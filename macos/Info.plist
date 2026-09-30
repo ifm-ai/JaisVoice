@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>fr</string>
+	<key>CFBundleDisplayName</key>
+	<string>JAIS Voice</string>
+	<key>CFBundleExecutable</key>
+	<string>JAISVoice</string>
+	<key>CFBundleIconFile</key>
+	<string>JAISVoice</string>
+	<key>CFBundleIdentifier</key>
+	<string>local.horizon.voice</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>fr</string>
+		<string>en</string>
+	</array>
+	<key>CFBundleName</key>
+	<string>JAIS Voice</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.2.0</string>
+	<key>CFBundleVersion</key>
+	<string>2</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>JAIS Voice exécute les actions macOS que vous demandez, par exemple créer une note. macOS vous demande une autorisation séparée pour contrôler chaque application.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Après votre accord explicite, JAIS Voice peut consulter ou modifier l’état du Bluetooth pour agir sur la connectivité de votre Mac.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>JAIS Voice utilise le microphone pendant que vous maintenez le raccourci pour parler.</string>
+</dict>
+</plist>

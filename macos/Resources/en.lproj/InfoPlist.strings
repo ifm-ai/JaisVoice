@@ -1,0 +1,3 @@
+"NSMicrophoneUsageDescription" = "JAIS Voice uses the microphone while you hold the shortcut to speak.";
+"NSAppleEventsUsageDescription" = "JAIS Voice performs the macOS actions you request, such as creating a note. macOS asks for separate permission to control each application.";
+"NSBluetoothAlwaysUsageDescription" = "With your explicit permission, JAIS Voice can check or change Bluetooth settings to manage your Mac’s connectivity.";

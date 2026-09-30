@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "horizon-voice"
+version = "0.1.0"
+description = "Local K2 voice assistant for macOS"
+requires-python = ">=3.12"
+dependencies = [
+  "livekit-agents[openai,mcp]==1.8.1",
+  "fastapi==0.141.1",
+  "uvicorn>=0.34,<1",
+  "httpx>=0.28,<1",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8", "pytest-asyncio>=0.26"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["horizon_voice*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
