@@ -1,6 +1,30 @@
-> Racine de développement : `/Users/florian/Workspace/JAISVoice`. Les modèles sont dans `.runtime/models/` et les livrables dans `outputs/`.
-
 # JAIS Voice
+
+## Installation
+
+Prérequis : Mac Apple Silicon sous macOS 26, 16 Go de mémoire au moins, environ 15 Go libres pour l’app et les modèles, plus 25 Go temporaires pendant la conversion des modèles de langage.
+
+1. Télécharger `JAIS-Voice-<version>.zip` depuis les [Releases](https://github.com/MBZUAI-IFM/JaisVoice/releases), le décompresser et glisser **JAIS Voice.app** dans **Applications**.
+2. L’app n’est pas signée par un développeur Apple identifié : au premier lancement, macOS la bloque. Ouvrir **Réglages Système → Confidentialité et sécurité**, puis cliquer **Ouvrir quand même** en face de JAIS Voice. Équivalent en Terminal, à ne faire que pour une archive obtenue depuis ce dépôt :
+
+   ```sh
+   xattr -dr com.apple.quarantine "/Applications/JAIS Voice.app"
+   ```
+3. Au lancement, l’app propose de télécharger le modèle de transcription JAIS-ASR (4,8 Go). Les modèles de langage s’installent comme décrit ci-dessous.
+
+L’app est autonome : elle embarque Python, Node.js, l’agent Pi et Chromium. Les données (modèles, journaux, état de l’agent) sont dans `~/Library/Application Support/JAIS Voice/`. Supprimer ce dossier et l’app désinstalle tout.
+
+### Modèles de langage 1B et 4B
+
+Les conversions MLX ne sont pas encore publiées. En attendant, chacun convertit les exports d’origine sur son Mac. Il faut un accès en lecture aux dépôts `MBZUAI-Paris` sur Hugging Face, puis une connexion avec un jeton (`hf auth login`, ou la variable `HF_TOKEN`). La conversion télécharge les sources FP32 à leur révision épinglée (environ 4 Go pour le 1B, 19 Go pour le 4B), vérifie leurs SHA-256 puis écrit le modèle MLX là où l’app le cherche :
+
+```sh
+RES="/Applications/JAIS Voice.app/Contents/Resources"
+"$RES/runtime/python/bin/python3.12" "$RES/app/scripts/prepare_mblab_models.py" --download \
+  --runtime-dir "$HOME/Library/Application Support/JAIS Voice"
+```
+
+`--model k2-agent` (4B) ou `--model k2-cleaner` (1B) limite la conversion à un seul modèle. Les sources restent dans `models/sources/` du dossier de données et peuvent être supprimées ensuite. Relancer l’app, ou ouvrir la section Modèles des réglages, pour les voir installés.
 
 Les réglages proposent un seul sélecteur **1B / 4B / 7B**, commun au **nettoyage et à l’agent**. Le choix est conservé après fermeture et appliqué à la prochaine demande audio ou texte. Les deux étapes gardent leurs prompts et paramètres propres, mais utilisent le même checkpoint, chargé une seule fois.
 
@@ -18,7 +42,7 @@ Assistant vocal natif pour ce Mac Apple Silicon : appuyer sur **⌥ Espace**, pa
 - `agent/` : harness d’agent [Pi](https://github.com/earendil-works/pi) (`@earendil-works/pi-coding-agent`, épinglé dans `package.json`) : prompt système, modèles locaux et extension `extensions/jais/` (shell macOS, Notes, radios, question de clarification, navigateur Playwright MCP, budget de 50 actions).
 - `k2_runtime/` : architecture K2 fidèle (normalisation par groupes et YaRN), passerelle locale Chat Completions, nettoyage `/v1/clean` avec garde-fou, parseur de réponses et d’appels d’outils.
 - `backend/horizon_voice/local_asr.py` : service JAIS-ASR F5 local.
-- `.runtime/` : poids, navigateur Chromium dédié, état de Pi et journaux. `.venv/` contient les dépendances Python isolées.
+- `.runtime/` : en développement, poids, navigateur Chromium dédié, état de Pi et journaux. `.venv/` contient les dépendances Python isolées. L’app distribuée utilise `~/Library/Application Support/JAIS Voice/` à la place.
 
 Audio WAV → JAIS-ASR F5 local → LLM choisi (nettoyage, `/v1/clean`) → Pi avec le même LLM (agent) → outils navigateur / macOS / réponse textuelle.
 
@@ -34,12 +58,14 @@ Prérequis : macOS 26 sur Apple Silicon, Python 3.12 pour l’application, Pytho
 
 ```sh
 python3.12 scripts/setup.py
-.venv/bin/python scripts/build_app.py --direct
+.venv/bin/python scripts/build_app.py --direct --zip
 ```
 
 La compilation native utilise `swiftc` avec le SDK Apple compatible avec le compilateur disponible ; aucun framework n’est téléchargé.
 
-La commande de construction assemble le bundle avec ses deux lanceurs, `launch-services` (ASR et passerelle MLX) et `launch-agent` (Pi). L’application est signée localement pour les essais sur ce Mac ; ce n’est pas un paquet distribué via le Mac App Store.
+La construction produit une app autonome dans `outputs/` (environ 1,6 Go) et, avec `--zip`, l’archive à publier dans une Release GitHub. Elle embarque Python 3.12 et les dépendances des services, Python 3.11 pour l’environnement de l’ASR (via `uv`), le binaire Node.js courant (qui doit être la version officielle de nodejs.org, pas celle de Homebrew), Pi installé par `npm ci --omit=dev` et la révision de Chromium attendue par Playwright. Les téléchargements sont mis en cache dans `.runtime/build-cache/`. Les lanceurs `launch-services` (ASR et passerelle MLX), `launch-agent` (Pi) et `launch-models` désignent ces composants relativement au bundle, et placent les données dans `~/Library/Application Support/JAIS Voice/` (ou dans `HORIZON_RUNTIME_DIR` si la variable est définie). Le bytecode Python est précompilé : rien n’est écrit dans le bundle signé à l’exécution.
+
+`--dev` construit au contraire une petite app dont les lanceurs exécutent ce dépôt (`.venv`, `scripts/`, `.runtime/`), pour itérer vite. Dans les deux cas, l’app n’a qu’une signature locale (ad hoc), sans Developer ID ni notarisation.
 
 Les dépendances Python et npm sont verrouillées dans `requirements.lock` et `package-lock.json`. Les références et conversions des checkpoints IFM sont enregistrées dans `.runtime/models/manifest.json`.
 
@@ -67,7 +93,7 @@ La suite `scripts/evaluate_mblab.py` emploie 16 cas fixés avant la première in
 
 ## Lancement et fonctionnement
 
-Ouvrir `JAIS Voice.app` dans le dossier de livraison. Son superviseur démarre JAIS-ASR F5 et la passerelle MLX ; l’app lance ensuite l’agent Pi, relié à elle par un tube. Les services écoutent uniquement sur la boucle locale.
+Ouvrir `JAIS Voice.app`. Son superviseur démarre JAIS-ASR F5 et la passerelle MLX ; l’app lance ensuite l’agent Pi, relié à elle par un tube. Les services écoutent uniquement sur la boucle locale.
 
 | Service | Adresse locale |
 | --- | --- |
@@ -85,7 +111,7 @@ Quitter l’application arrête les services qu’elle a lancés. Les ports déj
 
 ## Actions macOS et shell
 
-L’agent possède `shell_execute(command, reason)` en plus du navigateur, avec des outils spécialisés pour créer une note et gérer les radios. À la demande explicite de l’utilisateur, les commandes s’exécutent directement, sans confirmation intermédiaire de JAIS Voice. L’extension Pi les lance dans `/bin/zsh -f`, dans un nouveau groupe de processus, depuis `~/Library/Caches/local.horizon.voice/Shell`. Les détails et les résultats restent visibles dans la bulle. Les commandes peuvent notamment utiliser `/usr/bin/osascript` et `/usr/bin/open`. Les pages web et sorties d’outils ne constituent jamais des instructions autorisées.
+L’agent possède `shell_execute(command, reason)` en plus du navigateur, avec des outils spécialisés pour créer une note et gérer les radios. À la demande explicite de l’utilisateur, les commandes s’exécutent directement, sans confirmation intermédiaire de JAIS Voice. L’extension Pi les lance dans `/bin/zsh -f`, dans un nouveau groupe de processus, depuis `~/Library/Caches/ae.ac.mbzuai.jaisvoice/Shell`. Les détails et les résultats restent visibles dans la bulle. Les commandes peuvent notamment utiliser `/usr/bin/osascript` et `/usr/bin/open`. Les pages web et sorties d’outils ne constituent jamais des instructions autorisées.
 
 Ce mécanisme n’est **pas un bac à sable** : le modèle peut lancer des commandes avec les droits du compte courant et modifier des fichiers. Un environnement minimal évite d’hériter des secrets du processus ; cela ne bloque pas la lecture des fichiers accessibles au compte. Exécution : 30 s maximum ; sortie limitée ; arrêt/nouveau tour termine le groupe de processus possédé. Une modification déjà faite n’est pas annulée.
 
@@ -93,7 +119,7 @@ macOS demande séparément l’autorisation Automatisation pour Notes, et évent
 
 Le « mode avion » choisi pour cette démo signifie Wi-Fi **et** Bluetooth désactivés, pas un interrupteur natif macOS. La demande ultérieure de suppression des confirmations s’applique aussi à cette action. Le Bluetooth peut être contrôlé par blueutil, préparé uniquement dans le projet : `.venv/bin/python scripts/prepare_macos_tools.py`. Sa source officielle 2.14.0 est épinglée par SHA256 ; aucune radio n’est modifiée à la préparation. Cette dépendance utilise des API privées et ses résultats doivent être vérifiés. Couper le réseau empêche la navigation web (l’ASR et les modèles restent locaux), et couper le Bluetooth peut déconnecter clavier/souris. Prévoir un rétablissement manuel via les réglages système.
 
-Le bundle utilise le dossier de travail voisin pour les modèles et les services. Conserver l’ensemble du dossier de la démo. Les journaux sont sous `.runtime/logs/`.
+Les journaux sont dans `logs/` du dossier de données (`.runtime/logs/` pour une app `--dev`).
 
 ## Essais
 

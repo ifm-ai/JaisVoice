@@ -9,7 +9,8 @@ Ce dossier est la racine de développement de JAIS Voice, déplacée ici le 17 s
 - Modèles et services : `.runtime/` ; catalogue des modèles (dépôts Hugging Face, tailles) : `models/catalog.json`, géré par `scripts/models.py`.
 - Environnement Python : `.venv/`.
 - Application construite et livrables : `outputs/`. Application installée : `/Applications/JAIS Voice.app`.
-- Construire : `.venv/bin/python scripts/build_app.py --direct`.
+- Construire : `.venv/bin/python scripts/build_app.py --direct` (app autonome partageable, données dans `~/Library/Application Support/JAIS Voice`) ; `--dev` pour une app qui exécute ce dépôt et `.runtime/` ; `--zip` pour l’archive de Release.
+- Dépôt : https://github.com/MBZUAI-IFM/JaisVoice (branche `main`).
 - Tests Python : `PYTHONPATH=.:backend .venv/bin/python -m pytest backend/tests tests -q -o asyncio_mode=auto`.
 - Tests de l’extension Pi : `node --test agent/`.
 - Tests natifs : `outputs/JAIS Voice.app/Contents/MacOS/JAISVoice --self-test`.

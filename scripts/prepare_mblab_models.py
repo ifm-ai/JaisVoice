@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Verify local mblab exports and convert them; never download or execute source code.
+"""Verify mblab exports and convert them to MLX; never execute downloaded source code.
 
+Sources are local copies under <runtime>/models/sources, or fetched at their
+pinned revision with --download (needs access to the MBZUAI-Paris repositories).
 Writes manifest-mblab.json only. Activating this profile is a separate operation.
 The norm-offset fix is already present in the HF weights and must not be repeated.
 """
@@ -62,6 +64,22 @@ def verify_pinned_source(source: Path, spec: dict, hashes_path: Path) -> dict:
     return verified
 
 
+def download_source(source: Path, spec: dict) -> None:
+    """Fetch the pinned export and record Hugging Face's LFS SHA-256 of each file."""
+    import huggingface_hub as hub
+    info = hub.HfApi().model_info(spec["repo"], revision=spec["revision"], files_metadata=True)
+    if info.sha != spec["revision"]:
+        raise ValueError(f"Hugging Face returned revision {info.sha}, expected {spec['revision']}")
+    print(f"Downloading {spec['repo']}@{spec['revision'][:12]} → {source}", flush=True)
+    hub.snapshot_download(spec["repo"], revision=spec["revision"], local_dir=source, max_workers=8)
+    shutil.rmtree(source / ".cache", ignore_errors=True)
+    details = [{"file": sibling.rfilename, "bytes": sibling.size, "sha256": sibling.lfs.sha256}
+               for sibling in info.siblings if sibling.lfs is not None]
+    write_json(source / "download-manifest.json", {
+        "repo": spec["repo"], "revision": spec["revision"], "file_details": details,
+        "completed_at": datetime.now(timezone.utc).isoformat()})
+
+
 def write_json(path: Path, document: dict):
     temporary = path.with_name(path.name + ".tmp")
     temporary.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n")
@@ -69,7 +87,7 @@ def write_json(path: Path, document: dict):
 
 
 def prepare(runtime: Path, selected: str | None = None, verify_only: bool = False,
-            hashes_1b: Path | None = None, hashes_4b: Path | None = None) -> dict:
+            hashes_1b: Path | None = None, hashes_4b: Path | None = None, download: bool = False) -> dict:
     runtime = runtime.resolve()
     manifest_path = runtime / "models" / "manifest-mblab.json"
     manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
@@ -78,7 +96,12 @@ def prepare(runtime: Path, selected: str | None = None, verify_only: bool = Fals
         if selected and alias != selected:
             continue
         source = runtime / "models" / "sources" / spec["source_directory"]
-        hashes_path = (hashes_1b or source / "source-sha256.json") if alias == "k2-cleaner" else (hashes_4b or source / "download-manifest.json")
+        if download and not (source / "download-manifest.json").is_file():
+            download_source(source, spec)
+        # mblab copies carry hashes read on the host; downloads carry Hugging Face's.
+        own_hashes = source / "source-sha256.json"
+        default_hashes = own_hashes if own_hashes.is_file() else source / "download-manifest.json"
+        hashes_path = (hashes_1b if alias == "k2-cleaner" else hashes_4b) or default_hashes
         print(f"Verifying complete local source: {alias}", flush=True)
         verified = verify_pinned_source(source, spec, hashes_path)
         reports[alias] = verified
@@ -115,7 +138,7 @@ def prepare(runtime: Path, selected: str | None = None, verify_only: bool = Fals
                 "protocol": "ifm-k2-v1", "reasoning_efforts": ["low", "medium", "high"],
                 "tool_call_format": "xml", "tool_presentation_format": "markdown",
                 "prepared_at": datetime.now(timezone.utc).isoformat(),
-                "source_host": "mblab", "source_path": str(source),
+                "source_host": "huggingface" if download else "mblab", "source_path": str(source),
                 "source_verification": verified, "output_sha256": output_hashes,
                 "norm_offset": "already baked in source; no offset added during MLX conversion",
             }
@@ -135,8 +158,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runtime-dir", type=Path, default=Path(os.environ.get("HORIZON_RUNTIME_DIR", ROOT / ".runtime")))
     parser.add_argument("--model", choices=list(MODELS))
+    parser.add_argument("--download", action="store_true", help="Fetch missing sources from Hugging Face at their pinned revision")
     parser.add_argument("--verify-only", action="store_true", help="Validate hashes, index, tensor shapes and source provenance without loading MLX")
     parser.add_argument("--hashes-1b", type=Path)
     parser.add_argument("--hashes-4b", type=Path)
     args = parser.parse_args()
-    prepare(args.runtime_dir, args.model, args.verify_only, args.hashes_1b, args.hashes_4b)
+    prepare(args.runtime_dir, args.model, args.verify_only, args.hashes_1b, args.hashes_4b, args.download)
