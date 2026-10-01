@@ -1,10 +1,9 @@
-import httpx
+from fastapi.testclient import TestClient
 import pytest
 
-from horizon_voice.cleanup_guard import cleanup_problem
-from horizon_voice.clients import InferenceClients, PipelineError
-from horizon_voice.config import Settings
-from horizon_voice.pipeline import TurnCoordinator
+from k2_runtime import gateway
+from k2_runtime.cleanup_guard import cleanup_problem
+from k2_runtime.prompts import cleaner_messages
 
 
 @pytest.mark.parametrize("source,result", [
@@ -53,65 +52,63 @@ def test_bare_negations_do_not_create_repair_markers():
     assert cleanup_problem("ثلاث تذاكر لا أربع", "ثلاث تذاكر") == "missing_negation"
 
 
-async def test_uncertain_real_client_output_blocks_the_agent():
+def done(content, finish="stop"):
+    return {"finish_reason": finish, "content": content, "reasoning_content": "", "tool_calls": [],
+            "usage": {}, "metrics": {}}
+
+
+@pytest.fixture
+def gateway_client(monkeypatch):
+    """The real /v1/clean endpoint with an explicitly substituted generation worker."""
+    worker = gateway.Worker()
+    worker.status = "ready"
+    worker.models = {"k2-cleaner": (None, None, {}, {}), "k2-agent": (None, None, {}, {})}
+    worker.outputs, worker.requests = [], []
+    def fake_run(body, cancelled, emit):
+        worker.requests.append(body)
+        emit(("ready", {"prompt_tokens": 1}))
+        emit(("done", worker.outputs.pop(0)) if worker.outputs else ("error", "no fixture output"))
+        emit(("end", None))
+    monkeypatch.setattr(worker, "load", lambda: None)
+    monkeypatch.setattr(worker, "run", fake_run)
+    monkeypatch.setattr(gateway, "worker", worker)
+    with TestClient(gateway.app) as client:
+        yield client, worker
+
+
+def test_uncertain_correction_is_refused_and_never_returned(gateway_client):
+    http, worker = gateway_client
     transcript = "ابحث عن أبو ظبي عفوا أقصد في Paris وأفتح الموقع الرسمي"
-    wrong = "ابحث عن أبو ظبي وأفتح الموقع الرسمي"
-    async def respond(request):
-        return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": wrong}}]})
-    events = []
-    async def emit(event): events.append(event)
-    async def forbidden_reply(turn, clean): pytest.fail("Uncertain cleanup must never reach the agent")
-    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
-        clients = InferenceClients(Settings(), http)
-        async def explicit_asr_double(audio, *, language=None): return transcript
-        clients.transcribe = explicit_asr_double
-        coordinator = TurnCoordinator(clients, emit, forbidden_reply)
-        await (await coordinator.start("uncertain-cleanup", b"explicit-asr-double"))
-    assert events[-1]["type"] == "error"
-    assert events[-1]["error_code"] == "cleaner_uncertain"
-    assert not any(event["type"] in {"correction", "tool_start", "complete"} for event in events)
+    worker.outputs.append(done("ابحث عن أبو ظبي وأفتح الموقع الرسمي"))
+    response = http.post("/v1/clean", json={"text": transcript})
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "cleaner_uncertain"
+    assert "text" not in response.json()
+    assert worker.requests[0].model == "k2-cleaner" and worker.requests[0].tools is None
+    assert worker.requests[0].messages == cleaner_messages(transcript)
 
 
-@pytest.mark.parametrize("audio", [False, True])
-async def test_cleanup_toggle_is_per_turn_and_defaults_back_to_enabled(audio):
+def test_cleanup_guard_is_per_request_and_enabled_by_default(gateway_client):
+    http, worker = gateway_client
     raw = "Can you check the result of biggest K2 Horizon model on artifical analysis ? From there write the benchmar score in a text file"
     corrected = "Can you check the result of the biggest K2 Horizon model on artificial analysis? From there, write the benchmark score in a text file."
-    async def respond(request):
-        return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": corrected}}]})
-    events, replies = [], []
-    async def emit(event): events.append(event)
-    async def reply(turn, clean):
-        replies.append(clean)
-        return "done"
-    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
-        clients = InferenceClients(Settings(), http)
-        async def transcribe(data, *, language=None): return raw
-        clients.transcribe = transcribe
-        coordinator = TurnCoordinator(clients, emit, reply)
-        start = coordinator.start if audio else coordinator.start_text
-        data = b"audio-double" if audio else raw
-        await (await start("off", data, cleanup_guard_enabled="false"))
-        assert events[-1]["type"] == "complete"
-        assert replies == [corrected]
-        await (await start("default", data))
-        assert events[-1]["error_code"] == "cleaner_uncertain"
-        await (await start("on", data, cleanup_guard_enabled="true"))
-        assert events[-1]["error_code"] == "cleaner_uncertain"
-        assert replies == [corrected]
+    worker.outputs.extend([done(corrected)] * 3)
+    off = http.post("/v1/clean", json={"text": raw, "guard": False})
+    assert off.status_code == 200 and off.json()["text"] == corrected
+    assert http.post("/v1/clean", json={"text": raw}).json()["detail"]["code"] == "cleaner_uncertain"
+    assert http.post("/v1/clean", json={"text": raw, "guard": True}).json()["detail"]["code"] == "cleaner_uncertain"
 
 
-@pytest.mark.parametrize("finish,content,code", [("length", "Text", "cleaner_incomplete"), ("stop", "", "cleaner_empty")])
-async def test_guard_disabled_still_rejects_incomplete_or_empty_output(finish, content, code):
-    async def respond(request):
-        return httpx.Response(200, json={"choices": [{"finish_reason": finish, "message": {"content": content}}]})
-    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
-        with pytest.raises(PipelineError) as error:
-            await InferenceClients(Settings(), http).clean("Text", cleanup_guard_enabled=False)
-        assert error.value.code == code
+@pytest.mark.parametrize("finish,content,code", [("length", "Text", "cleaner_incomplete"), ("stop", "  ", "cleaner_empty")])
+def test_guard_disabled_still_rejects_incomplete_or_empty_output(gateway_client, finish, content, code):
+    http, worker = gateway_client
+    worker.outputs.append(done(content, finish))
+    response = http.post("/v1/clean", json={"text": "Text", "guard": False})
+    assert response.status_code == 422 and response.json()["detail"]["code"] == code
 
 
 @pytest.mark.parametrize("value", ["False", "0", "", 0, 1, [], {}])
-def test_invalid_guard_option_does_not_silently_disable(value):
-    from horizon_voice.clients import validate_cleanup_guard
-    with pytest.raises(PipelineError):
-        validate_cleanup_guard(value)
+def test_invalid_guard_option_does_not_silently_disable(gateway_client, value):
+    http, worker = gateway_client
+    assert http.post("/v1/clean", json={"text": "Text", "guard": value}).status_code == 422
+    assert worker.requests == []

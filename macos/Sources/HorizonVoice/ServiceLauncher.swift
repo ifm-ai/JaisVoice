@@ -66,6 +66,14 @@ final class ServiceLaunchLog {
     var onExit: ((Int32, String) -> Void)?
     var isRunning: Bool { process?.isRunning ?? false }
 
+    nonisolated static var logsDirectory: URL {
+        if let runtime = ProcessInfo.processInfo.environment["HORIZON_RUNTIME_DIR"], !runtime.isEmpty {
+            return URL(fileURLWithPath: runtime).appendingPathComponent("logs", isDirectory: true)
+        }
+        return FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Logs/JAIS Voice", isDirectory: true)
+    }
+
     func start() throws {
         guard !isRunning else { return }
         let environment = ProcessInfo.processInfo.environment
@@ -87,14 +95,7 @@ final class ServiceLaunchLog {
         task.environment = ownedEnvironment
         let ownership = Pipe()
         task.standardInput = ownership
-        let logsDirectory: URL
-        if let runtime = environment["HORIZON_RUNTIME_DIR"], !runtime.isEmpty {
-            logsDirectory = URL(fileURLWithPath: runtime).appendingPathComponent("logs", isDirectory: true)
-        } else {
-            logsDirectory = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("Logs/JAIS Voice", isDirectory: true)
-        }
-        let log = try ServiceLaunchLog(url: logsDirectory.appendingPathComponent("supervisor.log"))
+        let log = try ServiceLaunchLog(url: Self.logsDirectory.appendingPathComponent("supervisor.log"))
         logURL = log.url
         task.standardOutput = log.handle; task.standardError = log.handle
         let offset = log.startOffset, url = log.url

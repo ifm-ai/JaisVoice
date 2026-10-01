@@ -1,12 +1,9 @@
 import sys
 from types import ModuleType
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 from k2_runtime import gateway
-from horizon_voice import control
-from horizon_voice.config import Settings
 
 
 @pytest.fixture
@@ -85,37 +82,9 @@ def test_reload_failure_keeps_other_model_unloaded(memory_worker):
     assert not w.lifecycle_busy
 
 
-async def test_control_proxies_target_and_preserves_conflict(monkeypatch):
-    seen=[]
-    def respond(request):
-        seen.append(request)
-        return httpx.Response(409,json={'detail':'busy'})
-    real = httpx.AsyncClient
-    monkeypatch.setattr(control.httpx,'AsyncClient',lambda **kw:real(transport=httpx.MockTransport(respond),**kw))
-    async with real(transport=httpx.ASGITransport(app=control.create_app(Settings())),base_url='http://test') as client:
-        result=await client.post('/models/4B/memory',json={'action':'unload'})
-        assert result.status_code == 409
-        assert result.json()['detail'] == 'busy'
-        assert seen[0].url.path == '/models/4B/memory'
-        assert (await client.post('/models/7B/memory',json={'action':'unload'})).status_code == 422
-        assert len(seen) == 1
-
-
 @pytest.mark.parametrize('size,alias', [('1B','k2-cleaner'), ('4B','k2-agent')])
 def test_load_evicts_other_model_even_when_target_already_loaded(memory_worker, size, alias):
     http, worker, _ = memory_worker
     assert http.post(f'/models/{size}/memory', json={'action':'load'}).status_code == 200
     assert list(worker.models) == [alias]
 
-
-async def test_control_routes_asr_memory(monkeypatch):
-    seen = []
-    def respond(request):
-        seen.append(request)
-        return httpx.Response(409, json={'detail':'ASR is busy'})
-    real = httpx.AsyncClient
-    monkeypatch.setattr(control.httpx, 'AsyncClient', lambda **kw: real(transport=httpx.MockTransport(respond), **kw))
-    async with real(transport=httpx.ASGITransport(app=control.create_app(Settings())), base_url='http://test') as client:
-        result = await client.post('/models/ASR/memory', json={'action':'unload'})
-    assert result.status_code == 409
-    assert seen[0].url.port == 8790 and seen[0].url.path == '/memory'

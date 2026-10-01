@@ -19,14 +19,18 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
+from .cleanup_guard import cleanup_problem
+from .prompts import cleaner_messages
 from .protocol import K2Parser, normalize_messages, tool_call_deltas
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("HORIZON_RUNTIME_DIR", ROOT / ".runtime"))
 logger = logging.getLogger("horizon.mlx")
 MODEL_ALIASES = ("k2-cleaner", "k2-agent")
+# Agent model IDs for OpenAI clients that select a size by model name (Pi).
+AGENT_MODEL_IDS = {"k2-1b": "1B", "k2-4b": "4B"}
 
 
 def model_size(entry: dict) -> str | None:
@@ -118,7 +122,7 @@ class CompletionRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
     model: str
     model_size: Literal["1B", "4B"] | None = None
-    messages: list[dict] = Field(min_length=1, max_length=100)
+    messages: list[dict] = Field(min_length=1, max_length=256)
     tools: list[dict] | None = None
     tool_choice: str | dict | None = None
     stream: bool = False
@@ -401,8 +405,8 @@ async def model_memory(size: Literal["1B", "4B"], body: ModelMemoryRequest):
     return worker.health_snapshot()
 
 
-@app.post("/v1/chat/completions")
-async def completions(body: CompletionRequest, request: Request):
+async def begin_generation(body: CompletionRequest, request: Request):
+    """Queue one generation; returns its event reader and the release callback."""
     if worker.lifecycle_busy:
         raise HTTPException(409, "La mémoire des modèles est en cours de modification.")
     if worker.status != "ready":
@@ -424,8 +428,7 @@ async def completions(body: CompletionRequest, request: Request):
     def emit(event):
         if not canceled.is_set():
             loop.call_soon_threadsafe(queue.put_nowait, event)
-    future = loop.run_in_executor(worker.executor, worker.run, body, canceled, emit)
-    identifier, created = "chatcmpl-" + uuid.uuid4().hex, int(time.time())
+    loop.run_in_executor(worker.executor, worker.run, body, canceled, emit)
     def release():
         if canceled in worker.active_flags:
             canceled.set()
@@ -439,9 +442,6 @@ async def completions(body: CompletionRequest, request: Request):
                 return await asyncio.wait_for(queue.get(), timeout=0.15)
             except asyncio.TimeoutError:
                 continue
-    def chunk(delta, finish=None):
-        return {"id": identifier, "object": "chat.completion.chunk", "created": created,
-                "model": body.model, "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}
     try:
         first, metadata = await next_event()
         if first != "ready":
@@ -449,6 +449,29 @@ async def completions(body: CompletionRequest, request: Request):
     except BaseException:
         release()
         raise
+    return next_event, release
+
+
+async def final_result(next_event):
+    while True:
+        kind, data = await next_event()
+        if kind == "error":
+            raise HTTPException(422, data)
+        if kind == "done":
+            return data
+        if kind == "end":
+            raise HTTPException(422, "Generation ended without a final answer")
+
+
+@app.post("/v1/chat/completions")
+async def completions(body: CompletionRequest, request: Request):
+    if body.model in AGENT_MODEL_IDS:
+        body.model, body.model_size = "k2-agent", AGENT_MODEL_IDS[body.model]
+    next_event, release = await begin_generation(body, request)
+    identifier, created = "chatcmpl-" + uuid.uuid4().hex, int(time.time())
+    def chunk(delta, finish=None):
+        return {"id": identifier, "object": "chat.completion.chunk", "created": created,
+                "model": body.model, "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}
     if body.stream:
         async def events():
             try:
@@ -472,21 +495,62 @@ async def completions(body: CompletionRequest, request: Request):
                 release()
         return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
     try:
-        while True:
-            kind, data = await next_event()
-            if kind == "error":
-                raise HTTPException(422, data)
-            if kind == "done":
-                message = {"role": "assistant", "content": data["content"], "reasoning_content": data["reasoning_content"]}
-                if data["tool_calls"]:
-                    message["tool_calls"] = data["tool_calls"]
-                return {"id": identifier, "object": "chat.completion", "created": created, "model": body.model,
-                        "choices": [{"index": 0, "message": message, "finish_reason": data["finish_reason"]}],
-                        "usage": data["usage"], "metrics": data["metrics"]}
-            if kind == "end":
-                raise HTTPException(422, "Generation ended without a final answer")
+        data = await final_result(next_event)
     finally:
         release()
+    message = {"role": "assistant", "content": data["content"], "reasoning_content": data["reasoning_content"]}
+    if data["tool_calls"]:
+        message["tool_calls"] = data["tool_calls"]
+    return {"id": identifier, "object": "chat.completion", "created": created, "model": body.model,
+            "choices": [{"index": 0, "message": message, "finish_reason": data["finish_reason"]}],
+            "usage": data["usage"], "metrics": data["metrics"]}
+
+
+class CleanRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(min_length=1, max_length=4000)
+    model_size: Literal["1B", "4B"] | None = None
+    # Only a JSON boolean: a malformed value must never silently disable the guard.
+    guard: StrictBool = True
+
+
+def clean_failure(status: int, code: str, message: str) -> HTTPException:
+    return HTTPException(status, {"code": code, "message": message})
+
+
+def cleaner_effort() -> str:
+    effort = os.environ.get("HORIZON_CLEANER_REASONING_EFFORT")
+    return effort or worker._model_health.get("k2-cleaner", {}).get("default_reasoning_effort", "low")
+
+
+@app.post("/v1/clean")
+async def clean(body: CleanRequest, request: Request):
+    """Transcript cleanup for one turn: the only text allowed to reach the agent.
+
+    Incomplete, empty or (with the guard) uncertain corrections are refused;
+    the raw transcript is never forwarded as a fallback.
+    """
+    completion = CompletionRequest(model="k2-cleaner", model_size=body.model_size, messages=cleaner_messages(body.text),
+                                   temperature=0, max_tokens=2048, reasoning_effort=cleaner_effort())
+    started = time.perf_counter()
+    try:
+        next_event, release = await begin_generation(completion, request)
+        try:
+            data = await final_result(next_event)
+        finally:
+            release()
+    except HTTPException as exc:
+        if exc.status_code == 422:
+            raise clean_failure(422, "cleaner_incomplete", "Le correcteur n’a pas terminé le nettoyage. La demande n’a pas été exécutée.") from exc
+        raise clean_failure(exc.status_code, "cleaner_unavailable", "Le nettoyage a échoué. Vérifiez l’état des modèles locaux.") from exc
+    text = data["content"].strip()
+    if data["finish_reason"] != "stop":
+        raise clean_failure(422, "cleaner_incomplete", "Le correcteur n’a pas terminé le nettoyage. La demande n’a pas été exécutée.")
+    if not text:
+        raise clean_failure(422, "cleaner_empty", "Le correcteur n’a renvoyé aucun texte corrigé. La demande n’a pas été exécutée.")
+    if body.guard and cleanup_problem(body.text, text) is not None:
+        raise clean_failure(422, "cleaner_uncertain", "Correction incertaine. Reformulez votre demande ; aucune action n’a été lancée.")
+    return {"text": text, "elapsed_ms": round((time.perf_counter() - started) * 1000)}
 
 
 if __name__ == "__main__":

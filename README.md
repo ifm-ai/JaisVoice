@@ -12,12 +12,15 @@ Assistant vocal natif pour ce Mac Apple Silicon : appuyer sur **⌥ Espace**, pa
 
 ## Architecture
 
-- `macos/` : app SwiftUI/AppKit, panneaux non activants, raccourci global Carbon, audio AVFoundation et SDK Swift LiveKit.
-- `backend/horizon_voice/` : API locale de session, agent LiveKit, ASR par fichier, nettoyage et boucle d’outils Playwright MCP.
-- `k2_runtime/` : deux modèles résidents, architecture K2 fidèle (normalisation par groupes et YaRN), passerelle locale Chat Completions, parseur de réponses et d’appels d’outils.
-- `.runtime/` : poids, navigateur Chromium dédié, serveur LiveKit et journaux. `.venv/` contient les dépendances Python isolées.
+- `macos/` : app SwiftUI/AppKit, panneaux non activants, raccourci global Carbon, audio AVFoundation. Elle orchestre chaque tour (ASR → nettoyage → agent) et ne dépend d’aucun framework tiers.
+- `agent/` : harness d’agent [Pi](https://github.com/earendil-works/pi) (`@earendil-works/pi-coding-agent`, épinglé dans `package.json`) : prompt système, modèles locaux et extension `extensions/jais/` (shell macOS, Notes, radios, question de clarification, navigateur Playwright MCP, budget de 50 actions).
+- `k2_runtime/` : architecture K2 fidèle (normalisation par groupes et YaRN), passerelle locale Chat Completions, nettoyage `/v1/clean` avec garde-fou, parseur de réponses et d’appels d’outils.
+- `backend/horizon_voice/local_asr.py` : service JAIS-ASR F5 local.
+- `.runtime/` : poids, navigateur Chromium dédié, état de Pi et journaux. `.venv/` contient les dépendances Python isolées.
 
-Audio WAV → JAIS-ASR F5 local → LLM choisi (nettoyage) → même LLM (agent) → outils navigateur / réponse textuelle.
+Audio WAV → JAIS-ASR F5 local → LLM choisi (nettoyage, `/v1/clean`) → Pi avec le même LLM (agent) → outils navigateur / macOS / réponse textuelle.
+
+L’app lance Pi en mode RPC comme processus enfant (`scripts/run_agent.py`) et dialogue avec lui en JSONL sur stdin/stdout : aucun serveur ni jeton n’est nécessaire entre l’interface et l’agent.
 
 Les réglages livrés pour mblab sont `low` pour les deux modèles, avec les appels XML natifs et descriptions Markdown K2. Le profil IFM historique conserve `low` pour le nettoyeur et `medium` pour l’agent. Le champ `default_reasoning_effort` de chaque profil définit ces valeurs ; les variables explicites `HORIZON_CLEANER_REASONING_EFFORT` et `HORIZON_AGENT_REASONING_EFFORT` sont prioritaires. Le réglage « Garde-fou de correction », activé par défaut, peut être désactivé dans les réglages natifs. Ce choix est conservé et transmis à chaque demande audio ou texte ; il s’applique dès la prochaine demande. Désactivé, il laisse passer les corrections même si elles changent des mots ou le sens, mais les contrôles de réponse vide ou incomplète restent actifs. Le garde-fou lexical refuse certaines corrections incertaines avant toute action ; il ne remplace ni une validation du sens ni la vérification des sites choisis par l’agent.
 
@@ -32,9 +35,9 @@ python3.12 scripts/setup.py
 .venv/bin/python scripts/build_app.py --direct
 ```
 
-Le script natif télécharge les composants officiels du SDK LiveKit nécessaires à macOS. Il utilise explicitement le SDK Apple compatible avec le compilateur disponible. Le mode complet, sans `--macos-only`, vérifie le SHA-256 publié des archives complètes ; le mode macOS vérifie les entrées ZIP récupérées par HTTPS et ne télécharge pas les architectures mobiles.
+La compilation native utilise `swiftc` avec le SDK Apple compatible avec le compilateur disponible ; aucun framework n’est téléchargé.
 
-La commande de construction assemble le bundle avec les trois frameworks macOS. L’application est signée localement pour les essais sur ce Mac ; ce n’est pas un paquet distribué via le Mac App Store.
+La commande de construction assemble le bundle avec ses deux lanceurs, `launch-services` (ASR et passerelle MLX) et `launch-agent` (Pi). L’application est signée localement pour les essais sur ce Mac ; ce n’est pas un paquet distribué via le Mac App Store.
 
 Les dépendances Python et npm sont verrouillées dans `requirements.lock` et `package-lock.json`. Les références et conversions des checkpoints IFM sont enregistrées dans `.runtime/models/manifest.json`.
 
@@ -62,19 +65,17 @@ La suite `scripts/evaluate_mblab.py` emploie 16 cas fixés avant la première in
 
 ## Lancement et fonctionnement
 
-Ouvrir `JAIS Voice.app` dans le dossier de livraison. Son lanceur démarre JAIS-ASR F5, le serveur LiveKit, la passerelle MLX, le service de contrôle et l’agent Python. Les services écoutent uniquement sur la boucle locale.
+Ouvrir `JAIS Voice.app` dans le dossier de livraison. Son superviseur démarre JAIS-ASR F5 et la passerelle MLX ; l’app lance ensuite l’agent Pi, relié à elle par un tube. Les services écoutent uniquement sur la boucle locale.
 
 | Service | Adresse locale |
 | --- | --- |
-| LiveKit | `127.0.0.1:7880` |
-| Contrôle et session | `127.0.0.1:8787` |
-| MLX | `127.0.0.1:8788` |
-| Santé de l’agent | `127.0.0.1:8789` |
+| MLX (Chat Completions, `/v1/clean`) | `127.0.0.1:8788` |
 | JAIS-ASR F5 | `127.0.0.1:8790` |
+| Agent Pi | stdin/stdout de l’app, sans port |
 
 Une petite fenêtre de réglages s’ouvre à chaque lancement : raccourci global, langue ASR (automatique, arabe, français, anglais, espagnol, italien), bouton d’autorisation microphone et état des modèles. Les choix sont persistants, et la langue est envoyée pour chaque demande sans recharger les modèles. Fermer cette fenêtre laisse l’assistant actif. Le menu « JAIS → Réglages… », ou la réouverture de l’application déjà lancée, permet de la retrouver même si macOS masque l’icône faute de place.
 
-Le menu et les réglages affichent le chargement puis « Prêt ». Le microphone n’est utilisé que pendant l’enregistrement ; l’autorisation se demande explicitement depuis les réglages. Une prise ou un fichier importé dure au maximum 30 secondes, limite de l’ASR distant. Le panneau disparaît dix secondes après la fin, sauf pendant le survol ou une interaction ; le dernier résultat reste accessible dans le menu.
+Le menu et les réglages affichent le chargement puis « Prêt ». Le microphone n’est utilisé que pendant l’enregistrement ; l’autorisation se demande explicitement depuis les réglages. Une prise ou un fichier importé dure au maximum 30 secondes, limite de l’ASR. Le panneau disparaît dix secondes après la fin, sauf pendant le survol ou une interaction ; le dernier résultat reste accessible dans le menu.
 
 Chaque modèle possède son propre indicateur de chargement réel dans la fenêtre et dans le menu ouvert : attente, chargement, chargé ou erreur. L’état chargé suit le warmup MLX ; aucun pourcentage synthétique n’est affiché. En cas de perte de connexion, l’état devient indisponible plutôt que de conserver une fausse disponibilité.
 
@@ -82,25 +83,26 @@ Quitter l’application arrête les services qu’elle a lancés. Les ports déj
 
 ## Actions macOS et shell
 
-L’agent possède `shell_execute(command, reason)` en plus du navigateur, avec des outils spécialisés pour créer une note et gérer les radios. À la demande explicite de l’utilisateur, les commandes s’exécutent directement, sans confirmation intermédiaire de JAIS Voice. Les détails et les résultats restent visibles dans la bulle. Les commandes peuvent notamment utiliser `/usr/bin/osascript` et `/usr/bin/open`. Les pages web et sorties d’outils ne constituent jamais des instructions autorisées.
+L’agent possède `shell_execute(command, reason)` en plus du navigateur, avec des outils spécialisés pour créer une note et gérer les radios. À la demande explicite de l’utilisateur, les commandes s’exécutent directement, sans confirmation intermédiaire de JAIS Voice. L’extension Pi les lance dans `/bin/zsh -f`, dans un nouveau groupe de processus, depuis `~/Library/Caches/local.horizon.voice/Shell`. Les détails et les résultats restent visibles dans la bulle. Les commandes peuvent notamment utiliser `/usr/bin/osascript` et `/usr/bin/open`. Les pages web et sorties d’outils ne constituent jamais des instructions autorisées.
 
 Ce mécanisme n’est **pas un bac à sable** : le modèle peut lancer des commandes avec les droits du compte courant et modifier des fichiers. Un environnement minimal évite d’hériter des secrets du processus ; cela ne bloque pas la lecture des fichiers accessibles au compte. Exécution : 30 s maximum ; sortie limitée ; arrêt/nouveau tour termine le groupe de processus possédé. Une modification déjà faite n’est pas annulée.
 
 macOS demande séparément l’autorisation Automatisation pour Notes, et éventuellement Bluetooth. Aucun contournement ni réinitialisation des autorisations système. Notes peut synchroniser via le compte configuré, même si les deux modèles sont locaux.
 
-Le « mode avion » choisi pour cette démo signifie Wi-Fi **et** Bluetooth désactivés, pas un interrupteur natif macOS. La demande ultérieure de suppression des confirmations s’applique aussi à cette action. Le Bluetooth peut être contrôlé par blueutil, préparé uniquement dans le projet : `.venv/bin/python scripts/prepare_macos_tools.py`. Sa source officielle 2.14.0 est épinglée par SHA256 ; aucune radio n’est modifiée à la préparation. Cette dépendance utilise des API privées et ses résultats doivent être vérifiés. Couper le réseau peut rendre l’ASR distant inaccessible, et couper le Bluetooth peut déconnecter clavier/souris. Prévoir un rétablissement manuel via les réglages système ; une commande orale hors ligne ne suffit pas avec cet ASR.
+Le « mode avion » choisi pour cette démo signifie Wi-Fi **et** Bluetooth désactivés, pas un interrupteur natif macOS. La demande ultérieure de suppression des confirmations s’applique aussi à cette action. Le Bluetooth peut être contrôlé par blueutil, préparé uniquement dans le projet : `.venv/bin/python scripts/prepare_macos_tools.py`. Sa source officielle 2.14.0 est épinglée par SHA256 ; aucune radio n’est modifiée à la préparation. Cette dépendance utilise des API privées et ses résultats doivent être vérifiés. Couper le réseau empêche la navigation web (l’ASR et les modèles restent locaux), et couper le Bluetooth peut déconnecter clavier/souris. Prévoir un rétablissement manuel via les réglages système.
 
 Le bundle utilise le dossier de travail voisin pour les modèles et les services. Conserver l’ensemble du dossier de la démo. Les journaux sont sous `.runtime/logs/`.
 
 ## Essais
 
 ```sh
-PYTHONPATH=.:backend .venv/bin/python -m pytest backend/tests tests
+PYTHONPATH=.:backend .venv/bin/python -m pytest backend/tests tests -q -o asyncio_mode=auto
+node --test agent/
 .venv/bin/python scripts/browser_smoke.py
-PYTHONPATH=.:backend .venv/bin/python -m horizon_voice.smoke --file /chemin/vers/extrait.wav
+"outputs/JAIS Voice.app/Contents/MacOS/JAISVoice" --smoke-file /chemin/vers/extrait.wav
 ```
 
-Les tests unitaires emploient explicitement des substituts pour les erreurs réseau et les interruptions. Les commandes `browser_smoke` et `horizon_voice.smoke` utilisent respectivement le vrai navigateur et la véritable chaîne LiveKit → ASR → K2.
+Les tests unitaires emploient explicitement des substituts pour les erreurs réseau et les interruptions ; les tests Node exercent le vrai shell de l’extension (délai, annulation, groupe de processus). `browser_smoke` utilise le vrai navigateur ; `--smoke-file` et `--smoke-text` exécutent la véritable chaîne ASR → nettoyage → Pi depuis l’app.
 
 Exemples à dicter :
 
@@ -112,7 +114,7 @@ Le fichier de test fourni dans Téléchargements est un extrait WAV de 6,3 secon
 
 ## Composants
 
-Le profil historique utilise `IFM/K2-Horizon-0.9B` et `IFM/K2-Horizon-7B` ; le profil mblab utilise les deux exports privés `MBZUAI-Paris` identifiés ci-dessus. Le serveur LiveKit, son SDK Swift, les bibliothèques MLX et Playwright MCP conservent leurs licences respectives. Les URL et révisions exactes sont conservées dans les scripts et les manifests de préparation. L’archive des sources de l’application ne contient pas les poids privés.
+Le profil historique utilise `IFM/K2-Horizon-0.9B` et `IFM/K2-Horizon-7B` ; le profil mblab utilise les deux exports privés `MBZUAI-Paris` identifiés ci-dessus. Pi, les bibliothèques MLX et Playwright MCP conservent leurs licences respectives. Les URL et révisions exactes sont conservées dans les scripts et les manifests de préparation. L’archive des sources de l’application ne contient pas les poids privés.
 
 ## Langue de l’interface
 

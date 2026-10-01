@@ -8,8 +8,6 @@ from http.server import ThreadingHTTPServer
 import httpx
 import pytest
 from horizon_voice.local_asr import decode_audio, normalize_result, make_handler
-from horizon_voice import control
-from horizon_voice.config import Settings
 
 
 def audio(frames=3200, rate=16000):
@@ -42,20 +40,6 @@ def test_local_truncation_flags_propagate(row):
 
 def test_refusal_survives_result_normalization():
     assert normalize_result({'transcription':{'text':'','refused':True}})['refused'] is True
-
-
-@pytest.mark.parametrize('asr_status', ['loading','error','unreachable'])
-async def test_control_waits_for_local_asr(monkeypatch, asr_status):
-    def respond(request):
-        if request.url.port == 8790:
-            if asr_status == 'unreachable': raise httpx.ConnectError('offline', request=request)
-            return httpx.Response(200,json={'status':asr_status,'message':'ASR fixture'})
-        return httpx.Response(200,json={'status':'ready','models':{}})
-    real_client=httpx.AsyncClient
-    monkeypatch.setattr(control.httpx,'AsyncClient',lambda **kw:real_client(transport=httpx.MockTransport(respond),**kw))
-    health=await control.upstream_health(Settings())
-    assert health['status'] == ('error' if asr_status=='error' else 'starting')
-    assert health['services']['asr'] is False
 
 
 def test_worker_http_roundtrip_and_busy_rejection():

@@ -20,15 +20,12 @@ def run(*args, **kwargs):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", type=Path, help="Use a prebuilt native binary")
-    parser.add_argument("--framework-dir", type=Path, action="append", default=[])
-    parser.add_argument("--direct", action="store_true", help="Build with official macOS binary frameworks, without SwiftPM")
+    parser.add_argument("--direct", action="store_true", help="Build with swiftc, without SwiftPM")
     parser.add_argument("--swift", default=os.environ.get("HORIZON_SWIFT", "swift"))
     args = parser.parse_args()
     if args.direct:
-        run(sys.executable, ROOT / "macos/build_direct.py", "--macos-only", cwd=ROOT)
+        run(sys.executable, ROOT / "macos/build_direct.py", cwd=ROOT)
         binary = ROOT / "macos/.build/direct/HorizonVoice"
-        if not args.framework_dir:
-            args.framework_dir = list((ROOT / "macos/.frameworks").glob("*.xcframework/macos-*/*.framework"))
     elif args.binary:
         binary = args.binary.resolve()
     else:
@@ -43,7 +40,7 @@ def main():
     if staging.exists():
         raise SystemExit(f"A prior build remains at {staging}; inspect it before replacing.")
     contents = staging / "Contents"
-    for name in ("MacOS", "Resources", "Frameworks"):
+    for name in ("MacOS", "Resources"):
         (contents / name).mkdir(parents=True, exist_ok=True)
     shutil.copy2(binary, contents / "MacOS/JAISVoice")
     with (ROOT / "macos/Info.plist").open("rb") as source:
@@ -54,20 +51,11 @@ def main():
     resource_dir = ROOT / "macos/Resources"
     if resource_dir.exists():
         shutil.copytree(resource_dir, contents / "Resources", dirs_exist_ok=True)
-    launcher = contents / "Resources/launch-services"
-    launcher.write_text("#!/bin/sh\nexec " + shlex.quote(str(ROOT / ".venv/bin/python")) + " " + shlex.quote(str(ROOT / "scripts/run_services.py")) + "\n")
-    launcher.chmod(0o755)
-    frameworks = list(args.framework_dir)
-    if not frameworks:
-        frameworks.extend(p for p in (ROOT / "macos/.build/artifacts").glob("**/macos-*/**/*.framework") if not any(parent.suffix == ".framework" for parent in p.parents))
-    names = set()
-    for framework in frameworks:
-        if framework.name in names:
-            continue
-        names.add(framework.name)
-        target = contents / "Frameworks" / framework.name
-        shutil.copytree(framework, target, symlinks=True)
-        run("/usr/bin/codesign", "--force", "--sign", "-", target)
+    # Model services are supervised together; the agent is a pipe child of the app.
+    for name, script in (("launch-services", "run_services.py"), ("launch-agent", "run_agent.py")):
+        launcher = contents / "Resources" / name
+        launcher.write_text("#!/bin/sh\nexec " + shlex.quote(str(ROOT / ".venv/bin/python")) + " " + shlex.quote(str(ROOT / "scripts" / script)) + "\n")
+        launcher.chmod(0o755)
     entitlements = ROOT / "macos/Entitlements.plist"
     signature = ["/usr/bin/codesign", "--force", "--sign", "-"]
     if entitlements.exists():

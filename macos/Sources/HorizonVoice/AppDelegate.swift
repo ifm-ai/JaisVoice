@@ -5,13 +5,11 @@ import UniformTypeIdentifiers
 
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let state = TurnState()
-    private let transport = VoiceTransport()
+    private let transport = LocalPipeline()
     private let recorder = AudioRecorder()
     private let shortcut = GlobalShortcut()
     private let launcher = ServiceLauncher()
     private let preferences = AppPreferences()
-    private let shellCommands = ShellCommandController()
-    private var seenShellRequests: Set<String> = []
     private var configuration: ConfigurationWindowController!
     private var panels: FloatingPanels!
     private var statusItem: NSStatusItem!
@@ -68,14 +66,12 @@ import UniformTypeIdentifiers
         updateMenu()
         state.onBegin = { [weak self] in self?.panels.cancelDismissal() }
         state.onFinish = { [weak self] in
-            self?.shellCommands.cancelAll()
             self?.panels.scheduleHide()
             self?.reportSmokeIfNeeded()
         }
         transport.onEvent = { [weak self] event in self?.receive(event) }
         transport.onDisconnect = { [weak self] message in
             guard let self, !self.shuttingDown, !self.state.modelsChanging, !self.state.modelsUnloaded else { return }
-            self.shellCommands.cancelAll()
             self.state.ready = false; self.state.serviceMessage = message
             if self.state.isBusy { self.state.fail(message); self.panels.showResult() }
         }
@@ -120,9 +116,10 @@ import UniformTypeIdentifiers
         guard !shuttingDown else { return .terminateLater }
         shuttingDown = true
         startupTask?.cancel(); uploadTask?.cancel()
-        recorder.cancel(); shortcut.unregister(); shellCommands.cancelAll()
+        recorder.cancel(); shortcut.unregister()
         menuRefreshTimer?.invalidate()
         Task { @MainActor in
+            await transport.shutdown()
             do {
                 try await launcher.stopAndWait()
                 sender.reply(toApplicationShouldTerminate: true)
@@ -138,8 +135,8 @@ import UniformTypeIdentifiers
     func applicationWillTerminate(_ notification: Notification) {
         shuttingDown = true; startupTask?.cancel(); uploadTask?.cancel()
         recorder.cancel(); shortcut.unregister(); panels?.hide()
-        shellCommands.cancelAll()
         menuRefreshTimer?.invalidate()
+        transport.disconnect()
         launcher.stop()
     }
 
@@ -147,37 +144,12 @@ import UniformTypeIdentifiers
 
     private func receive(_ event: WireEvent) {
         if smokeStarted && event.type != "response_delta" {
-            let record: [String: Any] = ["type": event.type, "turn_id": event.turn_id, "tool_id": event.tool_id ?? "", "command": event.command ?? "", "text": event.text ?? "", "result": event.result ?? ""]
+            let record: [String: Any] = ["type": event.type, "turn_id": event.turn_id, "tool_id": event.tool_id ?? "", "tool_name": event.tool_name ?? "", "text": event.text ?? "", "result": event.result ?? ""]
             if let data = try? JSONSerialization.data(withJSONObject: record, options: [.sortedKeys]), let line = String(data: data, encoding: .utf8) {
                 print("HORIZON_SMOKE_EVENT=\(line)"); fflush(stdout)
             }
         }
-        if event.type == "shell_cancel" {
-            if let toolID = event.tool_id { shellCommands.cancel(turnID: event.turn_id, toolID: toolID) }
-            return
-        }
         guard event.turn_id == state.turnID, !state.finished else { return }
-        if event.type == "shell_request" {
-            guard !preview, let toolID = event.tool_id, let command = event.command, let reason = event.reason else { return }
-            let key = event.turn_id + ":" + toolID
-            guard seenShellRequests.insert(key).inserted else { return }
-            state.stage = "acting"
-            let request = ShellCommandRequest(turnID: event.turn_id, toolID: toolID, command: command, reason: reason)
-            shellCommands.present(request: request) { [weak self] result in
-                guard let self, !self.shuttingDown, self.state.turnID == request.turnID, !self.state.finished else { return }
-                self.state.stage = "acting"
-                Task { @MainActor in
-                    guard !self.shuttingDown, self.state.turnID == request.turnID, !self.state.finished else { return }
-                    do { try await self.transport.sendShellResult(turnID: request.turnID, toolID: request.toolID, result: result) }
-                    catch {
-                        guard self.state.turnID == request.turnID, !self.state.finished else { return }
-                        self.cancelPendingTurn()
-                        self.state.fail(L("Le résultat de la commande n’a pas pu être transmis. Une action déjà exécutée n’est pas annulée."))
-                    }
-                }
-            }
-            return
-        }
         state.accept(event)
         if state.awaitingClarification { panels.showResult() }
     }
@@ -295,9 +267,9 @@ import UniformTypeIdentifiers
         latestHealth = nil
         let previousStartup = startupTask
         previousStartup?.cancel(); startupTask = nil
-        shellCommands.cancelAll(); panels.hide()
+        panels.hide()
         Task { @MainActor in
-            await self.transport.disconnect()
+            await self.transport.shutdown()
             await previousStartup?.value
             do {
                 try await self.launcher.stopAndWait()
@@ -377,8 +349,6 @@ import UniformTypeIdentifiers
     }
 
     private func cancelPendingTurn() {
-        shellCommands.cancelAll()
-        seenShellRequests.removeAll()
         uploadTask?.cancel(); uploadTask = nil
         recorder.cancel()
         if let id = state.turnID, !state.finished {
@@ -498,6 +468,13 @@ import UniformTypeIdentifiers
     @objc private func changeShortcut(_ sender: NSMenuItem) { registerShortcut(sender.tag) }
     @objc private func quit() { NSApplication.shared.terminate(nil) }
 
+    /// `terminate` waits for shutdown tasks on the main actor (terminateLater).
+    /// Called from inside a main-actor task, it would block them: run it from a
+    /// run-loop source instead, as a menu action does.
+    private static func terminateFromRunLoop() {
+        RunLoop.main.perform(inModes: [.default]) { NSApplication.shared.terminate(nil) }
+    }
+
     @objc private func textRequest() {
         guard state.ready, !state.isBusy, !preview else { return }
         let alert = NSAlert()
@@ -604,7 +581,7 @@ import UniformTypeIdentifiers
             }
             do { try configuration.renderPreview(to: url); print("Réglages exportés : \(url.path)") }
             catch { fputs("\(error.localizedDescription)\n", stderr) }
-            NSApplication.shared.terminate(nil)
+            Self.terminateFromRunLoop()
         }
     }
 
@@ -641,7 +618,7 @@ import UniformTypeIdentifiers
                 print("HORIZON_PREVIEW_FOCUS before=\(previousFrontmost ?? -1) after=\(currentFrontmost ?? -1) unchanged=\(previousFrontmost == currentFrontmost)")
                 do { try panels.savePreview(to: url); print("Aperçu enregistré : \(url.path)") }
                 catch { fputs("\(error.localizedDescription)\n", stderr) }
-                NSApplication.shared.terminate(nil)
+                Self.terminateFromRunLoop()
             }
         }
     }
@@ -678,7 +655,7 @@ import UniformTypeIdentifiers
         if !CommandLine.arguments.contains("--smoke-stay") {
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
-                NSApplication.shared.terminate(nil)
+                Self.terminateFromRunLoop()
             }
         }
     }

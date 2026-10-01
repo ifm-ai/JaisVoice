@@ -215,3 +215,15 @@
 "PRÉCISION NÉCESSAIRE" = "CLARIFICATION NEEDED";
 
 "Maintenez les touches de dictée, répondez, puis relâchez." = "Hold the dictation keys, answer, then release.";
+"Démarrage de JAIS-ASR F5 local…" = "Starting local JAIS-ASR F5…";
+"La transcription a échoué. Vérifiez l’état du modèle local JAIS-ASR F5." = "Transcription failed. Check the status of the local JAIS-ASR F5 model.";
+"Le fichier doit être un WAV PCM 16 bits, mono, 16 kHz, de 0,1 à 30 secondes." = "The file must be a 16-bit PCM WAV, mono, 16 kHz, from 0.1 to 30 seconds.";
+"Le lanceur de l’agent est absent. Ouvrez le bundle JAIS Voice.app créé par le script d’installation." = "The agent launcher is missing. Open the JAIS Voice.app bundle created by the setup script.";
+"Le modèle ASR local a refusé cet enregistrement." = "The local ASR model refused this recording.";
+"Le modèle n’a renvoyé aucune réponse. Réessayez." = "The model returned no answer. Try again.";
+"L’agent a refusé la commande." = "The agent rejected the command.";
+"L’agent local n’a pas accepté la demande." = "The local agent did not accept the request.";
+"L’agent local n’a pas démarré. Vérifiez l’état des services dans le menu." = "The local agent did not start. Check the service status in the menu.";
+"L’agent local n’a pas pu terminer sa réponse : {0}" = "The local agent could not finish its answer: {0}";
+"L’agent local n’a pas pu terminer sa réponse." = "The local agent could not finish its answer.";
+"L’agent local n’est pas démarré." = "The local agent is not running.";

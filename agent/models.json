@@ -1,0 +1,37 @@
+{
+  "providers": {
+    "jais": {
+      "baseUrl": "http://127.0.0.1:8788/v1",
+      "api": "openai-completions",
+      "apiKey": "local-mlx",
+      "compat": {
+        "supportsStore": false,
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": true,
+        "supportsUsageInStreaming": false,
+        "maxTokensField": "max_tokens",
+        "supportsStrictMode": false
+      },
+      "models": [
+        {
+          "id": "k2-4b",
+          "name": "K2 4B (local MLX)",
+          "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 16384,
+          "maxTokens": 2048,
+          "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
+        },
+        {
+          "id": "k2-1b",
+          "name": "K2 1B (local MLX)",
+          "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 16384,
+          "maxTokens": 2048,
+          "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
+        }
+      ]
+    }
+  }
+}

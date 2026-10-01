@@ -9,6 +9,12 @@ provenance live under `.runtime/models` (`HORIZON_RUNTIME_DIR` overrides).
 both models resident in one dedicated MLX thread and serializes all generation.
 It requires Metal GPU access. No remote model fallback exists.
 
+The Pi agent selects a size by model ID: `k2-4b` and `k2-1b` are the agent role
+(`k2-agent`) on that checkpoint. `POST /v1/clean` `{text, model_size?, guard?}`
+runs the transcript cleaner with its fixed prompt and, unless `guard` is `false`,
+the lexical `cleanup_guard`; it returns `{text}` or an error `{detail: {code,
+message}}` and never falls back to the raw transcript.
+
 ## Explicit checkpoint profiles
 
 `HORIZON_MODEL_MANIFEST=/absolute/path/to/manifest-mblab.json` selects another

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Own and supervise the processes for a single local JAIS Voice instance."""
+"""Own and supervise the model services (ASR, MLX gateway) for one JAIS Voice instance.
+
+The Pi agent is not supervised here: the native app runs it as a pipe child.
+"""
 import fcntl
 import json
 import os
 from pathlib import Path
-import shutil
 import signal
 import socket
 import subprocess
@@ -102,39 +104,22 @@ def main():
     env["HORIZON_MODEL_MANIFEST"] = str(selected_manifest)
     apply_profile_reasoning(env, read_model_manifest(selected_manifest))
     print(f"Model profile: {selected_manifest}", flush=True)
-    node = env.get("HORIZON_NODE") or shutil.which("node")
-    if not node:
-        for path in ("/opt/homebrew/bin/node", str(Path.home() / ".local/bin/node")):
-            if Path(path).exists():
-                node = path
-                break
-    if not node:
-        raise RuntimeError("Node.js introuvable. Relancer la préparation de JAIS Voice.")
     env.update({
         "PYTHONPATH": os.pathsep.join([str(ROOT), str(ROOT / "backend")]),
         "HORIZON_PROJECT_ROOT": str(ROOT),
         "HORIZON_RUNTIME_DIR": str(RUNTIME),
-        "HORIZON_NODE": node,
-        "HORIZON_PLAYWRIGHT_CLI": str(ROOT / "node_modules/@playwright/mcp/cli.js"),
-        "PLAYWRIGHT_BROWSERS_PATH": str(RUNTIME / "browsers"),
-        "LIVEKIT_URL": "ws://127.0.0.1:7880",
-        "LIVEKIT_API_KEY": "devkey",
-        "LIVEKIT_API_SECRET": "secret",
         "HF_HOME": str(RUNTIME / "huggingface"),
         "TOKENIZERS_PARALLELISM": "false",
         "PYTHONUNBUFFERED": "1",
-        "PATH": os.pathsep.join([str(Path(node).parent), str(ROOT / ".venv/bin"), "/usr/bin", "/bin", "/usr/sbin", "/sbin"]),
+        "PATH": os.pathsep.join([str(ROOT / ".venv/bin"), "/usr/bin", "/bin", "/usr/sbin", "/sbin"]),
     })
     python = str(ROOT / ".venv/bin/python")
     asr_root = Path(env.get("HORIZON_ASR_MODEL_DIR", ROOT / ".runtime/models/JAIS-ASR-MLX"))
     commands = [
         ("asr", [str(asr_root / ".venv/bin/python"), str(ROOT / "backend/horizon_voice/local_asr.py")]),
-        ("livekit", [str(RUNTIME / "bin/livekit-server"), "--dev", "--bind", "127.0.0.1"]),
         ("mlx", [python, "-m", "k2_runtime.gateway", "--host", "127.0.0.1", "--port", "8788"]),
-        ("control", [python, "-m", "horizon_voice.control"]),
-        ("agent", [python, "-m", "horizon_voice.agent", "start"]),
     ]
-    for port in (7880, 8787, 8788, 8789, 8790):
+    for port in (8788, 8790):
         with socket.socket() as probe:
             if probe.connect_ex(("127.0.0.1", port)) == 0:
                 raise RuntimeError(f"Le port local {port} est déjà occupé ; aucun processus existant n'a été arrêté.")
@@ -151,15 +136,6 @@ def main():
             child = subprocess.Popen(command, cwd=ROOT, env=env, stdin=subprocess.DEVNULL, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
             processes.append((name, child))
             print(f"{name}: started ({child.pid})", flush=True)
-            if name == "livekit":
-                deadline = time.monotonic() + 15
-                while time.monotonic() < deadline and not STOP.is_set():
-                    with socket.socket() as probe:
-                        if probe.connect_ex(("127.0.0.1", 7880)) == 0:
-                            break
-                    if child.poll() is not None:
-                        raise RuntimeError("Le serveur LiveKit n'a pas démarré ; voir son journal.")
-                    STOP.wait(0.1)
         (RUNTIME / "services.json").write_text(json.dumps({"supervisor": os.getpid(), "children": {name: child.pid for name, child in processes}}))
         while not STOP.wait(0.5):
             for name, child in processes:

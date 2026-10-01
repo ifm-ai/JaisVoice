@@ -23,13 +23,12 @@ import unicodedata
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(ROOT), str(ROOT / "backend")]
+sys.path[:0] = [str(ROOT)]
 
 import httpx
 import jsonschema
 
-from horizon_voice.cleanup_guard import cleanup_problem
-from horizon_voice.config import Settings
+from k2_runtime.cleanup_guard import cleanup_problem
 from k2_runtime.prompts import cleaner_messages
 
 DEFAULT_CASES = ROOT / "tests/data/mblab_cleanup_cases.json"
@@ -123,12 +122,12 @@ async def installed_navigate_schema() -> tuple[dict, dict]:
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
 
-    settings = Settings()
-    cli = settings.playwright_cli
-    node = shutil.which(settings.node) or settings.node
+    cli = ROOT / "node_modules/@playwright/mcp/cli.js"
+    node = os.environ.get("HORIZON_NODE") or shutil.which("node") or "node"
+    runtime = Path(os.environ.get("HORIZON_RUNTIME_DIR", ROOT / ".runtime"))
     params = StdioServerParameters(command=node, args=[str(cli), "--browser", "chromium",
         "--isolated", "--image-responses", "omit", "--codegen", "none"],
-        env={**os.environ, "PLAYWRIGHT_BROWSERS_PATH": str(settings.runtime_dir / "browsers")},
+        env={**os.environ, "PLAYWRIGHT_BROWSERS_PATH": str(runtime / "browsers")},
         cwd=str(ROOT))
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as session:
@@ -171,7 +170,7 @@ def score_agent(result: dict, criterion: str, tool_schema: dict) -> dict:
 
 
 async def evaluate_agent(http, base_url, effort, tool_schema, max_tokens=2048):
-    from horizon_voice.agent import AGENT_INSTRUCTIONS
+    AGENT_INSTRUCTIONS = (ROOT / "agent/SYSTEM.md").read_text().strip()
     cases = [
         ("arithmetic_no_tool", "ما ناتج 17 + 8؟ أجب بالعدد فقط."),
         ("single_browser_navigate", "افتح https://example.com/ الآن."),
@@ -219,7 +218,7 @@ async def main(args):
             raise ValueError("Unknown case IDs: " + ", ".join(sorted(unknown)))
         cases = [case for case in cases if case["id"] in args.case_id]
     prompts_module = importlib.import_module("k2_runtime.prompts")
-    guard_module = importlib.import_module("horizon_voice.cleanup_guard")
+    guard_module = importlib.import_module("k2_runtime.cleanup_guard")
     report = {"suite_version": suite["suite_version"], "suite_sha256": sha256(args.cases),
         "started_at": datetime.now(timezone.utc).isoformat(), "base_url": base_url,
         "real_inference": True, "asr_used": False, "browser_actions_executed": False,
@@ -229,7 +228,7 @@ async def main(args):
         "evaluation_script_sha256": sha256(Path(__file__)),
         "inference_settings": {"cleaner_reasoning_effort": args.cleaner_effort,
             "agent_reasoning_effort": args.agent_effort, "temperature": 0, "max_tokens": args.max_tokens},
-        "notes": ["Direct local gateway check, not an ASR/LiveKit/native-interface test.",
+        "notes": ["Direct local gateway check, not an ASR/Pi/native-interface test.",
             "Raw correctness and guard acceptance are independent: a wrong output may pass the lexical guard.",
             "New cases are withheld from this prompt-development cycle, not certified absent from model training.",
             "Agent temperature is zero for reproducibility; production defaults to 0.2.",
@@ -274,14 +273,13 @@ async def main(args):
 
 
 if __name__ == "__main__":
-    settings = Settings()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://127.0.0.1:8788")
     parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
     parser.add_argument("--case-id", action="append", help="Optional subset; still records the hash of the complete frozen suite")
     parser.add_argument("--expect-profile", default="mblab", help="Required manifest filename substring; use an empty string explicitly to compare another profile")
-    parser.add_argument("--cleaner-effort", choices=["low", "medium", "high"], default=settings.cleaner_reasoning_effort)
-    parser.add_argument("--agent-effort", choices=["low", "medium", "high"], default=settings.agent_reasoning_effort)
+    parser.add_argument("--cleaner-effort", choices=["low", "medium", "high"], default=os.environ.get("HORIZON_CLEANER_REASONING_EFFORT", "low"))
+    parser.add_argument("--agent-effort", choices=["low", "medium", "high"], default=os.environ.get("HORIZON_AGENT_REASONING_EFFORT", "low"))
     parser.add_argument("--max-tokens", type=int, default=2048)
     parser.add_argument("--timeout", type=float, default=180)
     parser.add_argument("--cleaner-only", action="store_true")

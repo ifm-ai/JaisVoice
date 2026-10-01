@@ -1,7 +1,10 @@
 {
-  "name": "horizon-voice-tools",
+  "name": "jais-voice-agent",
   "private": true,
   "version": "0.1.0",
-  "description": "Local browser tools for Horizon Voice",
-  "dependencies": {"@playwright/mcp": "0.0.81"}
+  "description": "Pi agent harness and Playwright browser tools for JAIS Voice",
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.99.1",
+    "@playwright/mcp": "0.0.81"
+  }
 }

@@ -13,7 +13,7 @@ TOOLS_END = "</ifm|tool_calls>"
 
 
 def tool_call_deltas(calls):
-    # LiveKit's OpenAI parser consumes at most one completed call per chunk.
+    # One completed call per chunk keeps strict OpenAI stream parsers simple.
     return [{"tool_calls": [call]} for call in calls]
 
 

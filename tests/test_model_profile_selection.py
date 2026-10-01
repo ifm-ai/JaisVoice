@@ -6,7 +6,7 @@ import pytest
 from safetensors.numpy import save_file
 
 from k2_runtime.checkpoint import expected_weight_shapes
-from scripts import run_services
+from scripts import run_agent, run_services
 from scripts import select_model_profile as profiles
 from scripts.prepare_mblab_models import MODELS as MBLAB_MODELS
 
@@ -219,7 +219,6 @@ def test_launcher_forwards_persistent_profile_to_every_owned_service(installed, 
     monkeypatch.delenv('HORIZON_MODEL_MANIFEST', raising=False)
     monkeypatch.delenv('HORIZON_CLEANER_REASONING_EFFORT', raising=False)
     monkeypatch.delenv('HORIZON_AGENT_REASONING_EFFORT', raising=False)
-    monkeypatch.setenv('HORIZON_NODE', '/explicit-test-node')
     launched, stopped = [], []
     class Child:
         def __init__(self, command, **kwargs):
@@ -237,7 +236,7 @@ def test_launcher_forwards_persistent_profile_to_every_owned_service(installed, 
             pass
         def connect_ex(self, address):
             Probe.count += 1
-            return 1 if Probe.count <= 5 else 0
+            return 1
     class StopAfterLaunch:
         def is_set(self):
             return False
@@ -249,9 +248,39 @@ def test_launcher_forwards_persistent_profile_to_every_owned_service(installed, 
     monkeypatch.setattr(run_services.os, 'killpg', lambda pid, signal: stopped.append((pid, signal)))
     monkeypatch.setattr(run_services, 'STOP', StopAfterLaunch())
     assert run_services.main() == 0
-    assert len(launched) == 5
+    assert ['mlx' if 'k2_runtime.gateway' in command else command[-1] for command, _ in launched] == [str(run_services.ROOT / 'backend/horizon_voice/local_asr.py'), 'mlx']
+    assert Probe.count == 2
     assert all(kwargs['env']['HORIZON_MODEL_MANIFEST'] == str(alternative) for _, kwargs in launched)
     assert all(kwargs['env']['HORIZON_CLEANER_REASONING_EFFORT'] == 'low' for _, kwargs in launched)
     assert all(kwargs['env']['HORIZON_AGENT_REASONING_EFFORT'] == 'low' for _, kwargs in launched)
-    assert stopped == [(pid, sig) for sig in (run_services.signal.SIGTERM, run_services.signal.SIGKILL) for pid in reversed([100000 + i for i in range(5)])]
+    assert stopped == [(pid, sig) for sig in (run_services.signal.SIGTERM, run_services.signal.SIGKILL) for pid in reversed([100000 + i for i in range(2)])]
     assert not (runtime / 'services.json').exists()
+
+
+@pytest.mark.parametrize('override,expected', [(None, 'low'), ('medium', 'medium')])
+def test_agent_launcher_uses_profile_effort_and_isolated_configuration(installed, monkeypatch, override, expected):
+    runtime, _, alternative = installed
+    entries = json.loads(alternative.read_text())
+    entries['k2-agent']['default_reasoning_effort'] = 'low'
+    alternative.write_text(json.dumps(entries))
+    profiles.select_profile(runtime, alternative)
+    monkeypatch.setattr(run_agent, 'RUNTIME', runtime)
+    env = {'HORIZON_NODE': run_agent.find_node({})}
+    if override:
+        env['HORIZON_AGENT_REASONING_EFFORT'] = override
+    argv, child_env, workspace = run_agent.command(env)
+    assert argv[argv.index('--thinking') + 1] == expected
+    assert argv[argv.index('--mode') + 1] == 'rpc' and '--no-session' in argv and '--no-builtin-tools' in argv
+    assert argv[argv.index('--no-extensions') + 1:argv.index('--no-extensions') + 5] == ['-e', 'builtin:mcp', '-e', str(run_agent.ROOT / 'agent/extensions/jais')]
+    agent_dir = runtime / 'pi-agent'
+    assert child_env['PI_CODING_AGENT_DIR'] == str(agent_dir) and child_env['PI_OFFLINE'] == '1'
+    assert all((agent_dir / name).read_text() == (run_agent.ROOT / 'agent' / name).read_text() for name in run_agent.CONFIG_FILES)
+    assert workspace == runtime / 'agent-workspace' and workspace.is_dir()
+
+
+def test_agent_launcher_rejects_unsupported_effort(installed, monkeypatch):
+    runtime, _, alternative = installed
+    profiles.select_profile(runtime, alternative)
+    monkeypatch.setattr(run_agent, 'RUNTIME', runtime)
+    with pytest.raises(ValueError):
+        run_agent.command({'HORIZON_NODE': run_agent.find_node({}), 'HORIZON_AGENT_REASONING_EFFORT': 'max'})

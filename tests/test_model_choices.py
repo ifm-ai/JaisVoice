@@ -1,15 +1,7 @@
-import asyncio
-import json
-
-import httpx
-import openai
+from fastapi.testclient import TestClient
 import pytest
-from livekit.agents import APIConnectOptions, llm
 
-from horizon_voice.agent import CURRENT_TURN, HorizonLLM
-from horizon_voice.clients import InferenceClients, PipelineError
-from horizon_voice.config import Settings
-from horizon_voice.pipeline import Turn, TurnCoordinator
+from k2_runtime import gateway
 from k2_runtime.gateway import CompletionRequest, Worker
 
 
@@ -39,61 +31,41 @@ def test_checkpoint_selection_preserves_role_context_and_checkpoint_framing(role
         worker.executor.shutdown()
 
 
-@pytest.mark.parametrize("audio", [False, True])
-async def test_all_pairs_are_sent_to_cleaner_and_attached_to_each_turn(audio):
-    requests, replies, events = [], [], []
-    def respond(request):
-        body = json.loads(request.content)
-        requests.append(body)
-        return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": "Bonjour"}}]})
-    async def emit(event): events.append(event)
-    async def reply(turn, text):
-        replies.append((turn.cleaner_model, turn.agent_model))
-        return "Bonjour"
-    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
-        clients = InferenceClients(Settings(), http)
-        async def transcribe(data, *, language=None): return "Bonjour"
-        clients.transcribe = transcribe
-        coordinator = TurnCoordinator(clients, emit, reply)
-        pairs = [(a, b) for a in ("1B", "4B") for b in ("1B", "4B")]
-        for index, (a, b) in enumerate(pairs):
-            method = coordinator.start if audio else coordinator.start_text
-            await (await method(str(index), b"audio" if audio else "Bonjour", cleaner_model=a, agent_model=b))
-            assert events[-1]["type"] == "complete"
-        await (await coordinator.start_text("legacy", "Bonjour"))
-        assert replies == pairs + [(None, None)]
-        assert [r.get("model_size") for r in requests] == [a for a, _ in pairs] + [None]
-        assert all(r["model"] == "k2-cleaner" and "tools" not in r for r in requests)
-        before = len(requests)
-        with pytest.raises(PipelineError):
-            await coordinator.start_text("invalid", "Bonjour", agent_model="7B")
-        assert len(requests) == before
+@pytest.fixture
+def recording_gateway(monkeypatch):
+    worker = Worker()
+    worker.status = "ready"
+    worker.models = {"k2-cleaner": (None, None, {}, {}), "k2-agent": (None, None, {}, {})}
+    worker.requests = []
+    def fake_run(body, cancelled, emit):
+        worker.requests.append((body.model, body.model_size))
+        emit(("ready", {"prompt_tokens": 1}))
+        emit(("done", {"finish_reason": "stop", "content": "Bonjour", "reasoning_content": "", "tool_calls": [], "usage": {}, "metrics": {}}))
+        emit(("end", None))
+    monkeypatch.setattr(worker, "load", lambda: None)
+    monkeypatch.setattr(worker, "run", fake_run)
+    monkeypatch.setattr(gateway, "worker", worker)
+    with TestClient(gateway.app) as client:
+        yield client, worker
 
 
-async def test_agent_model_choice_is_request_scoped_and_kept_across_tool_rounds():
-    requests = []
-    def respond(request):
-        requests.append(json.loads(request.content))
-        payload = {"id": "test", "object": "chat.completion.chunk", "created": 0, "model": "k2-agent",
-                   "choices": [{"index": 0, "delta": {"content": "Bonjour"}, "finish_reason": "stop"}]}
-        return httpx.Response(200, text="data: " + json.dumps(payload) + "\n\ndata: [DONE]\n\n",
-                              headers={"content-type": "text/event-stream"})
-    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
-        client = openai.AsyncOpenAI(api_key="test", base_url="http://fixture/v1", http_client=http)
-        model = HorizonLLM(model="k2-agent", client=client)
-        async def call(size):
-            token = CURRENT_TURN.set(Turn("test", agent_model=size))
-            try:
-                for _ in range(2):
-                    async with model.chat(chat_ctx=llm.ChatContext(), conn_options=APIConnectOptions(max_retry=0)) as stream:
-                        async for _ in stream: pass
-            finally:
-                CURRENT_TURN.reset(token)
-        await asyncio.gather(call("1B"), call("4B"))
-        await call(None)
-    assert [r.get("model_size") for r in requests].count("1B") == 2
-    assert [r.get("model_size") for r in requests].count("4B") == 2
-    assert [r.get("model_size") for r in requests].count(None) == 2
+@pytest.mark.parametrize("size", ["1B", "4B"])
+def test_cleaner_size_is_request_scoped(recording_gateway, size):
+    http, worker = recording_gateway
+    assert http.post("/v1/clean", json={"text": "Bonjour", "model_size": size}).json()["text"] == "Bonjour"
+    assert http.post("/v1/clean", json={"text": "Bonjour"}).status_code == 200
+    assert worker.requests == [("k2-cleaner", size), ("k2-cleaner", None)]
+    assert http.post("/v1/clean", json={"text": "Bonjour", "model_size": "7B"}).status_code == 422
+    assert len(worker.requests) == 2
+
+
+def test_pi_model_ids_select_the_agent_role_and_size(recording_gateway):
+    http, worker = recording_gateway
+    for model in ("k2-1b", "k2-4b", "k2-agent"):
+        response = http.post("/v1/chat/completions", json={"model": model, "messages": [{"role": "user", "content": "Bonjour"}]})
+        assert response.status_code == 200 and response.json()["model"] == "k2-agent"
+    assert worker.requests == [("k2-agent", "1B"), ("k2-agent", "4B"), ("k2-agent", None)]
+    assert http.post("/v1/chat/completions", json={"model": "k2-7b", "messages": [{"role": "user", "content": "x"}]}).status_code == 404
 
 
 @pytest.mark.parametrize("size", ["1B", "4B"])

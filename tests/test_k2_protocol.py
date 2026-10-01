@@ -78,7 +78,7 @@ def test_unknown_tool_rejected():
         parser.feed('thought</ifm|think_faster><ifm|tool_calls><ifm|tool_call>{"name":"not_allowed","arguments":{}}</ifm|tool_call></ifm|tool_calls>')
 
 
-def test_three_tool_calls_emitted_one_per_delta_for_livekit_parser():
+def test_three_tool_calls_emitted_one_per_delta():
     parser = K2Parser(TOOLS)
     block = ''.join('<ifm|tool_call>' + json.dumps({'name': 'browser_navigate', 'arguments': {'url': f'https://example.com/{i}'}}) + '</ifm|tool_call>' for i in range(3))
     parser.feed('thought</ifm|think_faster><ifm|tool_calls>' + block + '</ifm|tool_calls>')

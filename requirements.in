@@ -1,5 +1,5 @@
-livekit-agents[mcp]==1.8.1
-livekit-plugins-openai==1.8.1
+mcp==1.30.0
+jsonschema==4.26.0
 fastapi==0.141.1
 uvicorn==0.53.0
 httpx==0.28.1

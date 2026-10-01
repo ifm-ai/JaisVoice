@@ -5,14 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "horizon-voice"
 version = "0.1.0"
-description = "Local K2 voice assistant for macOS"
-requires-python = ">=3.12"
-dependencies = [
-  "livekit-agents[openai,mcp]==1.8.1",
-  "fastapi==0.141.1",
-  "uvicorn>=0.34,<1",
-  "httpx>=0.28,<1",
-]
+description = "Local JAIS-ASR F5 service of JAIS Voice (runs in the ASR model's Python 3.11 environment)"
+requires-python = ">=3.11"
+dependencies = []
 
 [project.optional-dependencies]
 test = ["pytest>=8", "pytest-asyncio>=0.26"]

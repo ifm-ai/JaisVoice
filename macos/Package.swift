@@ -6,9 +6,8 @@ let package = Package(
     defaultLocalization: "fr",
     platforms: [.macOS(.v14)],
     products: [.executable(name: "HorizonVoice", targets: ["HorizonVoice"])],
-    dependencies: [.package(url: "https://github.com/livekit/client-sdk-swift-xcframework.git", exact: "2.16.0")],
     targets: [
-        .executableTarget(name: "HorizonVoice", dependencies: [.product(name: "LiveKit", package: "client-sdk-swift-xcframework")]),
+        .executableTarget(name: "HorizonVoice"),
         .testTarget(name: "HorizonVoiceTests", dependencies: ["HorizonVoice"])
     ],
     swiftLanguageModes: [.v5]

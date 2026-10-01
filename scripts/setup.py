@@ -27,11 +27,10 @@ def main():
     lock = ROOT / "requirements.lock"
     run(python, "-m", "pip", "install", "--cache-dir", ROOT / ".runtime/pip-cache", "-r", lock if lock.exists() else ROOT / "requirements.in")
     lock.write_text(subprocess.check_output([str(python), "-m", "pip", "freeze"], text=True))
-    run(python, ROOT / "scripts/install_livekit.py")
     npm = shutil.which("npm")
     node = shutil.which("node")
     if not npm or not node:
-        raise SystemExit("Node.js and npm are required to install the dedicated browser.")
+        raise SystemExit("Node.js and npm are required for the Pi agent and the dedicated browser.")
     run(npm, "ci" if (ROOT / "package-lock.json").exists() else "install", "--ignore-scripts", "--cache", ROOT / ".runtime/npm-cache")
     env = os.environ.copy()
     env["PLAYWRIGHT_BROWSERS_PATH"] = str(ROOT / ".runtime/browsers")

@@ -1,9 +1,6 @@
 import AppKit
 
 MainActor.assumeIsolated {
-    if CommandLine.arguments.contains("--shell-self-test") {
-        exit(ShellCommandSelfTests.run())
-    }
     if CommandLine.arguments.contains("--dismissal-self-test") {
         exit(SelfTests.runDismissal())
     }

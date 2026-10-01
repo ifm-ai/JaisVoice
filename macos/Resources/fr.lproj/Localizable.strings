@@ -215,3 +215,15 @@
 "PRÉCISION NÉCESSAIRE" = "PRÉCISION NÉCESSAIRE";
 
 "Maintenez les touches de dictée, répondez, puis relâchez." = "Maintenez les touches de dictée, répondez, puis relâchez.";
+"Démarrage de JAIS-ASR F5 local…" = "Démarrage de JAIS-ASR F5 local…";
+"La transcription a échoué. Vérifiez l’état du modèle local JAIS-ASR F5." = "La transcription a échoué. Vérifiez l’état du modèle local JAIS-ASR F5.";
+"Le fichier doit être un WAV PCM 16 bits, mono, 16 kHz, de 0,1 à 30 secondes." = "Le fichier doit être un WAV PCM 16 bits, mono, 16 kHz, de 0,1 à 30 secondes.";
+"Le lanceur de l’agent est absent. Ouvrez le bundle JAIS Voice.app créé par le script d’installation." = "Le lanceur de l’agent est absent. Ouvrez le bundle JAIS Voice.app créé par le script d’installation.";
+"Le modèle ASR local a refusé cet enregistrement." = "Le modèle ASR local a refusé cet enregistrement.";
+"Le modèle n’a renvoyé aucune réponse. Réessayez." = "Le modèle n’a renvoyé aucune réponse. Réessayez.";
+"L’agent a refusé la commande." = "L’agent a refusé la commande.";
+"L’agent local n’a pas accepté la demande." = "L’agent local n’a pas accepté la demande.";
+"L’agent local n’a pas démarré. Vérifiez l’état des services dans le menu." = "L’agent local n’a pas démarré. Vérifiez l’état des services dans le menu.";
+"L’agent local n’a pas pu terminer sa réponse : {0}" = "L’agent local n’a pas pu terminer sa réponse : {0}";
+"L’agent local n’a pas pu terminer sa réponse." = "L’agent local n’a pas pu terminer sa réponse.";
+"L’agent local n’est pas démarré." = "L’agent local n’est pas démarré.";
