@@ -50,9 +50,10 @@ def command(env: dict) -> tuple[list[str], dict, Path]:
         "HORIZON_PROJECT_ROOT": str(ROOT),
         "HORIZON_RUNTIME_DIR": str(RUNTIME),
         "HORIZON_NODE": node,
-        "HORIZON_PYTHON": str(ROOT / ".venv/bin/python"),
+        "HORIZON_PYTHON": sys.executable,
         "HORIZON_PLAYWRIGHT_CLI": str(ROOT / "node_modules/@playwright/mcp/cli.js"),
-        "PLAYWRIGHT_BROWSERS_PATH": str(RUNTIME / "browsers"),
+        # The packaged app ships Chromium read-only in its bundle.
+        "PLAYWRIGHT_BROWSERS_PATH": env.get("PLAYWRIGHT_BROWSERS_PATH") or str(RUNTIME / "browsers"),
         "PATH": os.pathsep.join([str(Path(node).parent), "/usr/bin", "/bin", "/usr/sbin", "/sbin"]),
     })
     thinking = agent_effort(env)

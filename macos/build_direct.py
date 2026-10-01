@@ -27,7 +27,7 @@ def main():
         sdk = compatible if compatible.exists() else Path(subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip())
     build = ROOT / ".build" / "direct"
     build.mkdir(parents=True, exist_ok=True)
-    command = [arguments.swiftc, "-sdk", str(sdk), "-target", "arm64-apple-macosx14.0", "-swift-version", "5",
+    command = [arguments.swiftc, "-sdk", str(sdk), "-target", "arm64-apple-macosx26.0", "-swift-version", "5",
                "-module-cache-path", str(build / "ModuleCache"), "-module-name", "HorizonVoice", "-O", "-o", str(build / "HorizonVoice")]
     command += [str(path) for path in sorted((ROOT / "Sources" / "HorizonVoice").glob("*.swift"))]
     subprocess.run(command, check=True)

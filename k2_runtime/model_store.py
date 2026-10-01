@@ -280,6 +280,18 @@ def sha256(path: Path) -> str:
 
 
 def find_python311() -> str:
+    bundled = os.environ.get("HORIZON_ASR_PYTHON_HOME")
+    if bundled:
+        # The ASR environment points at its interpreter: copy the app's one into
+        # the runtime directory so moving or updating the app does not break it.
+        home = runtime_dir() / "python3.11"
+        if not (home / "bin/python3.11").is_file():
+            staging = runtime_dir() / ".python3.11.copy"
+            shutil.rmtree(staging, ignore_errors=True)
+            shutil.copytree(bundled, staging, symlinks=True)
+            shutil.rmtree(home, ignore_errors=True)
+            os.replace(staging, home)
+        return str(home / "bin/python3.11")
     for candidate in (os.environ.get("HORIZON_ASR_PYTHON"), shutil.which("python3.11"), str(Path.home() / ".local/bin/python3.11"),
                       "/opt/homebrew/bin/python3.11", "/usr/local/bin/python3.11"):
         if candidate and Path(candidate).is_file():

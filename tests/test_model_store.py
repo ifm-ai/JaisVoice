@@ -331,3 +331,18 @@ def test_agent_launcher_uses_isolated_configuration(store, monkeypatch, override
 def test_pi_knows_every_catalog_size():
     ids = {model["id"] for model in json.loads((run_agent.ROOT / "agent/models.json").read_text())["providers"]["jais"]["models"]}
     assert ids == {f"k2-{size.lower()}" for size in model_store.SIZES}
+
+
+def test_bundled_asr_python_is_copied_out_of_the_app(tmp_path, monkeypatch):
+    bundled = tmp_path / "App.app/runtime/python3.11"
+    (bundled / "bin").mkdir(parents=True)
+    (bundled / "bin/python3.11").write_text("#!/bin/sh\n")
+    (bundled / "bin/python3").symlink_to("python3.11")
+    monkeypatch.setenv("HORIZON_ASR_PYTHON_HOME", str(bundled))
+    monkeypatch.setenv("HORIZON_RUNTIME_DIR", str(tmp_path / "runtime"))
+    python = Path(model_store.find_python311())
+    assert python == tmp_path / "runtime/python3.11/bin/python3.11" and python.is_file()
+    assert (python.parent / "python3").is_symlink()
+    # Later calls reuse the copy, even after the app has moved.
+    shutil.rmtree(tmp_path / "App.app")
+    assert Path(model_store.find_python311()) == python

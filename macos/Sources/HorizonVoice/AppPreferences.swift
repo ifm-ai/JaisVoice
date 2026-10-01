@@ -62,6 +62,7 @@ enum MicrophoneAuthorization: Equatable {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        Self.importLegacyPreferences(into: defaults)
         interfaceLanguage = .resolved(defaults.string(forKey: InterfaceLanguage.preferenceKey))
         shortcutChoice = Self.normalizedShortcutChoice(defaults.integer(forKey: Self.shortcutKey))
         asrLanguage = Self.normalizedASRLanguage(defaults.string(forKey: Self.asrLanguageKey))
@@ -73,6 +74,15 @@ enum MicrophoneAuthorization: Equatable {
         cleanupGuardEnabled = defaults.object(forKey: Self.cleanupGuardKey) as? Bool ?? true
         defaults.set(modelSize, forKey: Self.modelSizeKey)
         refreshMicrophoneStatus()
+    }
+
+    /// Preferences saved before the bundle identifier changed, imported once.
+    static let legacyDomain = "local.horizon.voice"
+
+    static func importLegacyPreferences(into defaults: UserDefaults) {
+        guard defaults === UserDefaults.standard, defaults.object(forKey: modelSizeKey) == nil,
+              let legacy = defaults.persistentDomain(forName: legacyDomain) else { return }
+        for (key, value) in legacy { defaults.set(value, forKey: key) }
     }
 
     static func normalizedShortcutChoice(_ index: Int) -> Int {
