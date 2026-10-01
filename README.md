@@ -4,7 +4,7 @@
 
 Requirements: an Apple Silicon Mac running macOS 26, at least 16 GB of memory, about 15 GB free for the app and models, plus 25 GB of temporary space while converting the language models.
 
-1. Download `JAIS-Voice-<version>.zip` from the [Releases](https://github.com/MBZUAI-IFM/JaisVoice/releases), unzip it and drag **JAIS Voice.app** into **Applications**.
+1. Download `JAIS-Voice-<version>.dmg` from the [latest release](https://github.com/MBZUAI-IFM/JaisVoice/releases/latest), open it and drag **JAIS Voice** onto **Applications**.
 2. The app is not signed by an identified Apple developer, so macOS blocks it on first launch. Open **System Settings → Privacy & Security**, then click **Open Anyway** next to JAIS Voice. The Terminal equivalent, only for an archive obtained from this repository:
 
    ```sh
@@ -58,12 +58,12 @@ Requirements: macOS 26 on Apple Silicon, Python 3.12 for the app, Python 3.11 fo
 
 ```sh
 python3.12 scripts/setup.py
-.venv/bin/python scripts/build_app.py --direct --zip
+.venv/bin/python scripts/build_app.py --direct --dmg
 ```
 
 The native build uses `swiftc` with the Apple SDK that matches the available compiler; no framework is downloaded.
 
-The build produces a self-contained app in `outputs/` (about 1.6 GB) and, with `--zip`, the archive to publish in a GitHub Release. It embeds Python 3.12 and the service dependencies, Python 3.11 for the ASR environment (through `uv`), the current Node.js binary (which must be the official nodejs.org build, not Homebrew's), Pi installed with `npm ci --omit=dev`, and the Chromium revision Playwright expects. Downloads are cached in `.runtime/build-cache/`. The `launch-services` (ASR and MLX gateway), `launch-agent` (Pi) and `launch-models` launchers locate these components relative to the bundle and keep data in `~/Library/Application Support/JAIS Voice/` (or in `HORIZON_RUNTIME_DIR` when set). Python bytecode is precompiled: nothing is written into the signed bundle at run time.
+The build produces a self-contained app in `outputs/` (about 1.6 GB). `--dmg` also writes `JAIS-Voice-<version>.dmg` (about 530 MB), a disk image whose window shows the app next to an Applications shortcut (`scripts/make_dmg.py`; Finder lays it out through AppleScript, so the first local run asks to allow controlling Finder). `--zip` writes a plain zip archive instead. It embeds Python 3.12 and the service dependencies, Python 3.11 for the ASR environment (through `uv`), the current Node.js binary (which must be the official nodejs.org build, not Homebrew's), Pi installed with `npm ci --omit=dev`, and the Chromium revision Playwright expects. Downloads are cached in `.runtime/build-cache/`. The `launch-services` (ASR and MLX gateway), `launch-agent` (Pi) and `launch-models` launchers locate these components relative to the bundle and keep data in `~/Library/Application Support/JAIS Voice/` (or in `HORIZON_RUNTIME_DIR` when set). Python bytecode is precompiled: nothing is written into the signed bundle at run time.
 
 `--dev` instead builds a small app whose launchers run this checkout (`.venv`, `scripts/`, `.runtime/`), for quick iteration. In both cases the app only has a local (ad hoc) signature, with no Developer ID or notarization.
 
@@ -90,6 +90,10 @@ After copying the sources to `.runtime/models/sources/mblab-1B-32bfb4a00c1e` and
 Preparation checks integrity, tensor shapes and revisions before converting. It writes to the directories referenced by `models/catalog.json`, which the app then detects as installed. Downloaded Python sources are never executed to convert or serve the models.
 
 The `scripts/evaluate_mblab.py` suite uses 16 cases fixed before the first inference: three known regressions and thirteen new inputs. It separates the correctness of the text from its acceptance by the safeguard. Its tool-proposal tests do not replace a trial with the real browser; the measured results and limits are recorded in the delivered validation report.
+
+### Continuous integration and releases
+
+`.github/workflows/release.yml` runs on a GitHub-hosted macOS 26 runner. On every pull request it runs the Python, Pi extension and native tests and builds the app and disk image (kept as a workflow artifact for 7 days). On every push to `main` it also publishes a release tagged `v<version>-build.<run number>` with the disk image, using `.github/release-notes.md` as notes. `CFBundleShortVersionString` in `macos/Info.plist` sets the version; the run number becomes `CFBundleVersion`.
 
 ## Launch and operation
 

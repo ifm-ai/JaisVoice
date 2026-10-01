@@ -9,7 +9,7 @@ This folder is the development root of JAIS Voice, moved here on 17 September 20
 - Models and services: `.runtime/`; model catalog (Hugging Face repositories, sizes): `models/catalog.json`, managed by `scripts/models.py`.
 - Python environment: `.venv/`.
 - Built app and deliverables: `outputs/`. Installed app: `/Applications/JAIS Voice.app`.
-- Build: `.venv/bin/python scripts/build_app.py --direct` (shareable self-contained app, data in `~/Library/Application Support/JAIS Voice`); `--dev` for an app that runs this checkout and `.runtime/`; `--zip` for the Release archive.
+- Build: `.venv/bin/python scripts/build_app.py --direct` (shareable self-contained app, data in `~/Library/Application Support/JAIS Voice`); `--dev` for an app that runs this checkout and `.runtime/`; `--dmg` for the drag-to-install disk image. Pushing to `main` publishes a release through `.github/workflows/release.yml`.
 - Repository: https://github.com/MBZUAI-IFM/JaisVoice (`main` branch).
 - Python tests: `PYTHONPATH=.:backend .venv/bin/python -m pytest backend/tests tests -q -o asyncio_mode=auto`.
 - Pi extension tests: `node --test agent/`.
