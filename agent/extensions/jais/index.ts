@@ -53,7 +53,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerTool(defineTool({
     name: "shell_execute",
-    label: "Commande macOS",
+    label: "macOS command",
     description: "Run a macOS shell command for this user's explicit desktop task. JAIS Voice may show the exact command "
       + "to the user for approval, or refuse it per the user's settings; a refusal is final. macOS system permissions still apply. "
       + `Commands run through /bin/zsh, with no elevated privileges, for at most ${SHELL_SECONDS} seconds. `
@@ -65,12 +65,12 @@ export default function (pi: ExtensionAPI) {
       reason: Type.String({ description: "Short explanation in the user's language of the requested visible action and any effect on connectivity." }),
     }, { additionalProperties: false }),
     executionMode: "sequential",
-    execute: (_id, params, signal, _update, ctx) => execute(params.command, params.reason, signal, { ctx, label: "Commande macOS" }),
+    execute: (_id, params, signal, _update, ctx) => execute(params.command, params.reason, signal, { ctx, label: "macOS command" }),
   }));
 
   pi.registerTool(defineTool({
     name: "macos_create_note",
-    label: "Nouvelle note",
+    label: "New note",
     description: "Create and visibly show a NEW note in macOS Notes, once JAIS Voice approves it. "
       + "Prefer this tool, not hand-written shell or AppleScript, for every request to create a note. The body is literal "
       + "plain text: preserve the user's exact requested wording and language; do not translate it or supply HTML. Choose a "
@@ -82,23 +82,23 @@ export default function (pi: ExtensionAPI) {
       body: Type.String({ description: "Exact literal text requested by the user, without HTML or translation (maximum 4000 UTF-8 bytes)." }),
     }, { additionalProperties: false }),
     executionMode: "sequential",
-    execute: (_id, params, signal, _update, ctx) => execute(noteCommand(params.title, params.body), "Créer une note : " + params.title, signal,
-      { ctx, label: "Nouvelle note", details: params.title + "\n\n" + params.body }),
+    execute: (_id, params, signal, _update, ctx) => execute(noteCommand(params.title, params.body), "Create a note: " + params.title, signal,
+      { ctx, label: "New note", details: params.title + "\n\n" + params.body }),
   }));
 
   if (existsSync(BLUEUTIL) && existsSync(RADIO_SCRIPT)) {
     const radios = `${shellQuote(PYTHON)} ${shellQuote(RADIO_SCRIPT)}`;
     pi.registerTool(defineTool({
       name: "macos_radio_status",
-      label: "État Wi-Fi et Bluetooth",
+      label: "Wi-Fi and Bluetooth status",
       description: "Immediately read current Wi-Fi and Bluetooth power without modifying them. Prefer this tool for radio state inspection; no additional JAIS Voice approval is required.",
       parameters: Type.Object({}, { additionalProperties: false }),
       executionMode: "sequential",
-      execute: (_id, _params, signal) => execute(radios + " status", "Lire l’état du Wi-Fi et du Bluetooth.", signal),
+      execute: (_id, _params, signal) => execute(radios + " status", "Read Wi-Fi and Bluetooth status.", signal),
     }));
     pi.registerTool(defineTool({
       name: "macos_set_airplane_mode",
-      label: "Mode avion",
+      label: "Airplane mode",
       description: "For the user's requested airplane-mode action, immediately disable BOTH Wi-Fi and Bluetooth (enabled=true), "
         + "or re-enable BOTH (enabled=false), with preflight checks, readback and rollback on failure. This is an equivalent "
         + "of airplane mode, not a macOS global switch. Prefer this tool, not handwritten shell. JAIS Voice may ask the user "
@@ -111,8 +111,8 @@ export default function (pi: ExtensionAPI) {
       executionMode: "sequential",
       // The CLI flag records the approval JAIS Voice just gave; it is not a TCC bypass.
       execute: (_id, params, signal, _update, ctx) => execute(radios + (params.enabled ? " airplane on --confirmed" : " airplane off --confirmed"),
-        params.enabled ? "Désactiver le Wi-Fi et le Bluetooth." : "Réactiver le Wi-Fi et le Bluetooth.", signal,
-        { ctx, label: "Mode avion", details: params.enabled ? "Wi-Fi : désactivé\nBluetooth : désactivé" : "Wi-Fi : activé\nBluetooth : activé" }),
+        params.enabled ? "Turn off Wi-Fi and Bluetooth." : "Turn Wi-Fi and Bluetooth back on.", signal,
+        { ctx, label: "Airplane mode", details: params.enabled ? "Wi-Fi: off\nBluetooth: off" : "Wi-Fi: on\nBluetooth: on" }),
     }));
   }
 

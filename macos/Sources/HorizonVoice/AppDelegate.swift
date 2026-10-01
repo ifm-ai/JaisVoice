@@ -65,7 +65,7 @@ import UniformTypeIdentifiers
         }.store(in: &subscriptions)
         preferences.objectWillChange.receive(on: RunLoop.main).sink { [weak self] _ in
             self?.state.objectWillChange.send()
-            self?.configuration.window?.title = L("Réglages · JAIS Voice")
+            self?.configuration.window?.title = L("Settings · JAIS Voice")
             self?.updateSelectedModelHealth()
             self?.updateMenu()
         }.store(in: &subscriptions)
@@ -180,7 +180,7 @@ import UniformTypeIdentifiers
         state.updateModelHealth(selected, serviceStatus: health.status)
         if state.cleanerModelPhase != .ready || state.agentModelPhase != .ready {
             state.ready = false
-            if health.status == "ready" { state.serviceMessage = L("Chargez le modèle sélectionné pour continuer.") }
+            if health.status == "ready" { state.serviceMessage = L("Load the selected model to continue.") }
         }
     }
 
@@ -188,7 +188,7 @@ import UniformTypeIdentifiers
         guard !state.modelsChanging, !state.modelsUnloaded else { return }
         startupTask?.cancel()
         serviceRequiresRelaunch = false
-        state.ready = false; state.serviceMessage = "Démarrage des services…"
+        state.ready = false; state.serviceMessage = "Starting services…"
         state.resetModelsLoading()
         startupTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -220,7 +220,7 @@ import UniformTypeIdentifiers
                     } else if health.status == "ready" {
                         guard self.state.cleanerModelPhase == .ready && self.state.agentModelPhase == .ready else {
                             self.state.ready = false
-                            self.state.serviceMessage = L("Chargez le modèle sélectionné pour continuer.")
+                            self.state.serviceMessage = L("Load the selected model to continue.")
                             try? await Task.sleep(nanoseconds: 500_000_000)
                             continue
                         }
@@ -230,7 +230,7 @@ import UniformTypeIdentifiers
                             guard !self.state.modelsChanging, self.state.cleanerModelPhase == .ready, self.state.agentModelPhase == .ready else { continue }
                             self.state.ready = true
                         }
-                        self.state.serviceMessage = "Prêt · modèles locaux chargés"
+                        self.state.serviceMessage = "Ready · local models loaded"
                         self.startSmokeIfNeeded()
                     } else {
                         self.state.ready = false
@@ -240,7 +240,7 @@ import UniformTypeIdentifiers
                     self.latestHealth = nil
                     self.state.ready = false
                     self.state.modelsUnavailable()
-                    self.state.serviceMessage = "Connexion aux services locaux…"
+                    self.state.serviceMessage = "Connecting to local services…"
                 }
                 try? await Task.sleep(nanoseconds: self.state.ready ? 2_000_000_000 : 500_000_000)
             }
@@ -261,14 +261,14 @@ import UniformTypeIdentifiers
         let missing = modelStore.missingDownloads
         guard !missing.isEmpty, !preview else { return }
         let alert = NSAlert()
-        alert.messageText = L("Télécharger les modèles ?")
+        alert.messageText = L("Download the models?")
         let lines = missing.map { model in
             "• " + model.display_name + (model.download_bytes.map { " (" + ModelStore.formatBytes($0) + ")" } ?? "")
         }
-        alert.informativeText = L("JAIS Voice a besoin de ces modèles pour fonctionner :") + "\n" + lines.joined(separator: "\n") + "\n\n"
-            + L("Ils sont téléchargés depuis Hugging Face et restent sur ce Mac. Vous pourrez les supprimer depuis les réglages.")
-        alert.addButton(withTitle: L("Télécharger"))
-        alert.addButton(withTitle: L("Plus tard"))
+        alert.informativeText = L("JAIS Voice needs these models to work:") + "\n" + lines.joined(separator: "\n") + "\n\n"
+            + L("They are downloaded from Hugging Face and stay on this Mac. You can delete them from Settings.")
+        alert.addButton(withTitle: L("Download"))
+        alert.addButton(withTitle: L("Later"))
         NSApplication.shared.activate(ignoringOtherApps: true)
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         missing.forEach { modelStore.download($0.id) }
@@ -292,14 +292,14 @@ import UniformTypeIdentifiers
         guard let model = modelStore.models.first(where: { $0.id == id }), !state.isBusy, !state.modelsChanging else { return }
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = L("Supprimer {0} ?", String(describing: model.display_name))
-        var details = L("{0} seront libérés sur ce Mac.", String(describing: ModelStore.formatBytes(model.diskBytes)))
+        alert.messageText = L("Delete {0}?", String(describing: model.display_name))
+        var details = L("{0} will be freed on this Mac.", String(describing: ModelStore.formatBytes(model.diskBytes)))
         details += " " + (model.downloadable
-            ? L("Vous pourrez le télécharger de nouveau depuis les réglages.")
-            : L("Ce modèle n’est pas encore publié sur Hugging Face : il faudra le reconvertir pour le réutiliser."))
+            ? L("You can download it again from Settings.")
+            : L("This model is not published on Hugging Face yet: it will have to be converted again to be used."))
         alert.informativeText = details
-        alert.addButton(withTitle: L("Supprimer")).hasDestructiveAction = true
-        alert.addButton(withTitle: L("Annuler"))
+        alert.addButton(withTitle: L("Delete")).hasDestructiveAction = true
+        alert.addButton(withTitle: L("Cancel"))
         NSApplication.shared.activate(ignoringOtherApps: true)
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         Task { @MainActor in
@@ -353,11 +353,11 @@ import UniformTypeIdentifiers
         }
         // Only the supervisor owned by this app may be stopped.
         guard launcher.isRunning else {
-            state.serviceMessage = L("Cette instance ne contrôle pas les services. Déchargez les modèles depuis l’application qui les a démarrés.")
+            state.serviceMessage = L("This instance does not own the services. Unload models from the app that started them.")
             return
         }
         state.modelsChanging = true; state.ready = false
-        state.serviceMessage = "Libération de la mémoire…"
+        state.serviceMessage = "Releasing memory…"
         latestHealth = nil
         let previousStartup = startupTask
         previousStartup?.cancel(); startupTask = nil
@@ -394,13 +394,13 @@ import UniformTypeIdentifiers
             if state.modelsUnloaded || state.modelsChanging { configuration.show(); return }
             let message = serviceRequiresRelaunch
                 ? state.serviceMessage + "\n\n" + ServiceDiagnostics.restartInstruction
-                : L("Les modèles se préparent encore. {0}", String(describing: L(state.serviceMessage)))
+                : L("Models are still preparing. {0}", String(describing: L(state.serviceMessage)))
             state.begin(); state.fail(message)
             panels.anchorToPointer(); panels.showResult(); return
         }
         preferences.refreshMicrophoneStatus()
         guard preferences.microphoneAuthorized else {
-            state.begin(); state.fail(L("Ouvrez les réglages de JAIS Voice et autorisez le microphone avant de parler."))
+            state.begin(); state.fail(L("Open JAIS Voice settings and allow microphone access before speaking."))
             panels.anchorToPointer(); panels.showResult(); return
         }
         let continuingConversation = (panels.result.isVisible || state.awaitingClarification) && state.turnID != nil
@@ -411,7 +411,7 @@ import UniformTypeIdentifiers
             try recorder.start()
             panels.showRecording()
         } catch {
-            state.fail(L("Le microphone n’a pas démarré : {0}", String(describing: error.localizedDescription)))
+            state.fail(L("The microphone could not start: {0}", String(describing: error.localizedDescription)))
             panels.showResult()
         }
     }
@@ -437,7 +437,7 @@ import UniformTypeIdentifiers
             } catch is CancellationError { return }
             catch {
                 guard self.state.turnID == turnID, !self.state.finished else { return }
-                self.state.fail(L("L’enregistrement n’a pas pu être transmis : {0}", String(describing: error.localizedDescription)))
+                self.state.fail(L("The recording could not be sent: {0}", String(describing: error.localizedDescription)))
             }
         }
     }
@@ -468,7 +468,7 @@ import UniformTypeIdentifiers
                 try shortcut.register(choice: previous)
                 shortcutError = message
             } catch {
-                shortcutError = message + L(" Aucun raccourci n’est actif.")
+                shortcutError = message + L(" No shortcut is active.")
             }
         }
         preferences.shortcutError = shortcutError
@@ -483,20 +483,20 @@ import UniformTypeIdentifiers
             let item = NSMenuItem(title: label, action: action, keyEquivalent: "")
             item.target = self; item.isEnabled = enabled && action != nil; menu.addItem(item); return item
         }
-        serviceMenuItem = add(preview ? L("Aperçu visuel · services désactivés") : L(state.serviceMessage), enabled: false)
+        serviceMenuItem = add(preview ? L("Visual preview · services disabled") : L(state.serviceMessage), enabled: false)
         cleanerMenuItem = add("", enabled: false)
         agentMenuItem = add("", enabled: false)
-        _ = add(L("Réglages…"), action: #selector(showConfiguration))
+        _ = add(L("Settings…"), action: #selector(showConfiguration))
         if serviceRequiresRelaunch { _ = add(ServiceDiagnostics.restartInstruction, enabled: false) }
         if let error = shortcutError { _ = add(error, enabled: false) }
         if !preferences.microphoneAuthorized && !preview {
-            _ = add(L("Autoriser le microphone…"), action: #selector(authorizeMicrophone))
+            _ = add(L("Allow microphone access…"), action: #selector(authorizeMicrophone))
         }
         menu.addItem(.separator())
-        _ = add(L("Dernier résultat"), action: #selector(showLast), enabled: state.hasResult)
-        _ = add(L("Importer un fichier audio…"), action: #selector(importAudio), enabled: state.ready && !state.isBusy && !preview)
-        _ = add(L("Saisir une demande…"), action: #selector(textRequest), enabled: state.ready && !state.isBusy && !preview)
-        _ = add(L("Arrêter la demande"), action: #selector(stopFromMenu), enabled: state.isBusy)
+        _ = add(L("Last result"), action: #selector(showLast), enabled: state.hasResult)
+        _ = add(L("Import an audio file…"), action: #selector(importAudio), enabled: state.ready && !state.isBusy && !preview)
+        _ = add(L("Type a request…"), action: #selector(textRequest), enabled: state.ready && !state.isBusy && !preview)
+        _ = add(L("Stop request"), action: #selector(stopFromMenu), enabled: state.isBusy)
         let shortcutMenu = NSMenu()
         for (index, choice) in ShortcutChoice.choices.enumerated() {
             let item = NSMenuItem(title: choice.label, action: #selector(changeShortcut(_:)), keyEquivalent: "")
@@ -504,13 +504,13 @@ import UniformTypeIdentifiers
             item.isEnabled = !state.isBusy && !preview
             shortcutMenu.addItem(item)
         }
-        let shortcutItem = NSMenuItem(title: L("Maintenir pour parler"), action: nil, keyEquivalent: "")
+        let shortcutItem = NSMenuItem(title: L("Hold to talk"), action: nil, keyEquivalent: "")
         shortcutItem.submenu = shortcutMenu; menu.addItem(shortcutItem)
         _ = add(state.modelMemoryButton, action: #selector(toggleModelMemory), enabled: state.canToggleModelMemory && !preview)
-        if !state.ready && !state.modelsChanging && !state.modelsUnloaded && !preview && !serviceRequiresRelaunch { _ = add(L("Relancer la connexion"), action: #selector(retryConnection)) }
-        if launcher.logURL != nil && !preview { _ = add(L("Voir le journal des services…"), action: #selector(showServiceLog)) }
+        if !state.ready && !state.modelsChanging && !state.modelsUnloaded && !preview && !serviceRequiresRelaunch { _ = add(L("Retry connection"), action: #selector(retryConnection)) }
+        if launcher.logURL != nil && !preview { _ = add(L("View service log…"), action: #selector(showServiceLog)) }
         menu.addItem(.separator())
-        let quit = add(L("Quitter JAIS Voice"), action: #selector(quit))
+        let quit = add(L("Quit JAIS Voice"), action: #selector(quit))
         quit.keyEquivalent = "q"
         statusItem.menu = menu
         refreshMenuStatus()
@@ -518,8 +518,8 @@ import UniformTypeIdentifiers
     }
 
     private func refreshMenuStatus() {
-        serviceMenuItem?.title = preview ? L("Aperçu visuel · services désactivés") : L(state.serviceMessage)
-        cleanerMenuItem?.title = L("Nettoyage · {0} — {1}", String(describing: state.cleanerModelLabel), String(describing: state.cleanerModelPhase.label))
+        serviceMenuItem?.title = preview ? L("Visual preview · services disabled") : L(state.serviceMessage)
+        cleanerMenuItem?.title = L("Cleanup · {0} — {1}", String(describing: state.cleanerModelLabel), String(describing: state.cleanerModelPhase.label))
         agentMenuItem?.title = "Agent · \(state.agentModelLabel) — \(state.agentModelPhase.label)"
         cleanerMenuItem?.image = NSImage(systemSymbolName: state.cleanerModelPhase.symbolName, accessibilityDescription: state.cleanerModelPhase.label)
         agentMenuItem?.image = NSImage(systemSymbolName: state.agentModelPhase.symbolName, accessibilityDescription: state.agentModelPhase.label)
@@ -572,15 +572,15 @@ import UniformTypeIdentifiers
     @objc private func textRequest() {
         guard state.ready, !state.isBusy, !preview else { return }
         let alert = NSAlert()
-        alert.messageText = L("Que souhaitez-vous faire ?")
-        alert.informativeText = L("Le texte passe par le correcteur puis l’agent local, sans utiliser le micro ni l’ASR. Les commandes macOS s’exécutent directement avec vos droits utilisateur.")
-        alert.addButton(withTitle: L("Envoyer"))
-        alert.addButton(withTitle: L("Annuler"))
+        alert.messageText = L("What would you like to do?")
+        alert.informativeText = L("Text goes through the corrector and local agent without using the microphone or speech recognition. macOS commands run directly with your user permissions.")
+        alert.addButton(withTitle: L("Send"))
+        alert.addButton(withTitle: L("Cancel"))
         let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 460, height: 60))
-        input.placeholderString = L("Ouvre une nouvelle note et écris bonjour…")
+        input.placeholderString = L("Open a new note and write hello…")
         input.usesSingleLineMode = false
         input.cell?.wraps = true
-        input.setAccessibilityLabel(L("Demande écrite"))
+        input.setAccessibilityLabel(L("Typed request"))
         alert.accessoryView = input
         NSApplication.shared.activate(ignoringOtherApps: true)
         alert.window.initialFirstResponder = input
@@ -598,8 +598,8 @@ import UniformTypeIdentifiers
     @objc private func importAudio() {
         guard state.ready, !state.isBusy, !preview else { return }
         let picker = NSOpenPanel()
-        picker.title = L("Importer un enregistrement")
-        picker.prompt = L("Transcrire")
+        picker.title = L("Import a recording")
+        picker.prompt = L("Transcribe")
         picker.allowedContentTypes = [.wav, .audio]
         picker.allowsMultipleSelection = false
         picker.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
@@ -621,21 +621,21 @@ import UniformTypeIdentifiers
 
     private func showSettingsPreview() {
         state.ready = true
-        state.serviceMessage = "Aperçu · aucun service ni microphone démarré"
+        state.serviceMessage = "Preview · no services or microphone started"
         state.cleanerModelLabel = "MBZUAI · 1B"
         state.agentModelLabel = "MBZUAI · 4B"
         state.cleanerModelPhase = .ready
         state.agentModelPhase = .ready
         if CommandLine.arguments.contains("--settings-loading") {
             state.ready = false
-            state.serviceMessage = "Aperçu · chargement du modèle agent"
+            state.serviceMessage = "Preview · loading agent model"
             state.agentModelPhase = .loading
         }
         if CommandLine.arguments.contains("--settings-error") {
             state.ready = false
-            state.serviceMessage = "Aperçu · échec de chargement du modèle agent"
+            state.serviceMessage = "Preview · agent model failed to load"
             state.agentModelPhase = .error
-            state.agentModelError = L("Exemple de diagnostic de chargement.")
+            state.agentModelError = L("Example loading diagnostic.")
         }
         state.updateModelInventory([
             "k2-cleaner": ServiceModelHealth(model_size: "1B", display_name: "MBZUAI · 1B", repo: nil, status: "unloaded", error: nil),
@@ -672,35 +672,35 @@ import UniformTypeIdentifiers
                 state.agentModelPhase = .loading; updateMenu()
                 let loadingTitle = agentMenuItem?.title ?? ""
                 state.agentModelPhase = .ready; updateMenu()
-                diagnostics["open_menu_updates_in_place"] = statusItem.menu === menu && loadingTitle.contains(ModelLoadPhase.loading.label) && agentMenuItem?.title.contains(L("Chargé")) == true
+                diagnostics["open_menu_updates_in_place"] = statusItem.menu === menu && loadingTitle.contains(ModelLoadPhase.loading.label) && agentMenuItem?.title.contains(L("Loaded")) == true
                 state.agentModelPhase = phase
                 menuDidClose(menu)
             }
             if let data = try? JSONSerialization.data(withJSONObject: diagnostics, options: [.sortedKeys]), let json = String(data: data, encoding: .utf8) {
                 print("HORIZON_SETTINGS_TEST=\(json)")
             }
-            do { try configuration.renderPreview(to: url); print("Réglages exportés : \(url.path)") }
+            do { try configuration.renderPreview(to: url); print("Settings exported: \(url.path)") }
             catch { fputs("\(error.localizedDescription)\n", stderr) }
             Self.terminateFromRunLoop()
         }
     }
 
     private func showPreview() {
-        state.serviceMessage = "Aperçu visuel · aucune inférence"
+        state.serviceMessage = "Visual preview · no inference"
         let id = state.begin()
         let events = [
             WireEvent(type: "transcript", turn_id: id, text: "ابحث عن متحف اللوفر في أبوظبي… لا، في باريس. افتح الموقع الرسمي."),
             WireEvent(type: "correction", turn_id: id, text: "ابحث عن متحف اللوفر في باريس. افتح الموقع الرسمي."),
             WireEvent(type: "tool_start", turn_id: id, tool_id: "preview-only", tool_name: "browser_navigate", arguments: .object(["url": .string("https://www.louvre.fr")])),
-            WireEvent(type: "tool_end", turn_id: id, tool_id: "preview-only", result: L("Exemple visuel, aucune navigation exécutée.")),
-            WireEvent(type: "complete", turn_id: id, text: "هذا مثال بصري للواجهة. لم يُنفَّذ بحث أو استدلال.\n\n[Musée du Louvre](https://www.louvre.fr)")
+            WireEvent(type: "tool_end", turn_id: id, tool_id: "preview-only", result: L("Visual example, no browsing performed.")),
+            WireEvent(type: "complete", turn_id: id, text: "هذا مثال بصري للواجهة. لم يُنفَّذ بحث أو استدلال.\n\n[Louvre Museum](https://www.louvre.fr)")
         ]
         for event in events { state.accept(event) }
         if CommandLine.arguments.contains("--preview-followup") {
             let followup = state.begin(continuingConversation: true)
-            state.accept(WireEvent(type: "transcript", turn_id: followup, text: "Et dans quelle ville se trouve ce musée ?"))
-            state.accept(WireEvent(type: "correction", turn_id: followup, text: "Dans quelle ville se trouve ce musée ?"))
-            state.accept(WireEvent(type: "complete", turn_id: followup, text: "Le musée du Louvre dont nous parlons se trouve à Paris."))
+            state.accept(WireEvent(type: "transcript", turn_id: followup, text: "And which city is this museum in?"))
+            state.accept(WireEvent(type: "correction", turn_id: followup, text: "Which city is this museum in?"))
+            state.accept(WireEvent(type: "complete", turn_id: followup, text: "The Louvre museum we are talking about is in Paris."))
         }
         if CommandLine.arguments.contains("--preview-clarification") {
             let clarification = state.begin()
@@ -709,8 +709,8 @@ import UniformTypeIdentifiers
         }
         if CommandLine.arguments.contains("--preview-approval") {
             let approval = state.begin()
-            state.accept(WireEvent(type: "correction", turn_id: approval, text: "Ouvre Safari sur la page d’accueil."))
-            state.pendingApproval = ActionRequest(tool: "Commande macOS", reason: "Ouvrir Safari.", details: "/usr/bin/open -a Safari")
+            state.accept(WireEvent(type: "correction", turn_id: approval, text: "Open Safari on the home page."))
+            state.pendingApproval = ActionRequest(tool: "macOS command", reason: "Ouvrir Safari.", details: "/usr/bin/open -a Safari")
         }
         state.showOriginal = true
         let previousFrontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
@@ -721,7 +721,7 @@ import UniformTypeIdentifiers
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
                 let currentFrontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
                 print("HORIZON_PREVIEW_FOCUS before=\(previousFrontmost ?? -1) after=\(currentFrontmost ?? -1) unchanged=\(previousFrontmost == currentFrontmost)")
-                do { try panels.savePreview(to: url); print("Aperçu enregistré : \(url.path)") }
+                do { try panels.savePreview(to: url); print("Preview saved: \(url.path)") }
                 catch { fputs("\(error.localizedDescription)\n", stderr) }
                 Self.terminateFromRunLoop()
             }
@@ -745,7 +745,7 @@ import UniformTypeIdentifiers
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 300_000_000_000)
             if state.turnID == id && !state.finished {
-                cancelPendingTurn(); state.fail(L("Le test a dépassé cinq minutes."))
+                cancelPendingTurn(); state.fail(L("The test exceeded five minutes."))
             }
         }
     }

@@ -98,7 +98,7 @@ class Worker:
         self.models = {}  # size -> (model, tokenizer, config, entry)
         self._state_lock = threading.Lock()
         self._model_health = {}  # size -> catalog entry and status
-        self.status, self.message = "starting", "Chargement des modèles…"
+        self.status, self.message = "starting", "Loading models…"
         self.lifecycle_busy = False
         self.pending = 0
         self.active_flags = set()
@@ -127,7 +127,7 @@ class Worker:
             self.refresh_inventory()
         except (OSError, ValueError) as exc:
             with self._state_lock:
-                self.status, self.message = "error", f"Catalogue des modèles invalide : {exc}"
+                self.status, self.message = "error", f"Invalid model catalog: {exc}"
         with self._state_lock:
             models = {size: {"model_size": size, "display_name": entry["display_name"], "status": entry["status"],
                              "installed": entry["installed"], "downloadable": entry["download"] is not None,
@@ -158,7 +158,7 @@ class Worker:
                 self.change_model(size, "load")
             with self._state_lock:
                 self.status = "ready"
-                self.message = "Prêt · " + self._model_health[size]["display_name"] if size else "Aucun modèle de langage installé"
+                self.message = "Ready · " + self._model_health[size]["display_name"] if size else "No language model installed"
         except Exception as exc:
             logger.exception("MLX model loading failed")
             with self._state_lock:
@@ -168,7 +168,7 @@ class Worker:
         """Runs on the same single executor as inference; no Metal work races."""
         self.refresh_inventory()
         if size not in self._model_health:
-            raise ValueError(f"Le modèle {size} n’existe pas dans le catalogue.")
+            raise ValueError(f"Le modèle {size} is not in the catalog.")
         import mlx.core as mx
         if action == "unload":
             with self._state_lock:
@@ -181,7 +181,7 @@ class Worker:
                 health.pop("error", None)
             return
         if not self._model_health[size]["installed"]:
-            raise ValueError(f"Le modèle {size} n’est pas installé : téléchargez-le dans les réglages.")
+            raise ValueError(f"Le modèle {size} is not installed: download it in Settings.")
         for other in list(self.models):
             if other != size:
                 self.change_model(other, "unload")
@@ -214,10 +214,10 @@ class Worker:
         size = body.model_size
         if size is None:
             if len(self.models) != 1:
-                raise ValueError("Précisez la taille du modèle : aucun ou plusieurs modèles sont chargés.")
+                raise ValueError("Specify the model size: no model or several models are loaded.")
             size = next(iter(self.models))
         if size not in self.models:
-            raise ValueError(f"Le modèle {size} n’est pas disponible : chargez-le dans les réglages.")
+            raise ValueError(f"Le modèle {size} is not available: load it in Settings.")
         model, tokenizer, config, entry = self.models[size]
         limit = model_store.CLEANER_CONTEXT if body.model == "k2-cleaner" else entry["context_limit"]
         entry = {**entry, "context_limit": min(limit, config.get("max_position_embeddings", limit))}
@@ -340,15 +340,15 @@ class ModelMemoryRequest(BaseModel):
 async def model_memory(size: Literal["1B", "4B", "7B"], body: ModelMemoryRequest):
     # Reserve before yielding so concurrent HTTP requests cannot race inference.
     if worker.status == "starting" or worker.lifecycle_busy or worker.pending or worker.active_request:
-        raise HTTPException(409, "Une opération est en cours. Réessayez après sa fin.")
+        raise HTTPException(409, "An operation is in progress. Try again when it ends.")
     if size not in worker._model_health:
-        raise HTTPException(404, "Ce modèle n’existe pas dans le catalogue.")
+        raise HTTPException(404, "This model is not in the catalog.")
     worker.lifecycle_busy = True
     async def perform():
         try:
             await asyncio.get_running_loop().run_in_executor(worker.executor, worker.change_model, size, body.action)
             with worker._state_lock:
-                worker.status, worker.message = "ready", "Services prêts"
+                worker.status, worker.message = "ready", "Services ready"
         finally:
             worker.lifecycle_busy = False
     # Cancellation of an HTTP client must not release the reservation before Metal finishes.
@@ -363,7 +363,7 @@ async def model_memory(size: Literal["1B", "4B", "7B"], body: ModelMemoryRequest
 async def begin_generation(body: CompletionRequest, request: Request):
     """Queue one generation; returns its event reader and the release callback."""
     if worker.lifecycle_busy:
-        raise HTTPException(409, "La mémoire des modèles est en cours de modification.")
+        raise HTTPException(409, "Model memory is being changed.")
     if worker.status != "ready":
         raise HTTPException(503, worker.message)
     if body.model not in MODEL_ROLES:
@@ -492,15 +492,15 @@ async def clean(body: CleanRequest, request: Request):
             release()
     except HTTPException as exc:
         if exc.status_code == 422:
-            raise clean_failure(422, "cleaner_incomplete", "Le correcteur n’a pas terminé le nettoyage. La demande n’a pas été exécutée.") from exc
-        raise clean_failure(exc.status_code, "cleaner_unavailable", "Le nettoyage a échoué. Vérifiez l’état des modèles locaux.") from exc
+            raise clean_failure(422, "cleaner_incomplete", "The corrector did not finish cleanup. The request was not executed.") from exc
+        raise clean_failure(exc.status_code, "cleaner_unavailable", "Cleanup failed. Check the local model status.") from exc
     text = data["content"].strip()
     if data["finish_reason"] != "stop":
-        raise clean_failure(422, "cleaner_incomplete", "Le correcteur n’a pas terminé le nettoyage. La demande n’a pas été exécutée.")
+        raise clean_failure(422, "cleaner_incomplete", "The corrector did not finish cleanup. The request was not executed.")
     if not text:
-        raise clean_failure(422, "cleaner_empty", "Le correcteur n’a renvoyé aucun texte corrigé. La demande n’a pas été exécutée.")
+        raise clean_failure(422, "cleaner_empty", "The corrector returned no corrected text. The request was not executed.")
     if body.guard and cleanup_problem(body.text, text) is not None:
-        raise clean_failure(422, "cleaner_uncertain", "Correction incertaine. Reformulez votre demande ; aucune action n’a été lancée.")
+        raise clean_failure(422, "cleaner_uncertain", "Uncertain correction. Rephrase your request; no action was started.")
     return {"text": text, "elapsed_ms": round((time.perf_counter() - started) * 1000)}
 
 

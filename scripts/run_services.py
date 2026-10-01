@@ -117,7 +117,7 @@ def main():
     for port in (8788, 8790):
         with socket.socket() as probe:
             if probe.connect_ex(("127.0.0.1", port)) == 0:
-                raise RuntimeError(f"Le port local {port} est déjà occupé ; aucun processus existant n'a été arrêté.")
+                raise RuntimeError(f"Local port {port} is already in use; no existing process was stopped.")
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGINT, shutdown)
     processes = []
@@ -147,7 +147,7 @@ def main():
                 start("asr", asr_command)
             for name, child in processes:
                 if child.poll() is not None:
-                    raise RuntimeError(f"Le service {name} s'est arrêté (code {child.returncode}). Voir {logs / (name + '.log')}")
+                    raise RuntimeError(f"The {name} service stopped (code {child.returncode}). See {logs / (name + '.log')}")
     finally:
         stop_processes(processes)
         for stream in streams:

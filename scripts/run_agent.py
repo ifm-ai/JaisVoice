@@ -22,14 +22,14 @@ def find_node(env: dict) -> str:
     for candidate in (node, "/opt/homebrew/bin/node", str(Path.home() / ".local/bin/node"), "/usr/local/bin/node"):
         if candidate and Path(candidate).is_file():
             return candidate
-    raise RuntimeError("Node.js introuvable. Relancer la préparation de JAIS Voice.")
+    raise RuntimeError("Node.js not found. Run the JAIS Voice setup again.")
 
 
 def agent_effort(env: dict) -> str:
     """Startup level only: the app applies each model's catalog effort when it selects it."""
     effort = env.get("HORIZON_AGENT_REASONING_EFFORT") or "low"
     if effort not in {"low", "medium", "high"}:
-        raise ValueError(f"HORIZON_AGENT_REASONING_EFFORT={effort!r} doit valoir low, medium ou high.")
+        raise ValueError(f"HORIZON_AGENT_REASONING_EFFORT={effort!r} must be low, medium or high.")
     return effort
 
 

@@ -24,9 +24,9 @@ import AppKit
         button.image = makeIcon()
         button.imagePosition = button.image == nil ? .noImage : .imageLeading
         button.appearsDisabled = false
-        button.toolTip = L("JAIS Voice · {0} pour parler · Cliquer pour les réglages", String(describing: shortcutTitle))
+        button.toolTip = L("JAIS Voice · {0} to talk · Click for settings", String(describing: shortcutTitle))
         button.setAccessibilityLabel("JAIS Voice")
-        button.setAccessibilityHelp(L("Assistant vocal. {0} pour parler. Ouvrir le menu pour les réglages.", String(describing: shortcutTitle)))
+        button.setAccessibilityHelp(L("Voice assistant. {0} to talk. Open the menu for settings.", String(describing: shortcutTitle)))
     }
 
     static func makeIcon() -> NSImage? {

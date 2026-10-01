@@ -1,18 +1,19 @@
 # JAISVoice
 
-Ce dossier est la racine de développement de JAIS Voice, déplacée ici le 17 septembre 2026 à la demande de Florian. Utiliser `/Users/florian/Workspace/JAISVoice` pour la suite du développement.
+This folder is the development root of JAIS Voice, moved here on 17 September 2026 at Florian's request. Use `/Users/florian/Workspace/JAISVoice` for further development.
 
-- Interface macOS : `macos/Sources/HorizonVoice/`.
-- Agent : harness Pi dans `agent/` (prompt, modèles, extension `extensions/jais/`), lancé par `scripts/run_agent.py`.
-- ASR local : `backend/horizon_voice/local_asr.py`. Nettoyage et garde-fou : `k2_runtime/` (`/v1/clean`).
-- Inférence locale : `k2_runtime/`.
-- Modèles et services : `.runtime/` ; catalogue des modèles (dépôts Hugging Face, tailles) : `models/catalog.json`, géré par `scripts/models.py`.
-- Environnement Python : `.venv/`.
-- Application construite et livrables : `outputs/`. Application installée : `/Applications/JAIS Voice.app`.
-- Construire : `.venv/bin/python scripts/build_app.py --direct` (app autonome partageable, données dans `~/Library/Application Support/JAIS Voice`) ; `--dev` pour une app qui exécute ce dépôt et `.runtime/` ; `--zip` pour l’archive de Release.
-- Dépôt : https://github.com/MBZUAI-IFM/JaisVoice (branche `main`).
-- Tests Python : `PYTHONPATH=.:backend .venv/bin/python -m pytest backend/tests tests -q -o asyncio_mode=auto`.
-- Tests de l’extension Pi : `node --test agent/`.
-- Tests natifs : `outputs/JAIS Voice.app/Contents/MacOS/JAISVoice --self-test`.
+- macOS interface: `macos/Sources/HorizonVoice/`.
+- Agent: Pi harness in `agent/` (prompt, models, `extensions/jais/` extension), started by `scripts/run_agent.py`.
+- Local ASR: `backend/horizon_voice/local_asr.py`. Cleanup and safeguard: `k2_runtime/` (`/v1/clean`).
+- Local inference: `k2_runtime/`.
+- Models and services: `.runtime/`; model catalog (Hugging Face repositories, sizes): `models/catalog.json`, managed by `scripts/models.py`.
+- Python environment: `.venv/`.
+- Built app and deliverables: `outputs/`. Installed app: `/Applications/JAIS Voice.app`.
+- Build: `.venv/bin/python scripts/build_app.py --direct` (shareable self-contained app, data in `~/Library/Application Support/JAIS Voice`); `--dev` for an app that runs this checkout and `.runtime/`; `--zip` for the Release archive.
+- Repository: https://github.com/MBZUAI-IFM/JaisVoice (`main` branch).
+- Python tests: `PYTHONPATH=.:backend .venv/bin/python -m pytest backend/tests tests -q -o asyncio_mode=auto`.
+- Pi extension tests: `node --test agent/`.
+- Native tests: `outputs/JAIS Voice.app/Contents/MacOS/JAISVoice --self-test`.
+- Language: code, comments, documentation and messages are in English. Interface strings are English keys passed to `L(...)`; add the French translation to `macos/Resources/fr.lproj/Localizable.strings` and the key to `en.lproj`.
 
-Préserver les poids, sauvegardes et journaux. Ne pas réintroduire de chemins absolus vers l’ancien dossier Documents/Codex.
+Preserve weights, backups and logs. Do not reintroduce absolute paths to the old Documents/Codex folder.

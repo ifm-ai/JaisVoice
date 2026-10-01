@@ -55,7 +55,7 @@ private final class RecordReader: @unchecked Sendable {
         } else if let resource = Bundle.main.url(forResource: "launch-agent", withExtension: nil) {
             executable = resource
         } else {
-            throw VoiceError.message(L("Le lanceur de l’agent est absent. Ouvrez le bundle JAIS Voice.app créé par le script d’installation."))
+            throw VoiceError.message(L("The agent launcher is missing. Open the JAIS Voice.app bundle created by the setup script."))
         }
         let task = Process()
         task.executableURL = executable
@@ -77,7 +77,7 @@ private final class RecordReader: @unchecked Sendable {
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     guard let self, self.process === task else { return }
-                    self.cleanup(error: VoiceError.message(L("L’agent local s’est arrêté. Vérifiez l’état des services dans le menu.")))
+                    self.cleanup(error: VoiceError.message(L("The local agent stopped. Check service status in the menu.")))
                     self.onExit?(detail)
                 }
             }
@@ -92,7 +92,7 @@ private final class RecordReader: @unchecked Sendable {
     private func receive(_ record: JSONValue) {
         if record["type"]?.string == "response", let id = record["id"]?.string, let continuation = pending.removeValue(forKey: id) {
             if record["success"]?.bool == true { continuation.resume(returning: record["data"] ?? .null) }
-            else { continuation.resume(throwing: VoiceError.message(record["error"]?.string ?? L("L’agent a refusé la commande."))) }
+            else { continuation.resume(throwing: VoiceError.message(record["error"]?.string ?? L("The agent rejected the command."))) }
             return
         }
         onEvent?(record)
@@ -100,7 +100,7 @@ private final class RecordReader: @unchecked Sendable {
 
     /// Send one command and wait for its correlated response.
     @discardableResult func call(_ type: String, _ fields: [String: JSONValue] = [:]) async throws -> JSONValue {
-        guard let input, isRunning else { throw VoiceError.message(L("L’agent local n’est pas démarré.")) }
+        guard let input, isRunning else { throw VoiceError.message(L("The local agent is not running.")) }
         nextID += 1
         let id = "jais-\(nextID)"
         var command = fields; command["type"] = .string(type); command["id"] = .string(id)

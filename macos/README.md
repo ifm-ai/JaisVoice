@@ -1,33 +1,33 @@
-# Application native JAIS Voice
+# JAIS Voice native app
 
-Application AppKit/SwiftUI de barre des menus, deux panneaux non activants, raccourci Carbon et capture audio native. `LocalPipeline` orchestre chaque tour : transcription par le service ASR local, nettoyage par la passerelle MLX (`/v1/clean`), puis agent Pi lancé en processus enfant (`AgentProcess`, JSONL sur stdin/stdout).
+AppKit/SwiftUI menu bar app with two non-activating panels, a Carbon shortcut and native audio capture. `LocalPipeline` orchestrates each turn: transcription by the local ASR service, cleanup by the MLX gateway (`/v1/clean`), then the Pi agent run as a child process (`AgentProcess`, JSONL over stdin/stdout).
 
-## Compiler
+## Build
 
-L’app n’a aucune dépendance tierce. Une compilation SwiftPM normale est possible sur une installation cohérente de Xcode/Command Line Tools :
+The app has no third-party dependency. A regular SwiftPM build works on a consistent Xcode/Command Line Tools installation:
 
 ```sh
 swift build -c release
 ```
 
-Sur ce Mac, le gestionnaire SwiftPM installé plante avant de traiter le projet et le SDK 27.0 est plus récent que le compilateur. Le chemin direct compile avec `swiftc` et le SDK 26.5 installé :
+On this Mac, the installed SwiftPM crashes before processing the project and SDK 27.0 is newer than the compiler. The direct path builds with `swiftc` and the installed SDK 26.5:
 
 ```sh
 python3 build_direct.py
 ```
 
-La sortie donne le binaire à assembler par `scripts/build_app.py` du projet parent, qui ajoute les lanceurs `launch-services` et `launch-agent`.
+Its output is the binary that the parent project's `scripts/build_app.py` assembles, adding the `launch-services`, `launch-agent` and `launch-models` launchers.
 
-## Vérifier
+## Check
 
-Le bundle prend en charge des modes explicites de validation :
+The bundle supports explicit validation modes:
 
-- `--self-test [--audio-fixture /chemin/extrait.wav]` : états de tours, annulation, diff arabe, délai de fermeture, WAV et conservation du dernier son pendant le rééchantillonnage. Aucun enregistrement microphone.
-- `--preview` : aperçu marqué « APERÇU », sans démarrer les services et sans inférence.
-- `--render-preview /chemin/apercu.png` : même aperçu, export du contenu du panneau puis fermeture.
-- `--smoke-file /chemin/extrait.wav` : chaîne réelle ASR → nettoyage → Pi → réponse, sans capture microphone. Affiche le panneau, imprime `HORIZON_SMOKE_RESULT=` avec le résultat JSON puis quitte. `--smoke-stay` conserve l’application ouverte pour l’inspection visuelle.
+- `--self-test [--audio-fixture /path/clip.wav]`: turn states, cancellation, Arabic diff, dismissal delay, WAV and keeping the last sound while resampling. No microphone recording.
+- `--preview`: preview labelled “PREVIEW”, without starting services and without inference. `--preview-followup`, `--preview-clarification` and `--preview-approval` add a follow-up turn, a clarifying question or an action approval.
+- `--render-preview /path/preview.png`: the same preview, exports the panel content then quits. `--render-settings` does the same for the settings window.
+- `--smoke-file /path/clip.wav` and `--smoke-text "…"`: real ASR → cleanup → Pi → response pipeline, without microphone capture. Shows the panel, prints `HORIZON_SMOKE_RESULT=` with the JSON result, then quits. `--smoke-stay` keeps the app open for visual inspection.
 
-Les tests de cœur peuvent également être compilés séparément :
+The core tests can also be compiled separately:
 
 ```sh
 swiftc -sdk /Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk \
@@ -38,10 +38,10 @@ swiftc -sdk /Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk \
 .build/NativeCoreTests
 ```
 
-## Configuration de lancement
+## Launch configuration
 
-Le bundle contient `Resources/launch-services`, exécutable préparé par l’assemblage. Il démarre les services et reste leur propriétaire. Quitter l’application transmet SIGTERM et attend la fin du superviseur. Un canal privé relie sa durée de vie à celle de l’app : même une fermeture forcée déclenche le nettoyage. Le superviseur attend jusqu’à 15 secondes la libération du verrou d’une instance en cours d’arrêt, puis refuse de partager les services d’une autre instance. Fermer les réglages conserve volontairement l’assistant dans la barre de menus.
+The bundle contains `Resources/launch-services`, an executable prepared during assembly. It starts the services and remains their owner. Quitting the app sends SIGTERM and waits for the supervisor to exit. A private pipe ties its lifetime to the app's: even a forced quit triggers cleanup. The supervisor waits up to 15 seconds for the lock of an instance that is shutting down, then refuses to share another instance's services. Closing the settings deliberately keeps the assistant in the menu bar.
 
-Variables optionnelles de développement : `HORIZON_LAUNCHER` et `HORIZON_AGENT_LAUNCHER` (chemins des lanceurs), `HORIZON_MLX_URL` (défaut `http://127.0.0.1:8788`), `HORIZON_ASR_URL` (défaut `http://127.0.0.1:8790`). Le raccourci choisi dans le menu est conservé dans les préférences natives.
+Optional development variables: `HORIZON_LAUNCHER`, `HORIZON_AGENT_LAUNCHER` and `HORIZON_MODELS_LAUNCHER` (launcher paths), `HORIZON_MLX_URL` (default `http://127.0.0.1:8788`), `HORIZON_ASR_URL` (default `http://127.0.0.1:8790`), `HORIZON_ACTION_PERMISSION` (`never`, `ask` or `always`, overrides the action setting). The shortcut chosen in the menu persists in the native preferences.
 
-Le raccourci se termine aussi lorsque les touches de modification sont relâchées avant Espace : le gestionnaire observe leurs états système pendant l’appui. Les répétitions sont ignorées. Seul le fichier PCM mono 16 kHz terminé est envoyé à l’ASR local.
+The shortcut also ends when the modifier keys are released before Space: the handler watches their system state during the press. Key repeats are ignored. Only the finished 16 kHz mono PCM file is sent to the local ASR.

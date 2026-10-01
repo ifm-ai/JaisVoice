@@ -37,7 +37,7 @@ def main():
     run(node, ROOT / "node_modules/playwright/cli.js", "install", "chromium", "--no-shell", env=env)
     if not args.skip_models:
         run(python, ROOT / "scripts/prepare_models.py")
-    print("Préparation terminée. Construire ensuite l’application avec scripts/build_app.py.")
+    print("Setup complete. Then build the app with scripts/build_app.py.")
 
 
 if __name__ == "__main__":

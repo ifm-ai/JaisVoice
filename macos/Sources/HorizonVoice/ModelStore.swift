@@ -53,15 +53,15 @@ struct DownloadProgress: Equatable {
     /// Why the assistant cannot run yet, if a required model is missing.
     var blockingMessage: String? {
         guard loaded else { return nil }
-        if let asr, !asr.installed { return L("Modèle de transcription non installé : téléchargez-le dans les réglages.") }
-        if !languageModels.contains(where: \.installed) { return L("Aucun modèle de langage installé : téléchargez-en un dans les réglages.") }
+        if let asr, !asr.installed { return L("Transcription model not installed: download it in Settings.") }
+        if !languageModels.contains(where: \.installed) { return L("No language model installed: download one in Settings.") }
         return nil
     }
 
     private static func launcher() throws -> URL {
         if let explicit = ProcessInfo.processInfo.environment["HORIZON_MODELS_LAUNCHER"] { return URL(fileURLWithPath: explicit) }
         guard let resource = Bundle.main.url(forResource: "launch-models", withExtension: nil) else {
-            throw VoiceError.message(L("L’outil de gestion des modèles est absent. Ouvrez le bundle JAIS Voice.app créé par le script d’installation."))
+            throw VoiceError.message(L("The model management tool is missing. Open the JAIS Voice.app bundle created by the setup script."))
         }
         return resource
     }
@@ -92,7 +92,7 @@ struct DownloadProgress: Equatable {
             let records = try await Self.run(["list"])
             if let message = Self.failure(records) { throw VoiceError.message(message) }
             guard let list = records.first(where: { $0["event"]?.string == "catalog" })?["models"] else {
-                throw VoiceError.message(L("Le catalogue des modèles est illisible."))
+                throw VoiceError.message(L("The model catalog cannot be read."))
             }
             models = try JSONDecoder().decode([CatalogModel].self, from: JSONEncoder().encode(list))
             loaded = true
@@ -124,7 +124,7 @@ struct DownloadProgress: Equatable {
                     self.processes[id] = nil
                     self.downloads[id] = nil
                     if status != 0 && status != 130 && self.error == nil {
-                        self.error = L("Le téléchargement s’est arrêté (code {0}).", String(describing: status))
+                        self.error = L("The download stopped (code {0}).", String(describing: status))
                     }
                     Task { await self.finished(id) }
                 }
@@ -146,7 +146,7 @@ struct DownloadProgress: Equatable {
             if case .number(let total)? = record["total"] { progress.total = Int64(total) }
             if processes[id] != nil { downloads[id] = progress }
         case "error":
-            error = record["message"].flatMap(\.string).map { L($0) } ?? L("Le téléchargement a échoué.")
+            error = record["message"].flatMap(\.string).map { L($0) } ?? L("The download failed.")
         default: break
         }
     }
@@ -179,8 +179,9 @@ struct DownloadProgress: Equatable {
         self.models = models; self.downloads = downloads; loaded = true
     }
 
+    /// Sizes follow the interface language (6 GB / 6 Go), not the macOS locale.
     static func formatBytes(_ bytes: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+        bytes.formatted(.byteCount(style: .file).locale(Locale(identifier: InterfaceLanguage.current.rawValue)))
     }
 }
 

@@ -7,7 +7,7 @@ enum InterfaceLanguage: String, CaseIterable {
     var label: String { self == .french ? "Français" : "English" }
     static let preferenceKey = "interfaceLanguage"
     static func resolved(_ value: String?) -> InterfaceLanguage {
-        InterfaceLanguage(rawValue: value ?? "") ?? .french
+        InterfaceLanguage(rawValue: value ?? "") ?? .english
     }
     static var current: InterfaceLanguage {
         resolved(UserDefaults.standard.string(forKey: preferenceKey))

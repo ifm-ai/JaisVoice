@@ -34,7 +34,7 @@ struct ConfigurationView: View {
                     instructions
                     privacy
                     shortcuts
-                    Button(L("Saisir une demande sans microphone…"), action: onTextRequest)
+                    Button(L("Type a request without a microphone…"), action: onTextRequest)
                         .font(.system(size: 11)).disabled(!state.ready || state.isBusy)
                 }
                 .padding(.horizontal, 22)
@@ -57,7 +57,7 @@ struct ConfigurationView: View {
                 .background(JAISBrand.paper, in: RoundedRectangle(cornerRadius: 13))
             VStack(alignment: .leading, spacing: 4) {
                 Text("Voice").font(.system(size: 21, weight: .semibold, design: .rounded))
-                Text(L("Réglages de votre assistant vocal")).font(.system(size: 12)).foregroundStyle(.secondary)
+                Text(L("Your voice assistant settings")).font(.system(size: 12)).foregroundStyle(.secondary)
             }
             Spacer()
         }.padding(.horizontal, 22).padding(.top, 24).padding(.bottom, 14)
@@ -71,9 +71,9 @@ struct ConfigurationView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }.accessibilityElement(children: .combine)
-            Text(L("NETTOYAGE ET AGENT")).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+            Text(L("CLEANUP AND AGENT")).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
             if modelStore.languageModels.isEmpty {
-                Text(modelStore.loaded ? L("Aucun modèle dans le catalogue.") : L("Lecture du catalogue des modèles…"))
+                Text(modelStore.loaded ? L("No model in the catalog.") : L("Reading the model catalog…"))
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
             ForEach(modelStore.languageModels) { model in modelRow(model) }
@@ -81,7 +81,7 @@ struct ConfigurationView: View {
                 Text(error).font(.system(size: 10)).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
             }
             Button(action: onToggleModelMemory) {
-                Label(state.modelsChanging ? L("Mise à jour…") : state.modelMemoryButton,
+                Label(state.modelsChanging ? L("Updating…") : state.modelMemoryButton,
                       systemImage: state.modelsUnloaded ? "arrow.clockwise" : "memorychip")
             }.disabled(!state.canToggleModelMemory)
         }.padding(13).cardBackground()
@@ -89,7 +89,7 @@ struct ConfigurationView: View {
 
     private var asrService: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(L("TRANSCRIPTION · MODÈLE ASR")).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+            Text(L("TRANSCRIPTION · ASR MODEL")).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
             if let asr = modelStore.asr { modelRow(asr) }
         }.padding(13).cardBackground()
     }
@@ -107,50 +107,50 @@ struct ConfigurationView: View {
             }
             if let progress {
                 ProgressView(value: progress.fraction ?? 0).frame(width: 70)
-                    .accessibilityLabel(L("Téléchargement de {0}", String(describing: model.display_name)))
+                    .accessibilityLabel(L("Downloading {0}", String(describing: model.display_name)))
                 Text(downloadLabel(progress)).font(.system(size: 10)).foregroundStyle(.secondary).monospacedDigit()
             } else if deleting {
-                Label(L("Suppression…"), systemImage: "trash").font(.system(size: 11)).foregroundStyle(.secondary)
+                Label(L("Deleting…"), systemImage: "trash").font(.system(size: 11)).foregroundStyle(.secondary)
             } else if model.installed || model.downloadable {
-                Label(state.changingModel == key ? L("Mise à jour…") : phase.label, systemImage: phase.symbolName)
+                Label(state.changingModel == key ? L("Updating…") : phase.label, systemImage: phase.symbolName)
                     .font(.system(size: 11)).foregroundStyle(modelPhaseColor(phase))
                     .help(state.modelInventory[key]?.error ?? phase.label)
             }
             Spacer(minLength: 4)
             if progress != nil {
-                Button(L("Annuler")) { onCancelDownload(model.id) }.controlSize(.small)
+                Button(L("Cancel")) { onCancelDownload(model.id) }.controlSize(.small)
             } else if !model.installed {
                 if model.downloadable {
-                    Button(L("Télécharger")) { onDownloadModel(model.id) }.controlSize(.small)
+                    Button(L("Download")) { onDownloadModel(model.id) }.controlSize(.small)
                         .disabled(deleting || state.isBusy)
                 } else {
-                    Text(L("Bientôt disponible")).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+                    Text(L("Coming soon")).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
                 }
             } else {
-                Button(phase == .ready ? L("Décharger") : L("Charger")) { onChangeModelMemory(key) }
+                Button(phase == .ready ? L("Unload") : L("Load")) { onChangeModelMemory(key) }
                     .controlSize(.small).disabled(!state.canChangeModel(key) || deleting)
-                    .accessibilityLabel((phase == .ready ? L("Décharger") : L("Charger")) + " " + key)
+                    .accessibilityLabel((phase == .ready ? L("Unload") : L("Load")) + " " + key)
                 Button { onDeleteModel(model.id) } label: { Image(systemName: "trash") }
                     .controlSize(.small).disabled(deleting || state.isBusy || state.modelsChanging)
-                    .help(L("Supprimer ce modèle du Mac")).accessibilityLabel(L("Supprimer {0}", String(describing: model.display_name)))
+                    .help(L("Delete this model from the Mac")).accessibilityLabel(L("Delete {0}", String(describing: model.display_name)))
             }
         }.padding(8).background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private func modelDetail(_ model: CatalogModel) -> String {
-        let name = model.isASR ? L("Transcription locale") : model.display_name
+        let name = model.isASR ? L("Local transcription") : model.display_name
         if model.installed { return name + " · " + ModelStore.formatBytes(model.diskBytes) }
         if !model.downloadable { return name }
         let size = model.download_bytes.map { " · " + ModelStore.formatBytes($0) } ?? ""
-        let partial = model.partialBytes > 0 ? " · " + L("reprise possible") : ""
+        let partial = model.partialBytes > 0 ? " · " + L("can resume") : ""
         return name + size + partial
     }
 
     private func downloadLabel(_ progress: DownloadProgress) -> String {
         switch progress.phase {
-        case "verify": return L("Vérification…")
-        case "install": return L("Installation…")
-        default: return progress.fraction.map { "\(Int($0 * 100)) %" } ?? L("Préparation…")
+        case "verify": return L("Verifying…")
+        case "install": return L("Installing…")
+        default: return progress.fraction.map { "\(Int($0 * 100)) %" } ?? L("Preparing…")
         }
     }
 
@@ -166,9 +166,9 @@ struct ConfigurationView: View {
     private var preferencesCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(L("Langue de l’interface")).font(.system(size: 12))
+                Text(L("Interface language")).font(.system(size: 12))
                 Spacer(minLength: 12)
-                Picker(L("Langue de l’interface"), selection: Binding(
+                Picker(L("Interface language"), selection: Binding(
                     get: { preferences.interfaceLanguage },
                     set: { preferences.setInterfaceLanguage($0) }
                 )) {
@@ -179,9 +179,9 @@ struct ConfigurationView: View {
             }.padding(12)
             Divider().overlay(.white.opacity(0.05)).padding(.horizontal, 12)
             HStack {
-                Text(L("Maintenir pour parler")).font(.system(size: 12))
+                Text(L("Hold to talk")).font(.system(size: 12))
                 Spacer(minLength: 12)
-                Picker(L("Maintenir pour parler"), selection: Binding(get: { preferences.shortcutChoice }, set: onShortcutChange)) {
+                Picker(L("Hold to talk"), selection: Binding(get: { preferences.shortcutChoice }, set: onShortcutChange)) {
                     ForEach(ShortcutChoice.choices.indices, id: \.self) { index in
                         Text(ShortcutChoice.choices[index].label).tag(index)
                     }
@@ -189,9 +189,9 @@ struct ConfigurationView: View {
             }.padding(12)
             Divider().overlay(.white.opacity(0.05)).padding(.horizontal, 12)
             HStack {
-                Text(L("Langue de transcription")).font(.system(size: 12))
+                Text(L("Transcription language")).font(.system(size: 12))
                 Spacer(minLength: 12)
-                Picker(L("Langue de transcription"), selection: Binding(get: { preferences.asrLanguage }, set: { preferences.setASRLanguage($0) })) {
+                Picker(L("Transcription language"), selection: Binding(get: { preferences.asrLanguage }, set: { preferences.setASRLanguage($0) })) {
                     ForEach(ASRLanguageChoice.choices) { language in
                         Text(language.label).tag(language.code)
                     }
@@ -199,13 +199,13 @@ struct ConfigurationView: View {
             }.padding(12)
             Divider().overlay(.white.opacity(0.05)).padding(.horizontal, 12)
             VStack(alignment: .leading, spacing: 5) {
-                Toggle(L("Garde-fou de correction"), isOn: Binding(
+                Toggle(L("Correction safeguard"), isOn: Binding(
                     get: { preferences.cleanupGuardEnabled },
                     set: { preferences.setCleanupGuardEnabled($0) }
                 )).toggleStyle(.switch).font(.system(size: 12)).disabled(state.isBusy)
                 Text(preferences.cleanupGuardEnabled
-                     ? L("Bloque les corrections qui semblent modifier votre demande.")
-                     : L("Les corrections sont transmises même si elles modifient des mots ou le sens."))
+                     ? L("Blocks corrections that appear to change your request.")
+                     : L("Corrections are sent even if they change words or meaning."))
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }.padding(12)
@@ -216,7 +216,7 @@ struct ConfigurationView: View {
                     .padding(.horizontal, 12).padding(.bottom, 12)
             }
             if state.isBusy {
-                Text(L("Ces réglages seront disponibles à la fin de la demande."))
+                Text(L("These settings will be available when the request finishes."))
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                     .padding(.horizontal, 12).padding(.bottom, 10)
             }
@@ -226,9 +226,9 @@ struct ConfigurationView: View {
     private var actionsCard: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(L("Actions sur le Mac")).font(.system(size: 12))
+                Text(L("Actions on this Mac")).font(.system(size: 12))
                 Spacer(minLength: 12)
-                Picker(L("Actions sur le Mac"), selection: Binding(
+                Picker(L("Actions on this Mac"), selection: Binding(
                     get: { preferences.actionPermission },
                     set: { preferences.setActionPermission($0) }
                 )) {
@@ -256,7 +256,7 @@ struct ConfigurationView: View {
                 .font(.system(size: 16)).frame(width: 22)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Microphone").font(.system(size: 12, weight: .medium))
-                Text(preferences.microphoneRequestPending ? L("Autorisation en cours…") : preferences.microphoneStatus.label)
+                Text(preferences.microphoneRequestPending ? L("Requesting access…") : preferences.microphoneStatus.label)
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -267,16 +267,16 @@ struct ConfigurationView: View {
                     .disabled(preferences.microphoneRequestPending || state.isBusy)
             } else {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(JAISBrand.green)
-                    .accessibilityLabel(L("Microphone autorisé"))
+                    .accessibilityLabel(L("Microphone access allowed"))
             }
         }.padding(12).cardBackground()
     }
 
     private var instructions: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(L("Maintenez {0}, parlez, puis relâchez.", String(describing: preferences.shortcutLabel)))
+            Text(L("Hold {0}, speak, then release.", String(describing: preferences.shortcutLabel)))
                 .font(.system(size: 12, weight: .medium))
-            Text(L("30 secondes maximum par prise. La réponse apparaît dans une petite bulle, sans changer d’application."))
+            Text(L("Up to 30 seconds per recording. The response appears in a small bubble without switching apps."))
                 .font(.system(size: 11)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }.padding(.horizontal, 2)
@@ -285,7 +285,7 @@ struct ConfigurationView: View {
     private var privacy: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "network").font(.system(size: 12)).padding(.top, 1)
-            Text(L("La transcription F5, le nettoyage et l’agent s’exécutent sur ce Mac. Les outils peuvent accéder à Internet pour répondre à vos demandes."))
+            Text(L("F5 transcription, cleanup and the agent run on this Mac. Tools may access the Internet to handle your requests."))
                 .font(.system(size: 10)).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
         }.foregroundStyle(configurationAccent.opacity(0.9)).padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -294,13 +294,13 @@ struct ConfigurationView: View {
 
     private var shortcuts: some View {
         HStack(spacing: 10) {
-            Button(action: onShowLast) { Label(L("Dernier résultat"), systemImage: "text.bubble") }
+            Button(action: onShowLast) { Label(L("Last result"), systemImage: "text.bubble") }
                 .disabled(!state.hasResult)
-            Button(action: onImportAudio) { Label(L("Importer un audio"), systemImage: "waveform.badge.plus") }
+            Button(action: onImportAudio) { Label(L("Import audio"), systemImage: "waveform.badge.plus") }
                 .disabled(!state.ready || state.isBusy)
             Spacer(minLength: 0)
             Button(action: onShowServiceLog) { Image(systemName: "doc.text.magnifyingglass") }
-                .help(L("Voir le journal des services")).accessibilityLabel(L("Voir le journal des services"))
+                .help(L("View service log")).accessibilityLabel(L("View service log"))
         }.font(.system(size: 11)).controlSize(.small)
     }
 
@@ -308,12 +308,12 @@ struct ConfigurationView: View {
         VStack(spacing: 0) {
             Divider().overlay(.white.opacity(0.05))
             HStack(spacing: 14) {
-                Button(L("Quitter"), action: onQuit).buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary)
+                Button(L("Quit"), action: onQuit).buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary)
                 Spacer()
-                Text(L("Fermer laisse l’assistant actif."))
+                Text(L("Closing keeps the assistant running."))
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                 Button(action: onClose) {
-                    Text(L("Terminé")).font(.system(size: 12, weight: .semibold))
+                    Text(L("Done")).font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(JAISBrand.forest)
                         .padding(.horizontal, 16).padding(.vertical, 7)
                         .background(configurationAccent, in: RoundedRectangle(cornerRadius: 7))
@@ -358,7 +358,7 @@ private extension View {
             styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
             backing: .buffered, defer: false
         )
-        window.title = L("Réglages · JAIS Voice")
+        window.title = L("Settings · JAIS Voice")
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
@@ -398,14 +398,14 @@ private extension View {
 
     /// Render the real SwiftUI content for visual QA, without starting services or audio.
     func renderPreview(to url: URL) throws {
-        guard let view = window?.contentView else { throw VoiceError.message(L("La fenêtre de réglages est absente.")) }
+        guard let view = window?.contentView else { throw VoiceError.message(L("The settings window is missing.")) }
         view.layoutSubtreeIfNeeded()
         guard let representation = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
-            throw VoiceError.message(L("Impossible de capturer les réglages."))
+            throw VoiceError.message(L("Unable to capture settings."))
         }
         view.cacheDisplay(in: view.bounds, to: representation)
         guard let data = representation.representation(using: .png, properties: [:]) else {
-            throw VoiceError.message(L("Échec de l’export des réglages en PNG."))
+            throw VoiceError.message(L("Unable to export settings as PNG."))
         }
         try data.write(to: url)
     }

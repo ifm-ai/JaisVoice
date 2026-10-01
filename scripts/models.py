@@ -54,7 +54,7 @@ def main(argv=None) -> int:
     except Exception as error:
         message = str(error) or type(error).__name__
         if type(error).__name__ in {"RepositoryNotFoundError", "GatedRepoError"}:
-            message = "Dépôt Hugging Face inaccessible. Vérifiez le lien du catalogue ou connectez-vous avec `hf auth login`."
+            message = "Hugging Face repository unreachable. Check the catalog link or sign in with `hf auth login`."
         emit({"event": "error", "message": message})
         return 1
 

@@ -8,12 +8,12 @@ struct ASRLanguageChoice: Identifiable, Equatable {
     var id: String { code }
 
     static var choices: [Self] { [
-        ASRLanguageChoice(code: "", label: L("Automatique")),
-        ASRLanguageChoice(code: "ar", label: L("Arabe")),
-        ASRLanguageChoice(code: "fr", label: L("Français")),
-        ASRLanguageChoice(code: "en", label: L("Anglais")),
-        ASRLanguageChoice(code: "es", label: L("Espagnol")),
-        ASRLanguageChoice(code: "it", label: L("Italien"))
+        ASRLanguageChoice(code: "", label: L("Automatic")),
+        ASRLanguageChoice(code: "ar", label: L("Arabic")),
+        ASRLanguageChoice(code: "fr", label: L("French")),
+        ASRLanguageChoice(code: "en", label: L("English")),
+        ASRLanguageChoice(code: "es", label: L("Spanish")),
+        ASRLanguageChoice(code: "it", label: L("Italian"))
     ] }
 }
 
@@ -23,17 +23,17 @@ enum ActionPermission: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .never: return L("Ne jamais autoriser")
-        case .ask: return L("Demander à chaque fois")
-        case .always: return L("Toujours autoriser")
+        case .never: return L("Never allow")
+        case .ask: return L("Ask every time")
+        case .always: return L("Always allow")
         }
     }
 
     var detail: String {
         switch self {
-        case .never: return L("L’assistant ne peut ni lancer de commande ni modifier vos applications. La navigation web reste possible.")
-        case .ask: return L("Chaque commande est affichée avant de s’exécuter. Vous l’autorisez ou la refusez.")
-        case .always: return L("Attention : les commandes choisies par l’assistant s’exécutent sans confirmation, avec vos droits. Un modèle peut se tromper ou suivre des instructions cachées dans une page web, et une commande peut supprimer ou envoyer vos fichiers. N’activez ce mode que si vous surveillez ce que fait l’assistant.")
+        case .never: return L("The assistant can neither run commands nor change your apps. Web browsing remains available.")
+        case .ask: return L("Each command is shown before it runs. You allow or refuse it.")
+        case .always: return L("Warning: commands chosen by the assistant run without confirmation, with your permissions. A model can make mistakes or follow instructions hidden in a web page, and a command can delete or send your files. Only enable this mode if you watch what the assistant does.")
         }
     }
 
@@ -48,15 +48,15 @@ enum MicrophoneAuthorization: Equatable {
 
     var label: String {
         switch self {
-        case .notDetermined: return L("À autoriser avant de parler")
-        case .authorized: return L("Autorisé · prêt à vous écouter")
-        case .denied: return L("Accès refusé dans les réglages du Mac")
-        case .restricted: return L("Accès limité par les réglages du Mac")
+        case .notDetermined: return L("Allow access before speaking")
+        case .authorized: return L("Allowed · ready to listen")
+        case .denied: return L("Access denied in Mac settings")
+        case .restricted: return L("Access restricted in Mac settings")
         }
     }
 
     var actionLabel: String {
-        self == .notDetermined ? L("Autoriser…") : L("Réglages Système…")
+        self == .notDetermined ? L("Allow…") : L("System Settings…")
     }
 }
 

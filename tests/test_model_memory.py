@@ -67,7 +67,7 @@ def test_both_can_be_unloaded_then_independently_reloaded(memory_worker):
 def test_missing_model_cannot_be_loaded_and_unknown_size_is_rejected(memory_worker):
     http, w, _, _ = memory_worker
     response = http.post('/models/7B/memory', json={'action': 'load'})
-    assert response.status_code == 500 and 'pas installé' in response.json()['detail']
+    assert response.status_code == 500 and 'not installed' in response.json()['detail']
     assert w._model_health['7B']['status'] == 'not_installed'
     assert http.post('/models/13B/memory', json={'action': 'load'}).status_code == 422
     assert set(w.models) == {'1B', '4B'}
