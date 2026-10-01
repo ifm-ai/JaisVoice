@@ -259,3 +259,17 @@
 "Dépôt Hugging Face inaccessible. Vérifiez le lien du catalogue ou connectez-vous avec `hf auth login`." = "Dépôt Hugging Face inaccessible. Vérifiez le lien du catalogue ou connectez-vous avec `hf auth login`.";
 "Une opération est déjà en cours pour ce modèle." = "Une opération est déjà en cours pour ce modèle.";
 "Python 3.11 est requis pour l’ASR et n’a pas été trouvé (installez-le, par exemple avec Homebrew)." = "Python 3.11 est requis pour l’ASR et n’a pas été trouvé (installez-le, par exemple avec Homebrew).";
+"Actions sur le Mac" = "Actions sur le Mac";
+"Ne jamais autoriser" = "Ne jamais autoriser";
+"Demander à chaque fois" = "Demander à chaque fois";
+"Toujours autoriser" = "Toujours autoriser";
+"L’assistant ne peut ni lancer de commande ni modifier vos applications. La navigation web reste possible." = "L’assistant ne peut ni lancer de commande ni modifier vos applications. La navigation web reste possible.";
+"Chaque commande est affichée avant de s’exécuter. Vous l’autorisez ou la refusez." = "Chaque commande est affichée avant de s’exécuter. Vous l’autorisez ou la refusez.";
+"Attention : les commandes choisies par l’assistant s’exécutent sans confirmation, avec vos droits. Un modèle peut se tromper ou suivre des instructions cachées dans une page web, et une commande peut supprimer ou envoyer vos fichiers. N’activez ce mode que si vous surveillez ce que fait l’assistant." = "Attention : les commandes choisies par l’assistant s’exécutent sans confirmation, avec vos droits. Un modèle peut se tromper ou suivre des instructions cachées dans une page web, et une commande peut supprimer ou envoyer vos fichiers. N’activez ce mode que si vous surveillez ce que fait l’assistant.";
+"Refuser" = "Refuser";
+"Autoriser" = "Autoriser";
+"Autorisation requise" = "Autorisation requise";
+"AUTORISATION" = "AUTORISATION";
+"Commande macOS" = "Commande macOS";
+"Nouvelle note" = "Nouvelle note";
+"Mode avion" = "Mode avion";

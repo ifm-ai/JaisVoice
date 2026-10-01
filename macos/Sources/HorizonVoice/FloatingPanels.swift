@@ -140,6 +140,7 @@ struct ResultBubble: View {
                             ForEach(state.actions) { action in actionRow(action) }
                         }
                     }
+                    if let request = state.pendingApproval { approvalCard(request) }
                     if !state.response.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             sectionLabel(L(state.awaitingClarification ? "PRÉCISION NÉCESSAIRE" : "RÉPONSE"), tag: state.agentModelLabel)
@@ -170,6 +171,7 @@ struct ResultBubble: View {
             .onChange(of: state.response) { scrollToLatest(proxy) }
             .onChange(of: state.cleaned) { scrollToLatest(proxy) }
             .onChange(of: state.raw) { scrollToLatest(proxy) }
+            .onChange(of: state.pendingApproval) { scrollToLatest(proxy) }
             .onAppear { scrollToLatest(proxy) }
             }
             Rectangle().fill(.white.opacity(0.08)).frame(height: 1).padding(.horizontal, 16)
@@ -231,6 +233,38 @@ struct ResultBubble: View {
                 .strikethrough(word.removed, pattern: .solid, color: .orange.opacity(0.8))
                 .foregroundColor(word.removed ? .orange.opacity(0.7) : .white.opacity(0.65))
         }
+    }
+
+    /// Minimal approval inside the bubble: what runs, then Refuse / Allow.
+    private func approvalCard(_ request: ActionRequest) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            sectionLabel(L("AUTORISATION"), tag: L(request.tool))
+            if !request.reason.isEmpty { naturalText(request.reason, size: 13) }
+            ScrollView {
+                Text(request.details)
+                    .font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.75))
+                    .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading).environment(\.layoutDirection, .leftToRight)
+            }
+            .frame(maxHeight: 90).fixedSize(horizontal: false, vertical: true)
+            .padding(9).background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 9))
+            HStack(spacing: 10) {
+                Spacer()
+                Button { onInteract(); state.onApproval?(false) } label: {
+                    Text(L("Refuser")).font(.system(size: 12, weight: .medium))
+                        .padding(.horizontal, 14).padding(.vertical, 6)
+                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
+                }.buttonStyle(.plain).foregroundStyle(.white.opacity(0.85))
+                Button { onInteract(); state.onApproval?(true) } label: {
+                    Text(L("Autoriser")).font(.system(size: 12, weight: .semibold))
+                        .padding(.horizontal, 14).padding(.vertical, 6)
+                        .background(accent, in: RoundedRectangle(cornerRadius: 7))
+                }.buttonStyle(.plain).foregroundStyle(JAISBrand.forest)
+            }
+        }
+        .padding(12)
+        .background(accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(accent.opacity(0.35), lineWidth: 0.7))
     }
 
     private func actionRow(_ action: ToolAction) -> some View {

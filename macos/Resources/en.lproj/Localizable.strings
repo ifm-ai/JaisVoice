@@ -259,3 +259,17 @@
 "Dépôt Hugging Face inaccessible. Vérifiez le lien du catalogue ou connectez-vous avec `hf auth login`." = "Hugging Face repository unreachable. Check the catalog link or sign in with `hf auth login`.";
 "Une opération est déjà en cours pour ce modèle." = "An operation is already in progress for this model.";
 "Python 3.11 est requis pour l’ASR et n’a pas été trouvé (installez-le, par exemple avec Homebrew)." = "Python 3.11 is required for the ASR and was not found (install it, for example with Homebrew).";
+"Actions sur le Mac" = "Actions on this Mac";
+"Ne jamais autoriser" = "Never allow";
+"Demander à chaque fois" = "Ask every time";
+"Toujours autoriser" = "Always allow";
+"L’assistant ne peut ni lancer de commande ni modifier vos applications. La navigation web reste possible." = "The assistant can neither run commands nor change your apps. Web browsing remains available.";
+"Chaque commande est affichée avant de s’exécuter. Vous l’autorisez ou la refusez." = "Each command is shown before it runs. You allow or refuse it.";
+"Attention : les commandes choisies par l’assistant s’exécutent sans confirmation, avec vos droits. Un modèle peut se tromper ou suivre des instructions cachées dans une page web, et une commande peut supprimer ou envoyer vos fichiers. N’activez ce mode que si vous surveillez ce que fait l’assistant." = "Warning: commands chosen by the assistant run without confirmation, with your permissions. A model can make mistakes or follow instructions hidden in a web page, and a command can delete or send your files. Only enable this mode if you watch what the assistant does.";
+"Refuser" = "Refuse";
+"Autoriser" = "Allow";
+"Autorisation requise" = "Approval needed";
+"AUTORISATION" = "APPROVAL";
+"Commande macOS" = "macOS command";
+"Nouvelle note" = "New note";
+"Mode avion" = "Airplane mode";

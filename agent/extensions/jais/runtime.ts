@@ -1,9 +1,10 @@
 /**
  * Pure helpers of the JAIS Voice Pi extension, testable without Pi.
  *
- * Shell commands are preauthorized by the user: they run immediately, with the
- * current user's privileges, in a fresh process group with a minimal
- * environment. This is not a sandbox; macOS privacy permissions still apply.
+ * Actions on the Mac run only once JAIS Voice approves them (its "Actions on this
+ * Mac" setting: never, ask each time, or always). They then run with the current
+ * user's privileges, in a fresh process group with a minimal environment. This
+ * is not a sandbox; macOS privacy permissions still apply.
  */
 import { spawn } from "node:child_process";
 import { closeSync, constants, existsSync, mkdirSync, openSync, readSync, realpathSync } from "node:fs";
@@ -28,6 +29,15 @@ export const MAX_REASON_BYTES = 1000;
 export const MAX_OUTPUT_BYTES = 8192;
 export const MAX_SNAPSHOT_BYTES = 60000;
 export const BROWSER_PREFIX = "mcp__browser__";
+/** Pi stops waiting slightly after the app closes its own approval alert (120 s). */
+export const APPROVAL_SECONDS = 125;
+export const REFUSED = "The user did not allow this action in JAIS Voice, so it was NOT executed. Do not retry it and do not "
+  + "try to achieve it with another tool. Tell the user it was not done; actions on this Mac can be allowed in the JAIS Voice settings.";
+
+/** The confirmation message JAIS Voice parses: why the action runs and exactly what runs. */
+export function approvalMessage(reason: string, details: string): string {
+  return JSON.stringify({ reason, details });
+}
 export const BROWSER_TOOLS = [
   "browser_navigate", "browser_navigate_back", "browser_snapshot", "browser_click",
   "browser_type", "browser_press_key", "browser_select_option", "browser_wait_for",

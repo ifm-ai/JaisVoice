@@ -29,6 +29,7 @@ struct ConfigurationView: View {
                     asrService
                     services
                     preferencesCard
+                    actionsCard
                     microphone
                     instructions
                     privacy
@@ -220,6 +221,32 @@ struct ConfigurationView: View {
                     .padding(.horizontal, 12).padding(.bottom, 10)
             }
         }.cardBackground()
+    }
+
+    private var actionsCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(L("Actions sur le Mac")).font(.system(size: 12))
+                Spacer(minLength: 12)
+                Picker(L("Actions sur le Mac"), selection: Binding(
+                    get: { preferences.actionPermission },
+                    set: { preferences.setActionPermission($0) }
+                )) {
+                    ForEach(ActionPermission.allCases, id: \.self) { permission in
+                        Text(permission.label).tag(permission)
+                    }
+                }.labelsHidden().frame(width: 190)
+            }
+            if preferences.actionPermission == .always {
+                Label(preferences.actionPermission.detail, systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10)).foregroundStyle(configurationAccent)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(preferences.actionPermission.detail)
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }.padding(12).cardBackground()
     }
 
     private var microphone: some View {

@@ -60,11 +60,21 @@ struct PipelineFailure: Error {
     private var run: AgentRun?
     var onEvent: ((WireEvent) -> Void)?
     var onDisconnect: ((String) -> Void)?
+    /// The current "actions on this Mac" setting, read for each request.
+    var actionPermission: () -> ActionPermission = { .ask }
+    /// Shows one action to the user; resolves false when refused or dismissed.
+    var approveAction: ((ActionRequest) async -> Bool)?
+    /// Closes any approval still displayed, which then resolves false.
+    var dismissApprovals: (() -> Void)?
 
     init() {
-        agent.onEvent = { [weak self] record in self?.run?.receive(record) }
+        agent.onEvent = { [weak self] record in
+            guard let self else { return }
+            if record["type"]?.string == "extension_ui_request" { self.answer(record) } else { self.run?.receive(record) }
+        }
         agent.onExit = { [weak self] detail in
             guard let self else { return }
+            self.dismissApprovals?()
             self.run?.fail(PipelineFailure(code: "agent_unavailable", message: L("L’agent local s’est arrêté. Vérifiez l’état des services dans le menu.")))
             self.agentConversation = nil; self.agentModel = "k2-4b"; self.agentThinking = nil
             self.onDisconnect?(detail)
@@ -138,6 +148,7 @@ struct PipelineFailure: Error {
     }
 
     func shutdown() async {
+        dismissApprovals?()
         turnTask?.cancel(); turnTask = nil; activeTurnID = nil
         run?.fail(CancellationError()); run = nil
         await agent.shutdown()
@@ -183,6 +194,7 @@ struct PipelineFailure: Error {
     private func stopActiveTurn() async {
         let task = turnTask
         turnTask = nil; activeTurnID = nil
+        dismissApprovals?()
         task?.cancel()
         if run != nil { _ = try? await agent.call("abort") }
         await task?.value
@@ -200,6 +212,30 @@ struct PipelineFailure: Error {
                 if !Task.isCancelled { self.emit(turnID, "error", text: L("Le traitement a échoué. Réessayez depuis la barre des menus."), errorCode: "processing_failed") }
             }
             if self.activeTurnID == turnID { self.activeTurnID = nil }
+        }
+    }
+
+    /// The extension asks before each action on this Mac (shell, Notes, radios).
+    /// Pi waits for the answer; other dialogs are declined, notifications ignored.
+    private func answer(_ record: JSONValue) {
+        guard let id = record["id"]?.string, let method = record["method"]?.string else { return }
+        guard method == "confirm" else {
+            if ["select", "input", "editor"].contains(method) {
+                agent.send(["type": .string("extension_ui_response"), "id": .string(id), "cancelled": .bool(true)])
+            }
+            return
+        }
+        let request = ActionRequest(title: record["title"]?.string ?? "", message: record["message"]?.string ?? "")
+        let permission = ActionPermission.override ?? actionPermission()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let allowed: Bool
+            switch permission {
+            case .never: allowed = false
+            case .always: allowed = true
+            case .ask: allowed = self.run != nil ? await self.approveAction?(request) ?? false : false
+            }
+            self.agent.send(["type": .string("extension_ui_response"), "id": .string(id), "confirmed": .bool(allowed)])
         }
     }
 

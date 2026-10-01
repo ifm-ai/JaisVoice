@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { commandProblem, compactContext, inlineSnapshots, noteCommand, runShell, shellQuote, type Message } from "./runtime.ts";
+import { approvalMessage, commandProblem, compactContext, inlineSnapshots, noteCommand, runShell, shellQuote, type Message } from "./runtime.ts";
 
 const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 
@@ -95,4 +95,9 @@ test("context keeps recent dialogue and shortens stale tool output in a copy", (
   assert.ok(results.at(-1)! > 10000 && results.at(-1)! < 10200);
   assert.ok(compacted.filter((message) => message.role === "assistant").every((message) => message.content[0].text.length <= 1601));
   assert.equal(messages[2].content[0].text.length, 20000);
+});
+
+test("approval message carries the reason and the exact action", () => {
+  const message = approvalMessage("Ouvrir Safari", "open -a 'Safari'");
+  assert.deepEqual(JSON.parse(message), { reason: "Ouvrir Safari", details: "open -a 'Safari'" });
 });

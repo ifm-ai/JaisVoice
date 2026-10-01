@@ -147,6 +147,9 @@ struct ConversationExchange: Identifiable {
     @Published var hovered = false
     @Published var showOriginal = false
     @Published var expandedTools: Set<String> = []
+    /// An action waiting for the user's decision in the bubble.
+    @Published var pendingApproval: ActionRequest?
+    var onApproval: ((Bool) -> Void)?
     var onFinish: (() -> Void)?
     var onBegin: (() -> Void)?
 
@@ -155,6 +158,7 @@ struct ConversationExchange: Identifiable {
     var isBusy: Bool { turnID != nil && !finished }
     var stageLabel: String {
         if recording { return L("Je vous écoute") }
+        if pendingApproval != nil { return L("Autorisation requise") }
         switch stage {
         case "uploading": return L("Envoi de l’enregistrement…")
         case "transcribing": return L("Transcription…")
