@@ -20,7 +20,7 @@ def test_size_selection_uses_role_context_and_checkpoint_framing(role, size):
         assert chosen[3].get("tool_call_format") == worker.models[size][3].get("tool_call_format")
         assert worker.models[size][3]["context_limit"] == 16384
         del worker.models[size]
-        with pytest.raises(ValueError, match="pas disponible"):
+        with pytest.raises(ValueError, match="not available"):
             worker.resolve_model(body)
     finally:
         worker.executor.shutdown()
@@ -33,7 +33,7 @@ def test_checkpoint_context_limit_caps_the_role_budget():
         body = CompletionRequest(model="k2-agent", messages=[{"role": "user", "content": "x"}])
         assert worker.resolve_model(body)[3]["context_limit"] == 8192
         worker.models.update(loaded(["1B"]))
-        with pytest.raises(ValueError, match="Précisez"):
+        with pytest.raises(ValueError, match="Specify"):
             worker.resolve_model(body)
     finally:
         worker.executor.shutdown()

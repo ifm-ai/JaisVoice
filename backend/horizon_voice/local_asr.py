@@ -22,19 +22,19 @@ LANGUAGES = {None, "", "ar", "msa", "fr", "en", "es", "it"}
 
 def decode_audio(payload):
     if not isinstance(payload, dict) or payload.get("language") not in LANGUAGES:
-        raise ValueError("Langue de transcription invalide.")
+        raise ValueError("Invalid transcription language.")
     audio = base64.b64decode(payload["audio"], validate=True)
     if len(audio) > MAX_WAV_BYTES:
-        raise ValueError("L’enregistrement dépasse 30 secondes.")
+        raise ValueError("The recording exceeds 30 seconds.")
     with wave.open(io.BytesIO(audio), "rb") as stream:
         if (stream.getnchannels(), stream.getsampwidth(), stream.getframerate(), stream.getcomptype()) != (1, 2, 16000, "NONE"):
-            raise ValueError("Audio attendu : WAV PCM16 mono 16 kHz.")
+            raise ValueError("Expected audio: mono PCM16 WAV at 16 kHz.")
         count = stream.getnframes()
         if not 1600 <= count <= 480000:
-            raise ValueError("Durée audio invalide.")
+            raise ValueError("Invalid audio duration.")
         frames = stream.readframes(count)
         if len(frames) != count * 2:
-            raise ValueError("Audio incomplet.")
+            raise ValueError("Incomplete audio.")
     return frames, payload.get("language") or None
 
 
@@ -53,7 +53,7 @@ def transcribe_pinned(runtime, waveform, language):
     batch = runtime.processor(text=[runtime.prompt], audio=[waveform], sampling_rate=16000, return_tensors="pt")
     ids = batch["input_ids"][0].tolist()
     if len(ids) > 4096 - 256 or not bool((batch["attention_mask"] == 1).all()):
-        raise ValueError("L’audio dépasse le contexte du modèle.")
+        raise ValueError("The audio exceeds the model context.")
     with torch.inference_mode():
         merged = runtime.frontend.model(**batch)
     prefix = mx.array(merged.detach().float().numpy())
@@ -125,10 +125,10 @@ class LocalASR:
         if not self.loading.done():
             return {"status": "loading", "message": "Chargement de JAIS-ASR F5…", "profile": "F5"}
         if self.loading.exception() is not None:
-            return {"status": "error", "message": "Échec du chargement de JAIS-ASR F5. Consultez le journal ASR.", "profile": "F5"}
+            return {"status": "error", "message": "JAIS-ASR F5 failed to load. See the ASR log.", "profile": "F5"}
         if self.runtime is None:
-            return {"status": "unloaded", "message": "JAIS-ASR F5 déchargé", "profile": "F5"}
-        return {"status": "ready", "message": "JAIS-ASR F5 prêt", "profile": "F5"}
+            return {"status": "unloaded", "message": "JAIS-ASR F5 unloaded", "profile": "F5"}
+        return {"status": "ready", "message": "JAIS-ASR F5 ready", "profile": "F5"}
 
     def transcribe(self, frames, language):
         import mlx.core as mx
@@ -196,9 +196,9 @@ def make_handler(worker):
                 self.connection.settimeout(15)
                 frames, language = decode_audio(json.loads(self.rfile.read(length)))
             except (ValueError, TypeError, KeyError, EOFError, wave.Error):
-                return self.respond(400, {"error": "Audio ou langue invalide"})
+                return self.respond(400, {"error": "Invalid audio or language"})
             if not worker.slot.acquire(blocking=False):
-                return self.respond(429, {"error": "Transcription locale déjà en cours"})
+                return self.respond(429, {"error": "A local transcription is already running"})
             try:
                 if worker.health()["status"] != "ready":
                     return self.respond(503, worker.health())
@@ -206,7 +206,7 @@ def make_handler(worker):
                 self.respond(200, result)
             except Exception:
                 logging.exception("Local transcription failed")
-                self.respond(500, {"error": "Échec de la transcription locale"})
+                self.respond(500, {"error": "Local transcription failed"})
             finally:
                 worker.slot.release()
     return Handler

@@ -84,7 +84,7 @@ def test_health_responds_during_load_and_ready_follows_warmup(loading_fixture):
             warm_release.set()
             assert finished.wait(3)
             snapshot = http.get("/health").json()
-            assert snapshot["status"] == "ready" and snapshot["message"] == "Prêt · Test 4B"
+            assert snapshot["status"] == "ready" and snapshot["message"] == "Ready · Test 4B"
             assert states(snapshot) == {"1B": "unloaded", "4B": "ready", "7B": "not_installed"}
             assert [model["id"] for model in http.get("/v1/models").json()["data"]] == ["k2-4b"]
             assert all("error" not in entry for entry in snapshot["models"].values())
@@ -107,7 +107,7 @@ def test_startup_loads_the_default_or_first_installed_size(loading_fixture, monk
     assert snapshot["status"] == "ready"
     assert list(worker.models) == ([expected] if expected else [])
     if expected is None:
-        assert snapshot["message"] == "Aucun modèle de langage installé"
+        assert snapshot["message"] == "No language model installed"
 
 
 @pytest.mark.parametrize("phase", ["load", "warmup"])

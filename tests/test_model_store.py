@@ -127,7 +127,7 @@ def test_llm_download_is_validated_then_atomically_installed(store):
     assert events[-1] == {"event": "done", "id": "k2-4b"}
     progress = [event for event in events if event.get("phase") == "download"]
     assert progress[-1]["bytes"] == progress[-1]["total"] > 0
-    with pytest.raises(RuntimeError, match="déjà installé"):
+    with pytest.raises(RuntimeError, match="already installed"):
         model_store.download(model_store.find(catalog, "k2-4b"), base, events.append, hub=hub)
 
 
@@ -137,7 +137,7 @@ def test_invalid_download_is_never_installed(store):
     config = json.loads((tmp / "repo/config.json").read_text())
     config["vocab_size"] += 1
     (tmp / "repo/config.json").write_text(json.dumps(config))
-    with pytest.raises(ValueError, match="Forme ou type"):
+    with pytest.raises(ValueError, match="shape or type"):
         model_store.download(model_store.find(catalog, "k2-4b"), base, lambda event: None, hub=FakeHub(tmp / "repo"))
     assert not (base / "model-4B").exists() and (base / ".model-4B.download").is_dir()
 
@@ -155,7 +155,7 @@ def test_interrupted_download_resumes(store):
 
 def test_unpublished_model_cannot_be_downloaded(store):
     catalog, base, _ = store
-    with pytest.raises(RuntimeError, match="pas encore publié"):
+    with pytest.raises(RuntimeError, match="not published"):
         model_store.download(model_store.find(catalog, "k2-1b"), base, lambda event: None, hub=object())
 
 
@@ -174,7 +174,7 @@ def test_altered_asr_file_is_refused(store):
     catalog, base, tmp = store
     repository = asr_repository(tmp / "asr-repo")
     (repository / "models/tensors/f5.safetensors").write_bytes(b"ASR WEIGHTS")
-    with pytest.raises(RuntimeError, match="altéré"):
+    with pytest.raises(RuntimeError, match="altered"):
         model_store.download(model_store.find(catalog, "asr-f5"), base, lambda event: None, hub=FakeHub(repository), python=sys.executable)
     assert not (base / "ASR").exists()
 
@@ -196,7 +196,7 @@ def test_symlinked_model_is_not_followed(store):
     write_model(tmp / "elsewhere")
     base.mkdir(parents=True)
     (base / "model-4B").symlink_to(tmp / "elsewhere")
-    with pytest.raises(RuntimeError, match="lien symbolique"):
+    with pytest.raises(RuntimeError, match="symbolic link"):
         model_store.delete(model_store.find(catalog, "k2-4b"), base)
     assert (tmp / "elsewhere/config.json").is_file()
 
@@ -205,7 +205,7 @@ def test_one_operation_per_model(store):
     catalog, base, _ = store
     entry = model_store.find(catalog, "k2-4b")
     with model_store.operation_lock(entry, base):
-        with pytest.raises(RuntimeError, match="déjà en cours"):
+        with pytest.raises(RuntimeError, match="already in progress"):
             model_store.delete(entry, base)
 
 
@@ -216,7 +216,7 @@ def test_cli_lists_and_reports_errors_as_json(store, capsys):
     listing = json.loads(capsys.readouterr().out)
     assert [model["id"] for model in listing["models"]] == ["asr-f5", "k2-1b", "k2-4b"]
     assert models_cli.main([*runtime, "download", "k2-1b"]) == 1
-    assert "pas encore publié" in json.loads(capsys.readouterr().out)["message"]
+    assert "not published" in json.loads(capsys.readouterr().out)["message"]
     assert models_cli.main([*runtime, "download", "missing"]) == 1
     assert json.loads(capsys.readouterr().out)["event"] == "error"
     write_model(base / "model-1B")
@@ -305,7 +305,7 @@ def test_invalid_catalog_stops_before_any_service(store, monkeypatch):
     Path(os.environ["HORIZON_MODEL_CATALOG"]).write_text("{}")
     monkeypatch.setattr(run_services, "RUNTIME", tmp / "runtime")
     monkeypatch.setattr(run_services.subprocess, "Popen", lambda *args, **kwargs: pytest.fail("no service may start"))
-    with pytest.raises(ValueError, match="Format de catalogue"):
+    with pytest.raises(ValueError, match="catalog format"):
         run_services.main()
 
 

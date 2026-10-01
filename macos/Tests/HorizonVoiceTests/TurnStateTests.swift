@@ -6,16 +6,16 @@ final class TurnStateTests: XCTestCase {
         let state = TurnState()
         let old = state.begin()
         let current = state.begin()
-        state.accept(WireEvent(type: "response_delta", turn_id: old, text: "ancienne réponse"))
+        state.accept(WireEvent(type: "response_delta", turn_id: old, text: "old response"))
         XCTAssertEqual(state.response, "")
-        state.accept(WireEvent(type: "response_delta", turn_id: current, text: "nouvelle réponse"))
-        XCTAssertEqual(state.response, "nouvelle réponse")
+        state.accept(WireEvent(type: "response_delta", turn_id: current, text: "new response"))
+        XCTAssertEqual(state.response, "new response")
     }
 
     @MainActor func testCancelledTurnCannotRestartFromLatePackets() {
         let state = TurnState(); let id = state.begin()
         state.cancel()
-        state.accept(WireEvent(type: "correction", turn_id: id, text: "ne pas agir"))
+        state.accept(WireEvent(type: "correction", turn_id: id, text: "do not act"))
         state.accept(WireEvent(type: "complete", turn_id: id, text: "trop tard"))
         XCTAssertEqual(state.cleaned, "")
         XCTAssertEqual(state.stage, "cancelled")

@@ -48,7 +48,7 @@ final class AudioRecorder {
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else {
-            throw VoiceError.message(L("Aucun microphone disponible. Vérifiez l’entrée audio du Mac."))
+            throw VoiceError.message(L("No microphone available. Check your Mac’s audio input."))
         }
         lock.lock(); samples = []; sampleRate = format.sampleRate; isRecording = true; lastMeterTime = 0; lock.unlock()
         input.installTap(onBus: 0, bufferSize: 2048, format: format) { [weak self] buffer, _ in self?.consume(buffer) }
@@ -89,7 +89,7 @@ final class AudioRecorder {
         engine.stop()
         if tapInstalled { engine.inputNode.removeTap(onBus: 0); tapInstalled = false }
         lock.lock(); isRecording = false; let captured = samples; let rate = sampleRate; samples = []; lock.unlock()
-        guard Double(captured.count) / rate >= 0.15 else { throw VoiceError.message(L("Enregistrement trop court. Maintenez le raccourci pendant que vous parlez.")) }
+        guard Double(captured.count) / rate >= 0.15 else { throw VoiceError.message(L("Recording too short. Hold the shortcut while speaking.")) }
         let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: rate, channels: 1, interleaved: false)!
         let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(captured.count))!
         buffer.frameLength = AVAudioFrameCount(captured.count)
@@ -107,10 +107,10 @@ final class AudioRecorder {
         let file = try AVAudioFile(forReading: url)
         let seconds = Double(file.length) / file.processingFormat.sampleRate
         guard seconds > 0 && seconds <= maximumSeconds else {
-            throw VoiceError.message(L("Choisissez un fichier audio de 30 secondes maximum."))
+            throw VoiceError.message(L("Choose an audio file no longer than 30 seconds."))
         }
         guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)) else {
-            throw VoiceError.message(L("Le fichier audio ne peut pas être lu."))
+            throw VoiceError.message(L("The audio file could not be read."))
         }
         try file.read(into: buffer)
         return try convertToWAV(buffer)
@@ -119,7 +119,7 @@ final class AudioRecorder {
     static func convertToWAV(_ source: AVAudioPCMBuffer) throws -> Data {
         let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false)!
         guard let converter = AVAudioConverter(from: source.format, to: target) else {
-            throw VoiceError.message(L("Le format audio n’est pas pris en charge."))
+            throw VoiceError.message(L("This audio format is not supported."))
         }
         converter.downmix = true
         let expectedFrames = Int(ceil(Double(source.frameLength) * 16_000 / source.format.sampleRate))
@@ -135,15 +135,15 @@ final class AudioRecorder {
                 supplied = true; state.pointee = .haveData; return source
             }
             guard status != .error, error == nil else {
-                throw error ?? VoiceError.message(L("La conversion de l’enregistrement a échoué."))
+                throw error ?? VoiceError.message(L("Recording conversion failed."))
             }
             samples.append(contentsOf: UnsafeBufferPointer(start: output.floatChannelData![0], count: Int(output.frameLength)))
             if status == .endOfStream { break }
             guard output.frameLength > 0, samples.count <= expectedFrames + 8192 else {
-                throw VoiceError.message(L("La conversion de l’enregistrement est incomplète."))
+                throw VoiceError.message(L("Recording conversion is incomplete."))
             }
         }
-        guard !samples.isEmpty else { throw VoiceError.message(L("L’enregistrement ne contient aucun son.")) }
+        guard !samples.isEmpty else { throw VoiceError.message(L("The recording contains no audio.")) }
         // Resampling can add filter padding; do not let it extend the spoken duration.
         return WAVEncoder.encode(samples: Array(samples.prefix(expectedFrames)))
     }

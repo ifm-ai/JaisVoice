@@ -1,7 +1,7 @@
 import Foundation
 
 enum ServiceDiagnostics {
-    static var restartInstruction: String { L("Corrigez le problème, puis quittez et relancez JAIS Voice.") }
+    static var restartInstruction: String { L("Resolve the issue, then quit and reopen JAIS Voice.") }
 
     static func concise(_ message: String) -> String {
         let line = message.split(whereSeparator: \.isWhitespace).joined(separator: " ")
@@ -13,9 +13,9 @@ enum ServiceDiagnostics {
     static func exitMessage(code: Int32, output: String) -> String {
         if code != 0, let lastLine = output.split(whereSeparator: \.isNewline).last {
             let detail = concise(String(lastLine))
-            if !detail.isEmpty { return L("Démarrage interrompu : {0}", String(describing: detail)) }
+            if !detail.isEmpty { return L("Startup interrupted: {0}", String(describing: detail)) }
         }
-        return L("Les services locaux se sont arrêtés (code {0}).", String(describing: code))
+        return L("Local services stopped (code {0}).", String(describing: code))
     }
 }
 
@@ -30,7 +30,7 @@ final class ServiceLaunchLog {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         if !FileManager.default.fileExists(atPath: url.path) {
             guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
-                throw VoiceError.message(L("Impossible de créer le journal des services : {0}", String(describing: url.path)))
+                throw VoiceError.message(L("Unable to create the service log: {0}", String(describing: url.path)))
             }
         }
         handle = try FileHandle(forWritingTo: url)
@@ -83,10 +83,10 @@ final class ServiceLaunchLog {
         } else if let resource = Bundle.main.url(forResource: "launch-services", withExtension: nil) {
             executable = resource
         } else {
-            throw VoiceError.message(L("Le lanceur local est absent. Ouvrez le bundle JAIS Voice.app créé par le script d’installation."))
+            throw VoiceError.message(L("The local launcher is missing. Open JAIS Voice.app created by the installation script."))
         }
         guard FileManager.default.isExecutableFile(atPath: executable.path) else {
-            throw VoiceError.message(L("Le lanceur local n’est pas exécutable. Relancez la préparation de l’application."))
+            throw VoiceError.message(L("The local launcher is not executable. Run application setup again."))
         }
         let task = Process()
         task.executableURL = executable
@@ -126,13 +126,13 @@ final class ServiceLaunchLog {
         let deadline = Date().addingTimeInterval(25)
         while task.isRunning {
             guard Date() < deadline else {
-                throw VoiceError.message(L("L’arrêt des modèles prend trop de temps. Réessayez le déchargement."))
+                throw VoiceError.message(L("Stopping the models is taking too long. Try unloading again."))
             }
             try await Task.sleep(nanoseconds: 100_000_000)
         }
         guard task.terminationStatus == 0 else {
             output?.close(); output = nil; process = nil
-            throw VoiceError.message(L("L’arrêt des services a échoué. Consultez le journal avant de recharger."))
+            throw VoiceError.message(L("Stopping the services failed. Check the log before reloading."))
         }
         output?.close(); output = nil; process = nil
     }

@@ -36,7 +36,7 @@ struct RecordingCapsule: View {
         .clipShape(Capsule())
         .preferredColorScheme(.dark)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L("Enregistrement en cours, {0} secondes", String(describing: Int(state.duration))))
+        .accessibilityLabel(L("Recording, {0} seconds", String(describing: Int(state.duration))))
     }
 }
 
@@ -65,7 +65,7 @@ struct ResultBubble: View {
                     JAISArtwork().frame(width: 18, height: 18)
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(preview ? L("JAIS VOICE · APERÇU") : "JAIS VOICE")
+                    Text(preview ? L("JAIS VOICE · PREVIEW") : "JAIS VOICE")
                         .font(.system(size: 10, weight: .bold, design: .rounded)).tracking(1.8)
                         .foregroundStyle(.white.opacity(0.92))
                     Text(state.stageLabel).font(.system(size: 11)).foregroundStyle(.white.opacity(0.54))
@@ -73,11 +73,11 @@ struct ResultBubble: View {
                 Spacer(minLength: 4)
                 if state.awaitingClarification {
                     Image(systemName: "bubble.left.and.questionmark.bubble.right.fill")
-                        .foregroundStyle(accent).accessibilityLabel(L("En attente de votre réponse"))
+                        .foregroundStyle(accent).accessibilityLabel(L("Waiting for your answer"))
                 }
                 if state.isBusy { ProgressView().controlSize(.small).scaleEffect(0.7).frame(width: 18) }
                 Button(action: onClose) { Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)).frame(width: 23, height: 23) }
-                    .buttonStyle(.plain).foregroundStyle(.white.opacity(0.55)).help(L("Fermer"))
+                    .buttonStyle(.plain).foregroundStyle(.white.opacity(0.55)).help(L("Close"))
             }.padding(.horizontal, 17).frame(height: 62)
             Rectangle().fill(.white.opacity(0.08)).frame(height: 1).padding(.horizontal, 16)
             ScrollViewReader { proxy in
@@ -85,7 +85,7 @@ struct ResultBubble: View {
                 VStack(alignment: .leading, spacing: 15) {
                     ForEach(state.history) { exchange in
                         VStack(alignment: .leading, spacing: 8) {
-                            sectionLabel(L("VOUS"), tag: "")
+                            sectionLabel(L("YOU"), tag: "")
                             naturalText(exchange.prompt, size: 14)
                             if !exchange.response.isEmpty {
                                 sectionLabel("JAIS VOICE", tag: "")
@@ -104,7 +104,7 @@ struct ResultBubble: View {
                     }
                     if !state.cleaned.isEmpty {
                         VStack(alignment: .leading, spacing: 7) {
-                            sectionLabel(L("TRANSCRIPTION CORRIGÉE"), tag: state.cleanerModelLabel)
+                            sectionLabel(L("CORRECTED TRANSCRIPT"), tag: state.cleanerModelLabel)
                             naturalText(state.cleaned, size: 15)
                         }
                     } else if !state.raw.isEmpty {
@@ -113,7 +113,7 @@ struct ResultBubble: View {
                             naturalText(state.raw, size: 14).foregroundStyle(.white.opacity(0.68))
                         }
                     } else if state.isBusy {
-                        Text(L("Votre voix devient du texte."))
+                        Text(L("Turning your voice into text."))
                             .font(.system(size: 13)).foregroundStyle(.white.opacity(0.48))
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -122,7 +122,7 @@ struct ResultBubble: View {
                             Button {
                                 onInteract(); state.showOriginal.toggle()
                             } label: {
-                                Label(state.showOriginal ? L("Masquer l’original") : L("Voir les corrections"), systemImage: state.showOriginal ? "chevron.up" : "chevron.down")
+                                Label(state.showOriginal ? L("Hide original") : L("Show corrections"), systemImage: state.showOriginal ? "chevron.up" : "chevron.down")
                                     .font(.system(size: 11, weight: .medium)).foregroundStyle(accent.opacity(0.9))
                             }.buttonStyle(.plain)
                             if state.showOriginal {
@@ -136,17 +136,17 @@ struct ResultBubble: View {
                     }
                     if !state.actions.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
-                            sectionLabel("ACTIONS", tag: state.actions.contains(where: { $0.name == "shell_execute" }) ? L("MACOS ET WEB") : L("NAVIGATEUR"))
+                            sectionLabel("ACTIONS", tag: state.actions.contains(where: { $0.name == "shell_execute" }) ? L("MACOS AND WEB") : L("BROWSER"))
                             ForEach(state.actions) { action in actionRow(action) }
                         }
                     }
                     if let request = state.pendingApproval { approvalCard(request) }
                     if !state.response.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
-                            sectionLabel(L(state.awaitingClarification ? "PRÉCISION NÉCESSAIRE" : "RÉPONSE"), tag: state.agentModelLabel)
+                            sectionLabel(L(state.awaitingClarification ? "CLARIFICATION NEEDED" : "RESPONSE"), tag: state.agentModelLabel)
                             naturalText(state.response, size: 14)
                             if state.awaitingClarification {
-                                Label(L("Maintenez les touches de dictée, répondez, puis relâchez."), systemImage: "mic.fill")
+                                Label(L("Hold the dictation keys, answer, then release."), systemImage: "mic.fill")
                                     .font(.system(size: 12, weight: .medium)).foregroundStyle(accent)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -180,14 +180,14 @@ struct ResultBubble: View {
                     onInteract()
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(state.response.isEmpty ? (state.cleaned.isEmpty ? state.raw : state.cleaned) : state.response, forType: .string)
-                } label: { Label(L("Copier"), systemImage: "doc.on.doc").font(.system(size: 11, weight: .medium)) }
+                } label: { Label(L("Copy"), systemImage: "doc.on.doc").font(.system(size: 11, weight: .medium)) }
                     .buttonStyle(.plain).disabled(state.response.isEmpty && state.cleaned.isEmpty && state.raw.isEmpty)
                 Spacer()
                 if state.isBusy {
-                    Button(action: onStop) { Label(L("Arrêter"), systemImage: "stop.fill").font(.system(size: 11, weight: .medium)) }
+                    Button(action: onStop) { Label(L("Stop"), systemImage: "stop.fill").font(.system(size: 11, weight: .medium)) }
                         .buttonStyle(.plain).foregroundStyle(accent)
                 } else {
-                    Text(preview ? L("Aperçu visuel · aucune inférence") : L("Raccourci micro pour continuer"))
+                    Text(preview ? L("Visual preview · no inference") : L("Use the talk shortcut to continue"))
                         .font(.system(size: 9)).foregroundStyle(.white.opacity(0.35))
                 }
             }.foregroundStyle(.white.opacity(0.7)).padding(.horizontal, 17).frame(height: 50)
@@ -238,7 +238,7 @@ struct ResultBubble: View {
     /// Minimal approval inside the bubble: what runs, then Refuse / Allow.
     private func approvalCard(_ request: ActionRequest) -> some View {
         VStack(alignment: .leading, spacing: 9) {
-            sectionLabel(L("AUTORISATION"), tag: L(request.tool))
+            sectionLabel(L("APPROVAL"), tag: L(request.tool))
             if !request.reason.isEmpty { naturalText(request.reason, size: 13) }
             ScrollView {
                 Text(request.details)
@@ -251,12 +251,12 @@ struct ResultBubble: View {
             HStack(spacing: 10) {
                 Spacer()
                 Button { onInteract(); state.onApproval?(false) } label: {
-                    Text(L("Refuser")).font(.system(size: 12, weight: .medium))
+                    Text(L("Refuse")).font(.system(size: 12, weight: .medium))
                         .padding(.horizontal, 14).padding(.vertical, 6)
                         .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
                 }.buttonStyle(.plain).foregroundStyle(.white.opacity(0.85))
                 Button { onInteract(); state.onApproval?(true) } label: {
-                    Text(L("Autoriser")).font(.system(size: 12, weight: .semibold))
+                    Text(L("Allow")).font(.system(size: 12, weight: .semibold))
                         .padding(.horizontal, 14).padding(.vertical, 6)
                         .background(accent, in: RoundedRectangle(cornerRadius: 7))
                 }.buttonStyle(.plain).foregroundStyle(JAISBrand.forest)
@@ -277,7 +277,7 @@ struct ResultBubble: View {
                 HStack(spacing: 8) {
                     Image(systemName: action.errorCode != nil ? "exclamationmark.circle.fill" : (action.finished ? "checkmark.circle.fill" : "arrow.up.right.circle"))
                         .foregroundStyle(action.errorCode != nil ? Color(red: 1, green: 0.48, blue: 0.44) : (action.finished ? JAISBrand.green : accent))
-                    Text(action.label + (action.errorCode != nil ? L(" · échec") : "")).font(.system(size: 12))
+                    Text(action.label + (action.errorCode != nil ? L(" · failed") : "")).font(.system(size: 12))
                     Spacer()
                     Image(systemName: state.expandedTools.contains(action.id) ? "chevron.up" : "chevron.down").font(.system(size: 8))
                 }.foregroundStyle(.white.opacity(0.75))
@@ -381,10 +381,10 @@ final class NonActivatingPanel: NSPanel {
     func savePreview(to url: URL) throws {
         guard let view = result.contentView,
               let representation = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
-            throw VoiceError.message(L("Impossible de capturer l’aperçu."))
+            throw VoiceError.message(L("Unable to capture preview."))
         }
         view.cacheDisplay(in: view.bounds, to: representation)
-        guard let data = representation.representation(using: .png, properties: [:]) else { throw VoiceError.message(L("Échec de l’export PNG.")) }
+        guard let data = representation.representation(using: .png, properties: [:]) else { throw VoiceError.message(L("PNG export failed.")) }
         try data.write(to: url)
     }
 }

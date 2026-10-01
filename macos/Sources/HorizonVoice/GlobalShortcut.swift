@@ -5,10 +5,10 @@ struct ShortcutChoice: Equatable {
     let label: String
     let modifiers: UInt32
     static var choices: [Self] { [
-        ShortcutChoice(label: L("⌥ Espace"), modifiers: UInt32(optionKey)),
-        ShortcutChoice(label: L("⌃ ⌥ Espace"), modifiers: UInt32(controlKey | optionKey)),
-        ShortcutChoice(label: L("⌃ ⇧ Espace"), modifiers: UInt32(controlKey | shiftKey)),
-        ShortcutChoice(label: L("⌘ ⇧ Espace"), modifiers: UInt32(cmdKey | shiftKey))
+        ShortcutChoice(label: L("⌥ Space"), modifiers: UInt32(optionKey)),
+        ShortcutChoice(label: L("⌃ ⌥ Space"), modifiers: UInt32(controlKey | optionKey)),
+        ShortcutChoice(label: L("⌃ ⇧ Space"), modifiers: UInt32(controlKey | shiftKey)),
+        ShortcutChoice(label: L("⌘ ⇧ Space"), modifiers: UInt32(cmdKey | shiftKey))
     ] }
 }
 
@@ -35,12 +35,12 @@ struct ShortcutChoice: Equatable {
             MainActor.assumeIsolated { shortcut.handle(kind: kind) }
             return noErr
         }, types.count, &types, Unmanaged.passUnretained(self).toOpaque(), &handler)
-        guard handlerStatus == noErr else { throw VoiceError.message(L("Le raccourci global ne peut pas être installé.")) }
+        guard handlerStatus == noErr else { throw VoiceError.message(L("The global shortcut could not be registered.")) }
         let id = EventHotKeyID(signature: OSType(0x48565F31), id: 1)
         let status = RegisterEventHotKey(UInt32(kVK_Space), ShortcutChoice.choices[choiceIndex].modifiers, id, GetApplicationEventTarget(), 0, &hotKey)
         guard status == noErr else {
             unregister()
-            throw VoiceError.message(L("Ce raccourci est déjà utilisé. Choisissez une autre combinaison dans le menu JAIS Voice."))
+            throw VoiceError.message(L("This shortcut is already in use. Choose another combination in the JAIS Voice menu."))
         }
         UserDefaults.standard.set(choiceIndex, forKey: "shortcutChoice")
     }

@@ -10,7 +10,7 @@ struct ServiceHealth: Decodable {
         var result: [String: ServiceModelHealth] = [:]
         for (role, size) in [("k2-cleaner", cleaner), ("k2-agent", agent)] {
             result[role] = models?.values.first(where: { $0.model_size == size })
-                ?? ServiceModelHealth(model_size: size, display_name: size, repo: nil, status: "unavailable", error: L("Ce modèle n’est pas disponible dans les services actifs."))
+                ?? ServiceModelHealth(model_size: size, display_name: size, repo: nil, status: "unavailable", error: L("This model is unavailable in the active services."))
         }
         return result
     }
@@ -75,7 +75,7 @@ struct PipelineFailure: Error {
         agent.onExit = { [weak self] detail in
             guard let self else { return }
             self.dismissApprovals?()
-            self.run?.fail(PipelineFailure(code: "agent_unavailable", message: L("L’agent local s’est arrêté. Vérifiez l’état des services dans le menu.")))
+            self.run?.fail(PipelineFailure(code: "agent_unavailable", message: L("The local agent stopped. Check service status in the menu.")))
             self.agentConversation = nil; self.agentModel = "k2-4b"; self.agentThinking = nil
             self.onDisconnect?(detail)
         }
@@ -87,7 +87,7 @@ struct PipelineFailure: Error {
         var request = URLRequest(url: url); request.timeoutInterval = timeout
         let (data, response) = try await URLSession.shared.data(for: request)
         guard (response as? HTTPURLResponse)?.statusCode == 200, let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw VoiceError.message(L("Les services locaux ne répondent pas encore."))
+            throw VoiceError.message(L("Local services are not responding yet."))
         }
         return object
     }
@@ -107,11 +107,11 @@ struct PipelineFailure: Error {
         async let gatewayHealth = try? Self.getJSON(Self.gatewayURL.appendingPathComponent("health"))
         async let asrHealth = try? Self.getJSON(Self.asrURL.appendingPathComponent("health"))
         let (models, asr) = await (gatewayHealth, asrHealth)
-        guard let models else { throw VoiceError.message(L("Les services locaux ne répondent pas encore.")) }
+        guard let models else { throw VoiceError.message(L("Local services are not responding yet.")) }
         let modelsReady = models["status"] as? String == "ready", asrReady = asr?["status"] as? String == "ready"
         let failed = models["status"] as? String == "error" || asr?["status"] as? String == "error"
-        var message = modelsReady ? L("Prêt") : (models["message"] as? String ?? L("Démarrage des services locaux…"))
-        if !asrReady { message = asr?["message"] as? String ?? L("Démarrage de JAIS-ASR F5 local…") }
+        var message = modelsReady ? L("Ready") : (models["message"] as? String ?? L("Starting local services…"))
+        if !asrReady { message = asr?["message"] as? String ?? L("Starting local JAIS-ASR F5…") }
         var payload: [String: Any] = ["status": modelsReady && asrReady ? "ready" : (failed ? "error" : "starting"), "message": message,
                                       "models": models["models"] ?? [:]]
         if let asr { payload["asr"] = asr }
@@ -126,7 +126,7 @@ struct PipelineFailure: Error {
         let url = size == "ASR" ? Self.asrURL.appendingPathComponent("memory") : Self.gatewayURL.appendingPathComponent("models/\(size)/memory")
         let (status, body) = try await Self.post(url, ["action": load ? "load" : "unload"], timeout: 190)
         guard status == 200 else {
-            throw VoiceError.message(body["detail"] as? String ?? body["error"] as? String ?? L("Impossible de modifier la mémoire du modèle."))
+            throw VoiceError.message(body["detail"] as? String ?? body["error"] as? String ?? L("Could not change model memory."))
         }
         return try await health()
     }
@@ -177,7 +177,7 @@ struct PipelineFailure: Error {
     /// Explicit text input: skips ASR only; the cleaner and agent still run.
     func sendText(_ text: String, turnID: String, conversationID: String? = nil, cleanerModel: String? = nil, agentModel: String? = nil, cleanupGuardEnabled: Bool? = nil) async throws {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.utf8.count <= 4000, !text.contains("\0") else {
-            throw VoiceError.message(L("Le texte de test est vide ou trop long."))
+            throw VoiceError.message(L("The text is empty or too long."))
         }
         let options = TurnOptions(conversationID: conversationID, cleanerModel: cleanerModel, agentModel: agentModel, cleanupGuardEnabled: cleanupGuardEnabled)
         await startTurn(turnID) { pipeline in
@@ -209,7 +209,7 @@ struct PipelineFailure: Error {
             catch is CancellationError { }
             catch let failure as PipelineFailure { self.emit(turnID, "error", text: failure.message, errorCode: failure.code) }
             catch {
-                if !Task.isCancelled { self.emit(turnID, "error", text: L("Le traitement a échoué. Réessayez depuis la barre des menus."), errorCode: "processing_failed") }
+                if !Task.isCancelled { self.emit(turnID, "error", text: L("Processing failed. Try again from the menu bar."), errorCode: "processing_failed") }
             }
             if self.activeTurnID == turnID { self.activeTurnID = nil }
         }
@@ -267,14 +267,14 @@ struct PipelineFailure: Error {
         let status: Int, result: [String: Any]
         do { (status, result) = try await Self.post(Self.asrURL.appendingPathComponent("transcribe"), body, timeout: 180) }
         catch let error as URLError where error.code == .cancelled { throw CancellationError() }
-        catch { throw PipelineFailure(code: "asr_unavailable", message: L("La transcription a échoué. Vérifiez l’état du modèle local JAIS-ASR F5.")) }
+        catch { throw PipelineFailure(code: "asr_unavailable", message: L("Transcription failed. Check the status of the local JAIS-ASR F5 model.")) }
         try Task.checkCancellation()
-        if status == 400 { throw PipelineFailure(code: "audio_format", message: L("Le fichier doit être un WAV PCM 16 bits, mono, 16 kHz, de 0,1 à 30 secondes.")) }
-        guard status == 200 else { throw PipelineFailure(code: "asr_unavailable", message: L("La transcription a échoué. Vérifiez l’état du modèle local JAIS-ASR F5.")) }
-        if result["refused"] as? Bool == true { throw PipelineFailure(code: "asr_refused", message: L("Le modèle ASR local a refusé cet enregistrement.")) }
-        if result["truncated"] as? Bool == true { throw PipelineFailure(code: "asr_truncated", message: L("La transcription est incomplète. Réessayez avec un extrait plus court.")) }
+        if status == 400 { throw PipelineFailure(code: "audio_format", message: L("The file must be a 16-bit PCM WAV, mono, 16 kHz, from 0.1 to 30 seconds.")) }
+        guard status == 200 else { throw PipelineFailure(code: "asr_unavailable", message: L("Transcription failed. Check the status of the local JAIS-ASR F5 model.")) }
+        if result["refused"] as? Bool == true { throw PipelineFailure(code: "asr_refused", message: L("The local ASR model refused this recording.")) }
+        if result["truncated"] as? Bool == true { throw PipelineFailure(code: "asr_truncated", message: L("The transcript is incomplete. Try a shorter recording.")) }
         guard let text = (result["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
-            throw PipelineFailure(code: "asr_empty", message: L("Aucune parole n’a été reconnue."))
+            throw PipelineFailure(code: "asr_empty", message: L("No speech was recognized."))
         }
         return text
     }
@@ -284,12 +284,12 @@ struct PipelineFailure: Error {
         let status: Int, result: [String: Any]
         do { (status, result) = try await Self.post(Self.gatewayURL.appendingPathComponent("v1/clean"), body, timeout: 180) }
         catch let error as URLError where error.code == .cancelled { throw CancellationError() }
-        catch { throw PipelineFailure(code: "cleaner_unavailable", message: L("Le nettoyage a échoué. Vérifiez l’état des modèles locaux.")) }
+        catch { throw PipelineFailure(code: "cleaner_unavailable", message: L("Cleanup failed. Check the local model status.")) }
         try Task.checkCancellation()
         guard status == 200, let text = result["text"] as? String else {
             let detail = result["detail"] as? [String: Any]
             throw PipelineFailure(code: detail?["code"] as? String ?? "cleaner_unavailable",
-                                  message: detail?["message"] as? String ?? L("Le nettoyage a échoué. Vérifiez l’état des modèles locaux."))
+                                  message: detail?["message"] as? String ?? L("Cleanup failed. Check the local model status."))
         }
         return text
     }
@@ -305,7 +305,7 @@ struct PipelineFailure: Error {
 
     private func act(_ text: String, turnID: String, options: TurnOptions) async throws {
         do { try await connect() }
-        catch { throw PipelineFailure(code: "agent_unavailable", message: L("L’agent local n’a pas démarré. Vérifiez l’état des services dans le menu.")) }
+        catch { throw PipelineFailure(code: "agent_unavailable", message: L("The local agent did not start. Check the service status in the menu.")) }
         if options.conversationID != agentConversation {
             try await agent.call("new_session")
             agentConversation = options.conversationID
@@ -329,7 +329,7 @@ struct PipelineFailure: Error {
         defer { if self.run === run { self.run = nil } }
         let data = try await agent.call("prompt", ["message": .string(text)])
         if data["disposition"]?.string != "started" {
-            throw PipelineFailure(code: "agent_failed", message: L("L’agent local n’a pas accepté la demande."))
+            throw PipelineFailure(code: "agent_failed", message: L("The local agent did not accept the request."))
         }
         try await withTaskCancellationHandler { try await run.finished() } onCancel: { Task { @MainActor in run.fail(CancellationError()) } }
     }
@@ -381,7 +381,7 @@ struct PipelineFailure: Error {
         case "message_end":
             let message = record["message"]
             if message?["role"]?.string == "assistant", message?["stopReason"]?.string == "error" {
-                failure = message?["errorMessage"]?.string ?? L("L’agent local n’a pas pu terminer sa réponse.")
+                failure = message?["errorMessage"]?.string ?? L("The local agent could not finish its answer.")
             }
         case "tool_execution_start":
             guard let id = record["toolCallId"]?.string, let tool = record["toolName"]?.string else { return }
@@ -401,9 +401,9 @@ struct PipelineFailure: Error {
             if let question, !question.isEmpty {
                 emit("clarification_request", Fields(text: question, started: started))
             } else if let failure {
-                emit("error", Fields(text: L("L’agent local n’a pas pu terminer sa réponse : {0}", String(describing: failure)), errorCode: "agent_failed"))
+                emit("error", Fields(text: L("The local agent could not finish its answer: {0}", String(describing: failure)), errorCode: "agent_failed"))
             } else if response.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                emit("error", Fields(text: L("Le modèle n’a renvoyé aucune réponse. Réessayez."), errorCode: "agent_empty"))
+                emit("error", Fields(text: L("The model returned no answer. Try again."), errorCode: "agent_empty"))
             } else {
                 emit("complete", Fields(text: response, started: started))
             }

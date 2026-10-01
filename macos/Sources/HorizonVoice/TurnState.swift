@@ -53,16 +53,16 @@ struct ToolAction: Identifiable {
     var errorCode: String?
     var label: String {
         switch name {
-        case "shell_execute": return L("Commande macOS")
-        case "browser_navigate": return L("Ouverture de la page")
-        case "browser_snapshot": return L("Lecture de la page")
-        case "browser_click": return L("Clic dans la page")
-        case "browser_type", "browser_fill_form": return L("Saisie du texte")
-        case "browser_select_option": return L("Sélection d’une option")
-        case "browser_navigate_back": return L("Retour à la page précédente")
-        case "browser_wait_for": return L("Chargement de la page")
-        case "browser_tabs": return L("Navigation entre les onglets")
-        default: return L("Action dans le navigateur")
+        case "shell_execute": return L("macOS command")
+        case "browser_navigate": return L("Opening page")
+        case "browser_snapshot": return L("Reading page")
+        case "browser_click": return L("Clicking on page")
+        case "browser_type", "browser_fill_form": return L("Entering text")
+        case "browser_select_option": return L("Selecting an option")
+        case "browser_navigate_back": return L("Going back")
+        case "browser_wait_for": return L("Loading page")
+        case "browser_tabs": return L("Switching tabs")
+        default: return L("Browser action")
         }
     }
 }
@@ -73,13 +73,13 @@ enum ModelLoadPhase: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .unloaded: return L("Déchargé")
-        case .notInstalled: return L("Non installé")
-        case .waiting: return L("En attente")
-        case .loading: return L("Chargement…")
-        case .ready: return L("Chargé")
-        case .error: return L("Erreur de chargement")
-        case .unavailable: return L("État indisponible")
+        case .unloaded: return L("Unloaded")
+        case .notInstalled: return L("Not installed")
+        case .waiting: return L("Waiting")
+        case .loading: return L("Loading…")
+        case .ready: return L("Loaded")
+        case .error: return L("Loading error")
+        case .unavailable: return L("Status unavailable")
         }
     }
 
@@ -137,9 +137,9 @@ struct ConversationExchange: Identifiable {
     @Published var modelsUnloaded = false
     @Published var modelsChanging = false
     @Published var ready = false
-    @Published var serviceMessage = "Démarrage des services…"
-    @Published var cleanerModelLabel = L("Correcteur local")
-    @Published var agentModelLabel = L("Agent local")
+    @Published var serviceMessage = "Starting services…"
+    @Published var cleanerModelLabel = L("Local corrector")
+    @Published var agentModelLabel = L("Local agent")
     @Published var cleanerModelPhase: ModelLoadPhase = .waiting
     @Published var agentModelPhase: ModelLoadPhase = .waiting
     @Published var cleanerModelError: String?
@@ -157,23 +157,23 @@ struct ConversationExchange: Identifiable {
     var hasResult: Bool { turnID != nil }
     var isBusy: Bool { turnID != nil && !finished }
     var stageLabel: String {
-        if recording { return L("Je vous écoute") }
-        if pendingApproval != nil { return L("Autorisation requise") }
+        if recording { return L("Listening") }
+        if pendingApproval != nil { return L("Approval needed") }
         switch stage {
-        case "uploading": return L("Envoi de l’enregistrement…")
-        case "transcribing": return L("Transcription…")
-        case "refining": return L("Correction de la transcription…")
-        case "acting": return actions.last?.finished == false ? L("Navigation en cours…") : L("Préparation de la réponse…")
-        case "awaiting_clarification": return L("En attente de votre réponse")
-        case "complete": return L("Terminé")
-        case "cancelled": return L("Demande arrêtée")
-        case "error": return L("Demande interrompue")
-        default: return stage.isEmpty ? L("Prêt à vous écouter") : stage
+        case "uploading": return L("Sending recording…")
+        case "transcribing": return L("Transcribing…")
+        case "refining": return L("Correcting transcript…")
+        case "acting": return actions.last?.finished == false ? L("Browsing…") : L("Preparing response…")
+        case "awaiting_clarification": return L("Waiting for your answer")
+        case "complete": return L("Done")
+        case "cancelled": return L("Request stopped")
+        case "error": return L("Request interrupted")
+        default: return stage.isEmpty ? L("Ready to listen") : stage
         }
     }
     func updateModelLabels(_ models: [String: ServiceModelHealth]?) {
-        cleanerModelLabel = models?["k2-cleaner"]?.label(fallback: L("Correcteur local")) ?? L("Correcteur local")
-        agentModelLabel = models?["k2-agent"]?.label(fallback: L("Agent local")) ?? L("Agent local")
+        cleanerModelLabel = models?["k2-cleaner"]?.label(fallback: L("Local corrector")) ?? L("Local corrector")
+        agentModelLabel = models?["k2-agent"]?.label(fallback: L("Local agent")) ?? L("Local agent")
     }
     func updateModelHealth(_ models: [String: ServiceModelHealth]?, serviceStatus: String) {
         updateModelLabels(models)
@@ -198,11 +198,11 @@ struct ConversationExchange: Identifiable {
     }
     var canToggleModelMemory: Bool { !isBusy && !modelsChanging }
     var modelMemoryButton: String {
-        L(modelsUnloaded ? "Recharger les modèles" : "Décharger les modèles")
+        L(modelsUnloaded ? "Reload models" : "Unload models")
     }
     func finishUnloadingModels() {
         modelsUnloaded = true; modelsChanging = false; ready = false
-        serviceMessage = "Modèles déchargés · mémoire libérée"
+        serviceMessage = "Models unloaded · memory released"
         cleanerModelPhase = .unloaded; agentModelPhase = .unloaded
         cleanerModelError = nil; agentModelError = nil
         conversationID = UUID().uuidString; history = []
@@ -265,7 +265,7 @@ struct ConversationExchange: Identifiable {
             if let text = event.text, !text.isEmpty { response = text }
             stage = "complete"; finished = true; onFinish?()
         case "cancelled": cancel()
-        case "error": fail(event.text.map { L($0) } ?? L("Une erreur est survenue. Réessayez la demande."))
+        case "error": fail(event.text.map { L($0) } ?? L("An error occurred. Please try again."))
         default: break
         }
     }
