@@ -2,11 +2,10 @@
 
 JAIS Voice uses one speech model and one language model at a time. `models/catalog.json` lists the models the app knows, their Hugging Face repository and pinned revision; the app's settings download, load, unload and delete them. Models live in `~/Library/Application Support/JAIS Voice/models/`.
 
-| Role | Repository |
+| Role | Model |
 | --- | --- |
 | Speech recognition | [MBZUAI-Paris/JAIS-ASR-MLX](https://huggingface.co/MBZUAI-Paris/JAIS-ASR-MLX) |
-| Cleanup and agent | [IFM/Jais-3-3.7B](https://huggingface.co/IFM/Jais-3-3.7B) |
-| Agent, smaller / larger | [IFM/Jais-3-0.9B](https://huggingface.co/IFM/Jais-3-0.9B) · [IFM/Jais-3-7B](https://huggingface.co/IFM/Jais-3-7B) |
+| Cleanup and agent (one model for both) | [IFM/Jais-3-3.7B](https://huggingface.co/IFM/Jais-3-3.7B) (default) · [IFM/Jais-3-0.9B](https://huggingface.co/IFM/Jais-3-0.9B) · [IFM/Jais-3-7B](https://huggingface.co/IFM/Jais-3-7B) |
 
 ## Speech recognition
 
