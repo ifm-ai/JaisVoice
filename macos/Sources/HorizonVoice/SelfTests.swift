@@ -98,6 +98,13 @@ import AVFoundation
             try check(!AppPreferences(defaults: defaults).cleanupGuardEnabled, "désactivation du garde-fou persistante")
             try check(LocalPipeline.cleanBody("t", options: .init(cleanupGuardEnabled: false))["guard"] as? Bool == false, "désactivation transmise avec le tour")
             preferences.setCleanupGuardEnabled(true)
+            try check(preferences.actionPermission == .ask, "actions sur le Mac : demander par défaut")
+            preferences.setActionPermission(.always)
+            try check(AppPreferences(defaults: defaults).actionPermission == .always, "réglage des actions persistant")
+            preferences.setActionPermission(.ask)
+            let action = ActionRequest(title: "Commande macOS", message: #"{"reason":"Ouvrir Safari","details":"open -a Safari"}"#)
+            try check(action == ActionRequest(tool: "Commande macOS", reason: "Ouvrir Safari", details: "open -a Safari"), "demande d’action lue depuis l’extension")
+            try check(ActionRequest(title: "Commande", message: "ls").details == "ls", "message non JSON affiché tel quel")
             try check(AppPreferences(defaults: defaults).cleanupGuardEnabled, "réactivation du garde-fou persistante")
             for size in ["1B", "4B"] {
                 preferences.setModelSize(size)

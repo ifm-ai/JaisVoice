@@ -112,6 +112,13 @@ private final class RecordReader: @unchecked Sendable {
         }
     }
 
+    /// Write one record that Pi does not answer, such as an extension_ui_response.
+    func send(_ record: [String: JSONValue]) {
+        guard let input, isRunning, var line = try? JSONEncoder().encode(JSONValue.object(record)) else { return }
+        line.append(0x0A)
+        try? input.write(contentsOf: line)
+    }
+
     private func cleanup(error: Error) {
         for continuation in pending.values { continuation.resume(throwing: error) }
         pending = [:]

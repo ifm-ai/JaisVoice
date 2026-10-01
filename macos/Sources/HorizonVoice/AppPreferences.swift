@@ -17,6 +17,32 @@ struct ASRLanguageChoice: Identifiable, Equatable {
     ] }
 }
 
+/// Whether the agent may run actions on this Mac (shell, Notes, radios).
+enum ActionPermission: String, CaseIterable {
+    case never, ask, always
+
+    var label: String {
+        switch self {
+        case .never: return L("Ne jamais autoriser")
+        case .ask: return L("Demander à chaque fois")
+        case .always: return L("Toujours autoriser")
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .never: return L("L’assistant ne peut ni lancer de commande ni modifier vos applications. La navigation web reste possible.")
+        case .ask: return L("Chaque commande est affichée avant de s’exécuter. Vous l’autorisez ou la refusez.")
+        case .always: return L("Attention : les commandes choisies par l’assistant s’exécutent sans confirmation, avec vos droits. Un modèle peut se tromper ou suivre des instructions cachées dans une page web, et une commande peut supprimer ou envoyer vos fichiers. N’activez ce mode que si vous surveillez ce que fait l’assistant.")
+        }
+    }
+
+    /// HORIZON_ACTION_PERMISSION overrides the preference, for scripted smoke tests.
+    static var override: ActionPermission? {
+        ProcessInfo.processInfo.environment["HORIZON_ACTION_PERMISSION"].flatMap(ActionPermission.init(rawValue:))
+    }
+}
+
 enum MicrophoneAuthorization: Equatable {
     case notDetermined, authorized, denied, restricted
 
@@ -43,6 +69,7 @@ enum MicrophoneAuthorization: Equatable {
     static let cleanerModelKey = "cleanerModelSize"
     static let agentModelKey = "agentModelSize"
     static let cleanupGuardKey = "cleanupGuardEnabled"
+    static let actionPermissionKey = "actionPermission"
     @Published private(set) var interfaceLanguage: InterfaceLanguage
     private let defaults: UserDefaults
 
@@ -52,6 +79,7 @@ enum MicrophoneAuthorization: Equatable {
     var cleanerModel: String { modelSize }
     var agentModel: String { modelSize }
     @Published private(set) var cleanupGuardEnabled: Bool
+    @Published private(set) var actionPermission: ActionPermission
     @Published var microphoneStatus: MicrophoneAuthorization = .notDetermined
     @Published var microphoneRequestPending = false
     @Published var shortcutError: String?
@@ -71,6 +99,7 @@ enum MicrophoneAuthorization: Equatable {
                 ?? defaults.string(forKey: Self.agentModelKey)
                 ?? defaults.string(forKey: Self.cleanerModelKey), fallback: "4B")
         cleanupGuardEnabled = defaults.object(forKey: Self.cleanupGuardKey) as? Bool ?? true
+        actionPermission = defaults.string(forKey: Self.actionPermissionKey).flatMap(ActionPermission.init(rawValue:)) ?? .ask
         defaults.set(modelSize, forKey: Self.modelSizeKey)
         refreshMicrophoneStatus()
     }
@@ -96,6 +125,11 @@ enum MicrophoneAuthorization: Equatable {
     func setCleanupGuardEnabled(_ enabled: Bool) {
         cleanupGuardEnabled = enabled
         defaults.set(enabled, forKey: Self.cleanupGuardKey)
+    }
+
+    func setActionPermission(_ permission: ActionPermission) {
+        actionPermission = permission
+        defaults.set(permission.rawValue, forKey: Self.actionPermissionKey)
     }
 
     func setModelSize(_ value: String) {

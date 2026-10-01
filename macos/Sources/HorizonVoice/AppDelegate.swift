@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
     private let launcher = ServiceLauncher()
     private let preferences = AppPreferences()
     private let modelStore = ModelStore()
+    private var actionApprover: ActionApprover!
     private var configuration: ConfigurationWindowController!
     private var panels: FloatingPanels!
     private var statusItem: NSStatusItem!
@@ -75,6 +76,10 @@ import UniformTypeIdentifiers
             self?.reportSmokeIfNeeded()
         }
         transport.onEvent = { [weak self] event in self?.receive(event) }
+        actionApprover = ActionApprover(state: state) { [weak self] in self?.panels.showResult() }
+        transport.actionPermission = { [weak self] in self?.preferences.actionPermission ?? .never }
+        transport.approveAction = { [weak self] request in await self?.actionApprover.approve(request) ?? false }
+        transport.dismissApprovals = { [weak self] in self?.actionApprover.dismiss() }
         transport.onDisconnect = { [weak self] message in
             guard let self, !self.shuttingDown, !self.state.modelsChanging, !self.state.modelsUnloaded else { return }
             self.state.ready = false; self.state.serviceMessage = message
@@ -701,6 +706,11 @@ import UniformTypeIdentifiers
             let clarification = state.begin()
             state.accept(WireEvent(type: "correction", turn_id: clarification, text: "Find a restaurant for tonight."))
             state.accept(WireEvent(type: "clarification_request", turn_id: clarification, text: "Which city should I search in?"))
+        }
+        if CommandLine.arguments.contains("--preview-approval") {
+            let approval = state.begin()
+            state.accept(WireEvent(type: "correction", turn_id: approval, text: "Ouvre Safari sur la page d’accueil."))
+            state.pendingApproval = ActionRequest(tool: "Commande macOS", reason: "Ouvrir Safari.", details: "/usr/bin/open -a Safari")
         }
         state.showOriginal = true
         let previousFrontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
