@@ -134,6 +134,8 @@ def main():
     parser.add_argument("--swift", default=os.environ.get("HORIZON_SWIFT", "swift"))
     parser.add_argument("--dev", action="store_true", help="Launchers run this checkout instead of an embedded runtime")
     parser.add_argument("--zip", action="store_true", help="Also write a zip archive to share the app")
+    parser.add_argument("--dmg", action="store_true", help="Also write a drag-to-install disk image")
+    parser.add_argument("--build-number", help="CFBundleVersion of this build (CI run number)")
     args = parser.parse_args()
     if args.direct:
         run(sys.executable, ROOT / "macos/build_direct.py", cwd=ROOT)
@@ -159,6 +161,8 @@ def main():
     with (ROOT / "macos/Info.plist").open("rb") as source:
         info = plistlib.load(source)
     info["CFBundleExecutable"] = "JAISVoice"
+    if args.build_number:
+        info["CFBundleVersion"] = args.build_number
     with (contents / "Info.plist").open("wb") as destination:
         plistlib.dump(info, destination)
     resources = contents / "Resources"
@@ -196,6 +200,9 @@ def main():
         archive.unlink(missing_ok=True)
         run("/usr/bin/ditto", "-c", "-k", "--keepParent", app, archive)
         print(f"Archive ready: {archive}")
+    if args.dmg:
+        from make_dmg import make_dmg
+        make_dmg(app, OUTPUTS / f"JAIS-Voice-{info['CFBundleShortVersionString']}.dmg", info["CFBundleDisplayName"])
 
 
 if __name__ == "__main__":

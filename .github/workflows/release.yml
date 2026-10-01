@@ -1,0 +1,75 @@
+name: Build and release
+
+# Pull requests: test and build the app. Pushes to main: also publish a release
+# with the drag-to-install disk image.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # The official nodejs.org build, embedded as is in the app.
+          node-version: 26
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Restore download cache
+        uses: actions/cache@v4
+        with:
+          path: .runtime/build-cache
+          key: build-cache-${{ hashFiles('requirements.in', 'requirements.lock', 'package-lock.json') }}
+          restore-keys: build-cache-
+
+      - name: Prepare test environment
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python --cache-dir .runtime/build-cache/uv -r requirements.in -c requirements.lock
+
+      - name: Python tests
+        run: PYTHONPATH=.:backend .venv/bin/python -m pytest backend/tests tests -q -o asyncio_mode=auto
+
+      - name: Pi extension tests
+        run: node --test agent/
+
+      - name: Build app and disk image
+        run: .venv/bin/python scripts/build_app.py --direct --dmg --build-number "${{ github.run_number }}"
+
+      - name: Native self-test
+        run: '"outputs/JAIS Voice.app/Contents/MacOS/JAISVoice" --self-test'
+
+      - name: Keep the disk image
+        uses: actions/upload-artifact@v4
+        with:
+          name: JAIS-Voice-dmg
+          path: outputs/*.dmg
+          retention-days: 7
+          compression-level: 0
+
+      - name: Publish release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' macos/Info.plist)
+          tag="v${version}-build.${{ github.run_number }}"
+          gh release create "$tag" outputs/*.dmg \
+            --target "$GITHUB_SHA" \
+            --title "JAIS Voice ${version} (build ${{ github.run_number }})" \
+            --notes-file .github/release-notes.md \
+            --latest
