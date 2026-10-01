@@ -4,6 +4,7 @@ import pytest
 from k2_runtime import gateway
 from k2_runtime.cleanup_guard import cleanup_problem
 from k2_runtime.prompts import cleaner_messages
+from model_fixtures import loaded
 
 
 @pytest.mark.parametrize("source,result", [
@@ -62,7 +63,7 @@ def gateway_client(monkeypatch):
     """The real /v1/clean endpoint with an explicitly substituted generation worker."""
     worker = gateway.Worker()
     worker.status = "ready"
-    worker.models = {"k2-cleaner": (None, None, {}, {}), "k2-agent": (None, None, {}, {})}
+    worker.models = loaded(["4B"])
     worker.outputs, worker.requests = [], []
     def fake_run(body, cancelled, emit):
         worker.requests.append(body)

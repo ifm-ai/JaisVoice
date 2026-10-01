@@ -6,6 +6,7 @@ private let configurationAccent = JAISBrand.green
 struct ConfigurationView: View {
     @ObservedObject var state: TurnState
     @ObservedObject var preferences: AppPreferences
+    @ObservedObject var modelStore: ModelStore
     var onShortcutChange: (Int) -> Void
     var onAuthorizeMicrophone: () -> Void
     var onShowLast: () -> Void
@@ -13,6 +14,9 @@ struct ConfigurationView: View {
     var onTextRequest: () -> Void
     var onChangeModelMemory: (String) -> Void
     var onToggleModelMemory: () -> Void
+    var onDownloadModel: (String) -> Void
+    var onCancelDownload: (String) -> Void
+    var onDeleteModel: (String) -> Void
     var onShowServiceLog: () -> Void
     var onClose: () -> Void
     var onQuit: () -> Void
@@ -67,8 +71,12 @@ struct ConfigurationView: View {
                 Spacer(minLength: 0)
             }.accessibilityElement(children: .combine)
             Text(L("NETTOYAGE ET AGENT")).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
-            ForEach(["1B", "4B"], id: \.self) { size in modelMemoryRow(size) }
-            if let error = state.modelMemoryError {
+            if modelStore.languageModels.isEmpty {
+                Text(modelStore.loaded ? L("Aucun modèle dans le catalogue.") : L("Lecture du catalogue des modèles…"))
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            ForEach(modelStore.languageModels) { model in modelRow(model) }
+            ForEach([state.modelMemoryError, modelStore.error].compactMap { $0 }, id: \.self) { error in
                 Text(error).font(.system(size: 10)).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
             }
             Button(action: onToggleModelMemory) {
@@ -81,22 +89,68 @@ struct ConfigurationView: View {
     private var asrService: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L("TRANSCRIPTION · MODÈLE ASR")).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
-            modelMemoryRow("ASR")
+            if let asr = modelStore.asr { modelRow(asr) }
         }.padding(13).cardBackground()
     }
 
-    private func modelMemoryRow(_ size: String) -> some View {
-        let phase = state.modelPhase(size)
+    /// Installation and memory state of one catalog model, with its actions.
+    private func modelRow(_ model: CatalogModel) -> some View {
+        let key = model.memoryKey
+        let phase: ModelLoadPhase = model.installed ? state.modelPhase(key) : .notInstalled
+        let progress = modelStore.downloads[model.id]
+        let deleting = modelStore.deleting.contains(model.id)
         return HStack(spacing: 9) {
-            Text(size == "ASR" ? "JAIS-ASR · F5" : size).font(.system(size: 12, weight: .semibold))
-            Label(state.changingModel == size ? L("Mise à jour…") : phase.label, systemImage: phase.symbolName)
-                .font(.system(size: 11)).foregroundStyle(modelPhaseColor(phase))
-                .help(state.modelInventory[size]?.error ?? phase.label)
-            Spacer()
-            Button(phase == .ready ? L("Décharger") : L("Charger")) { onChangeModelMemory(size) }
-                .controlSize(.small).disabled(!state.canChangeModel(size))
-                .accessibilityLabel((phase == .ready ? L("Décharger") : L("Charger")) + " " + size)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(model.isASR ? model.display_name : key).font(.system(size: 12, weight: .semibold))
+                Text(modelDetail(model)).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+            }
+            if let progress {
+                ProgressView(value: progress.fraction ?? 0).frame(width: 70)
+                    .accessibilityLabel(L("Téléchargement de {0}", String(describing: model.display_name)))
+                Text(downloadLabel(progress)).font(.system(size: 10)).foregroundStyle(.secondary).monospacedDigit()
+            } else if deleting {
+                Label(L("Suppression…"), systemImage: "trash").font(.system(size: 11)).foregroundStyle(.secondary)
+            } else if model.installed || model.downloadable {
+                Label(state.changingModel == key ? L("Mise à jour…") : phase.label, systemImage: phase.symbolName)
+                    .font(.system(size: 11)).foregroundStyle(modelPhaseColor(phase))
+                    .help(state.modelInventory[key]?.error ?? phase.label)
+            }
+            Spacer(minLength: 4)
+            if progress != nil {
+                Button(L("Annuler")) { onCancelDownload(model.id) }.controlSize(.small)
+            } else if !model.installed {
+                if model.downloadable {
+                    Button(L("Télécharger")) { onDownloadModel(model.id) }.controlSize(.small)
+                        .disabled(deleting || state.isBusy)
+                } else {
+                    Text(L("Bientôt disponible")).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+                }
+            } else {
+                Button(phase == .ready ? L("Décharger") : L("Charger")) { onChangeModelMemory(key) }
+                    .controlSize(.small).disabled(!state.canChangeModel(key) || deleting)
+                    .accessibilityLabel((phase == .ready ? L("Décharger") : L("Charger")) + " " + key)
+                Button { onDeleteModel(model.id) } label: { Image(systemName: "trash") }
+                    .controlSize(.small).disabled(deleting || state.isBusy || state.modelsChanging)
+                    .help(L("Supprimer ce modèle du Mac")).accessibilityLabel(L("Supprimer {0}", String(describing: model.display_name)))
+            }
         }.padding(8).background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func modelDetail(_ model: CatalogModel) -> String {
+        let name = model.isASR ? L("Transcription locale") : model.display_name
+        if model.installed { return name + " · " + ModelStore.formatBytes(model.diskBytes) }
+        if !model.downloadable { return name }
+        let size = model.download_bytes.map { " · " + ModelStore.formatBytes($0) } ?? ""
+        let partial = model.partialBytes > 0 ? " · " + L("reprise possible") : ""
+        return name + size + partial
+    }
+
+    private func downloadLabel(_ progress: DownloadProgress) -> String {
+        switch progress.phase {
+        case "verify": return L("Vérification…")
+        case "install": return L("Installation…")
+        default: return progress.fraction.map { "\(Int($0 * 100)) %" } ?? L("Préparation…")
+        }
     }
 
     private func modelPhaseColor(_ phase: ModelLoadPhase) -> Color {
@@ -104,7 +158,7 @@ struct ConfigurationView: View {
         case .ready: return JAISBrand.green
         case .loading: return configurationAccent
         case .error: return Color(red: 1, green: 0.48, blue: 0.44)
-        case .waiting, .unavailable, .unloaded: return .secondary
+        case .waiting, .unavailable, .unloaded, .notInstalled: return .secondary
         }
     }
 
@@ -262,8 +316,12 @@ private extension View {
         onShowLast: @escaping () -> Void,
         onImportAudio: @escaping () -> Void,
         onTextRequest: @escaping () -> Void,
+        modelStore: ModelStore,
         onChangeModelMemory: @escaping (String) -> Void,
         onToggleModelMemory: @escaping () -> Void,
+        onDownloadModel: @escaping (String) -> Void,
+        onCancelDownload: @escaping (String) -> Void,
+        onDeleteModel: @escaping (String) -> Void,
         onShowServiceLog: @escaping () -> Void,
         onQuit: @escaping () -> Void
     ) {
@@ -283,7 +341,7 @@ private extension View {
         window.setFrameAutosaveName("HorizonVoiceConfiguration")
         super.init(window: window)
         let view = ConfigurationView(
-            state: state, preferences: preferences,
+            state: state, preferences: preferences, modelStore: modelStore,
             onShortcutChange: onShortcutChange,
             onAuthorizeMicrophone: onAuthorizeMicrophone,
             onShowLast: onShowLast,
@@ -291,6 +349,9 @@ private extension View {
             onTextRequest: onTextRequest,
             onChangeModelMemory: onChangeModelMemory,
             onToggleModelMemory: onToggleModelMemory,
+            onDownloadModel: onDownloadModel,
+            onCancelDownload: onCancelDownload,
+            onDeleteModel: onDeleteModel,
             onShowServiceLog: onShowServiceLog,
             onClose: { [weak self] in self?.close() },
             onQuit: onQuit

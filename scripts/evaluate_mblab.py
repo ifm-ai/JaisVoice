@@ -240,12 +240,13 @@ async def main(args):
         health = health_response.json()
         if health.get("status") != "ready":
             raise RuntimeError("The resident gateway is not ready")
-        profile = str(health.get("model_manifest", ""))
-        if args.expect_profile and args.expect_profile not in Path(profile).name:
-            raise RuntimeError(f"Expected a model profile containing {args.expect_profile!r}; got {profile!r}")
-        report["profile"] = {"manifest_path": profile, "models": health.get("models")}
-        if profile and Path(profile).is_file():
-            report["profile"]["manifest_sha256"] = sha256(Path(profile))
+        catalog = str(health.get("model_catalog", ""))
+        loaded = [entry["display_name"] for entry in (health.get("models") or {}).values() if entry.get("status") == "ready"]
+        if len(loaded) != 1 or (args.expect_model and args.expect_model not in loaded[0]):
+            raise RuntimeError(f"Expected exactly one loaded model containing {args.expect_model!r}; got {loaded!r}")
+        report["profile"] = {"catalog_path": catalog, "loaded_model": loaded[0], "models": health.get("models")}
+        if catalog and Path(catalog).is_file():
+            report["profile"]["catalog_sha256"] = sha256(Path(catalog))
         for case in cases:
             row = await evaluate_cleanup(http, base_url, case, args.cleaner_effort, args.max_tokens)
             report["cleaner"].append(row)
@@ -277,7 +278,7 @@ if __name__ == "__main__":
     parser.add_argument("--base-url", default="http://127.0.0.1:8788")
     parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
     parser.add_argument("--case-id", action="append", help="Optional subset; still records the hash of the complete frozen suite")
-    parser.add_argument("--expect-profile", default="mblab", help="Required manifest filename substring; use an empty string explicitly to compare another profile")
+    parser.add_argument("--expect-model", default="MBZUAI", help="Required substring of the loaded model's name; use an empty string explicitly to compare another model")
     parser.add_argument("--cleaner-effort", choices=["low", "medium", "high"], default=os.environ.get("HORIZON_CLEANER_REASONING_EFFORT", "low"))
     parser.add_argument("--agent-effort", choices=["low", "medium", "high"], default=os.environ.get("HORIZON_AGENT_REASONING_EFFORT", "low"))
     parser.add_argument("--max-tokens", type=int, default=2048)

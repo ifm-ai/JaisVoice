@@ -6,7 +6,7 @@ Ce dossier est la racine de développement de JAIS Voice, déplacée ici le 17 s
 - Agent : harness Pi dans `agent/` (prompt, modèles, extension `extensions/jais/`), lancé par `scripts/run_agent.py`.
 - ASR local : `backend/horizon_voice/local_asr.py`. Nettoyage et garde-fou : `k2_runtime/` (`/v1/clean`).
 - Inférence locale : `k2_runtime/`.
-- Modèles et services : `.runtime/`; profil actif : `.runtime/models/active-profile.json`.
+- Modèles et services : `.runtime/` ; catalogue des modèles (dépôts Hugging Face, tailles) : `models/catalog.json`, géré par `scripts/models.py`.
 - Environnement Python : `.venv/`.
 - Application construite et livrables : `outputs/`. Application installée : `/Applications/JAIS Voice.app`.
 - Construire : `.venv/bin/python scripts/build_app.py --direct`.

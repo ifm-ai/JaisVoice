@@ -2,13 +2,15 @@
 
 # JAIS Voice
 
-Les réglages proposent un seul sélecteur **1B / 4B**, commun au **nettoyage et à l’agent**. Le choix est conservé après fermeture et appliqué à la prochaine demande audio ou texte. Les deux étapes gardent leurs prompts et paramètres propres, mais utilisent le même checkpoint. Le choix de l’ancien agent est repris lors de la migration (4B par défaut). Les deux checkpoints restent résidents pour permettre de changer de taille sans rechargement ; un même checkpoint n’est pas chargé deux fois pour les deux rôles.
+Les réglages proposent un seul sélecteur **1B / 4B / 7B**, commun au **nettoyage et à l’agent**. Le choix est conservé après fermeture et appliqué à la prochaine demande audio ou texte. Les deux étapes gardent leurs prompts et paramètres propres, mais utilisent le même checkpoint, chargé une seule fois.
+
+**Modèles à la demande.** `models/catalog.json` liste les modèles et leurs dépôts Hugging Face. Au lancement, l’app propose de télécharger les modèles requis absents ; les réglages permettent de télécharger, annuler (reprise possible), décharger ou supprimer chaque modèle. Les modèles K2 n’ont pas encore de dépôt MLX publié : ils apparaissent « Bientôt disponible » tant que leur entrée `download` vaut `null`, et les conversions déjà présentes sur ce Mac restent utilisables et supprimables. Le 7B MBZUAI a sa place réservée dans le catalogue.
 
 La transcription utilise **JAIS-ASR-MLX F5 sur ce Mac**, sans serveur ASR distant. Le modèle est conservé en mémoire par un service local isolé, lancé avec l’application.
 
 Assistant vocal natif pour ce Mac Apple Silicon : appuyer sur **⌥ Espace**, parler, relâcher. La capsule d’écoute laisse place à un petit panneau avec transcription, corrections, navigation et réponse. Les deux K2 fonctionnent sous MLX sur le Mac.
 
-**Statut : prototype supervisé, profil mblab 1B/4B activé le 16 septembre 2026.** Les deux conversions MLX et la chaîne audio native fonctionnent. Le 1B réussit 12/16 cas de nettoyage stricts ; le 4B sait rechercher et ouvrir des pages, mais peut choisir un mauvais site et le présenter comme officiel. Voir `Validation-MBLab.md` dans le dossier de livraison pour les succès et échecs mesurés. L’ancien profil IFM reste disponible pour revenir en arrière.
+**Statut : prototype supervisé, profil mblab 1B/4B activé le 16 septembre 2026.** Les deux conversions MLX et la chaîne audio native fonctionnent. Le 1B réussit 12/16 cas de nettoyage stricts ; le 4B sait rechercher et ouvrir des pages, mais peut choisir un mauvais site et le présenter comme officiel. Voir `Validation-MBLab.md` dans le dossier de livraison pour les succès et échecs mesurés. L’ancien couple IFM reste utilisable via `models/catalog-ifm.json`.
 
 ## Architecture
 
@@ -22,7 +24,7 @@ Audio WAV → JAIS-ASR F5 local → LLM choisi (nettoyage, `/v1/clean`) → Pi a
 
 L’app lance Pi en mode RPC comme processus enfant (`scripts/run_agent.py`) et dialogue avec lui en JSONL sur stdin/stdout : aucun serveur ni jeton n’est nécessaire entre l’interface et l’agent.
 
-Les réglages livrés pour mblab sont `low` pour les deux modèles, avec les appels XML natifs et descriptions Markdown K2. Le profil IFM historique conserve `low` pour le nettoyeur et `medium` pour l’agent. Le champ `default_reasoning_effort` de chaque profil définit ces valeurs ; les variables explicites `HORIZON_CLEANER_REASONING_EFFORT` et `HORIZON_AGENT_REASONING_EFFORT` sont prioritaires. Le réglage « Garde-fou de correction », activé par défaut, peut être désactivé dans les réglages natifs. Ce choix est conservé et transmis à chaque demande audio ou texte ; il s’applique dès la prochaine demande. Désactivé, il laisse passer les corrections même si elles changent des mots ou le sens, mais les contrôles de réponse vide ou incomplète restent actifs. Le garde-fou lexical refuse certaines corrections incertaines avant toute action ; il ne remplace ni une validation du sens ni la vérification des sites choisis par l’agent.
+Les réglages livrés pour mblab sont `low` pour les deux modèles, avec les appels XML natifs et descriptions Markdown K2. Le catalogue IFM historique (`HORIZON_MODEL_CATALOG=models/catalog-ifm.json`) conserve `low` pour le nettoyeur et `medium` pour l’agent. Les champs `cleaner_reasoning_effort` et `agent_reasoning_effort` du catalogue définissent ces valeurs ; les variables explicites `HORIZON_CLEANER_REASONING_EFFORT` et `HORIZON_AGENT_REASONING_EFFORT` sont prioritaires. Le réglage « Garde-fou de correction », activé par défaut, peut être désactivé dans les réglages natifs. Ce choix est conservé et transmis à chaque demande audio ou texte ; il s’applique dès la prochaine demande. Désactivé, il laisse passer les corrections même si elles changent des mots ou le sens, mais les contrôles de réponse vide ou incomplète restent actifs. Le garde-fou lexical refuse certaines corrections incertaines avant toute action ; il ne remplace ni une validation du sens ni la vérification des sites choisis par l’agent.
 
 Les événements par tour sont documentés dans `INTERFACES.md`. Les modèles ne partagent ni tokenizer ni cache. Le brut est affiché mais seul le texte nettoyé entre dans la conversation de l’agent. Les événements d’un tour annulé sont ignorés.
 
@@ -43,7 +45,7 @@ Les dépendances Python et npm sont verrouillées dans `requirements.lock` et `p
 
 ### Checkpoints privés mblab : 1B et 4B
 
-Le profil alternatif `.runtime/models/manifest-mblab.json` utilise les exports suivants, copiés depuis `mblab:/datadisk4/florian-valade/` sans modifier les originaux :
+Les modèles 1B et 4B du catalogue sont les conversions locales des exports suivants, copiés depuis `mblab:/datadisk4/florian-valade/` sans modifier les originaux :
 
 | Rôle | Export MBZUAI-Paris | Révision | Conversion locale |
 | --- | --- | --- | --- |
@@ -59,7 +61,7 @@ Après copie des sources dans `.runtime/models/sources/mblab-1B-32bfb4a00c1e` et
 .venv/bin/python scripts/prepare_mblab_models.py
 ```
 
-La préparation vérifie l’intégrité, les formes des tenseurs et les révisions avant conversion. Elle écrit dans de nouveaux dossiers et conserve le profil IFM. Elle n’active pas automatiquement un modèle non testé. Les sources Python téléchargées ne sont pas exécutées pour convertir ou servir les modèles.
+La préparation vérifie l’intégrité, les formes des tenseurs et les révisions avant conversion. Elle écrit dans les dossiers référencés par `models/catalog.json`, que l’app détecte alors comme installés. Les sources Python téléchargées ne sont pas exécutées pour convertir ou servir les modèles.
 
 La suite `scripts/evaluate_mblab.py` emploie 16 cas fixés avant la première inférence : trois régressions connues et treize nouvelles entrées. Elle distingue la justesse du texte de son acceptation par le garde-fou. Ses tests de proposition d’outil ne remplacent pas un essai du navigateur réel ; les résultats et limites mesurés sont consignés dans le bilan de validation livré.
 
@@ -114,7 +116,7 @@ Le fichier de test fourni dans Téléchargements est un extrait WAV de 6,3 secon
 
 ## Composants
 
-Le profil historique utilise `IFM/K2-Horizon-0.9B` et `IFM/K2-Horizon-7B` ; le profil mblab utilise les deux exports privés `MBZUAI-Paris` identifiés ci-dessus. Pi, les bibliothèques MLX et Playwright MCP conservent leurs licences respectives. Les URL et révisions exactes sont conservées dans les scripts et les manifests de préparation. L’archive des sources de l’application ne contient pas les poids privés.
+Le catalogue historique utilise `IFM/K2-Horizon-0.9B` et `IFM/K2-Horizon-7B` ; le catalogue par défaut utilise les deux exports privés `MBZUAI-Paris` identifiés ci-dessus. Pi, les bibliothèques MLX et Playwright MCP conservent leurs licences respectives. Les dépôts et révisions exacts sont conservés dans `models/catalog.json` et les scripts de préparation. L’archive des sources de l’application ne contient pas les poids privés.
 
 ## Langue de l’interface
 
@@ -129,12 +131,12 @@ Les poids et le runtime officiels sont conservés ensemble dans `.runtime/models
 .venv/bin/python .runtime/models/JAIS-ASR-MLX/scripts/verify.py --profile F5 --sha256
 ```
 
-Le service `backend/horizon_voice/local_asr.py` charge une seule instance F5 et sérialise l’inférence sur un thread Metal. Son journal est `.runtime/logs/asr.log`. La disponibilité de F5 est incluse dans `/health` du service de contrôle. L’inférence force les modes hors ligne Hugging Face et Transformers ; aucun téléchargement n’a lieu pendant une dictée.
+Le service `backend/horizon_voice/local_asr.py` charge une seule instance F5 et sérialise l’inférence sur un thread Metal. Son journal est `.runtime/logs/asr.log`. Le superviseur ne lance ce service que si le modèle est installé, le démarre après un téléchargement et l’arrête après une suppression. L’inférence force les modes hors ligne Hugging Face et Transformers ; aucun téléchargement n’a lieu pendant une dictée.
 
 Le mode automatique appelle le runtime publié sans modification. Pour une langue explicite, l’adaptateur reprend sa boucle de génération avec le `LanguagePin` fourni par le modèle, conservant son mécanisme de refus. L’arabe couvre les dialectes supportés. Le modèle conserve la limite publiée de 256 tokens ; une réponse tronquée ou refusée ne passe jamais au nettoyage ni à l’agent. Les enregistrements restent limités à 30 secondes.
 
 ## Libérer la mémoire
 
-Dans les réglages ou le menu JAIS, **Décharger les modèles** arrête les services locaux possédés par l’application, y compris F5 et les deux tailles LLM. L’application reste ouverte et les fichiers de modèles restent sur disque. La commande est désactivée pendant une demande ou un déchargement. Le rechargement n’est proposé qu’après la fin du superviseur, qui attend et récupère ses processus enfants. **Recharger les modèles** redémarre les services et une nouvelle session vocale ; la conversation est réinitialisée.
+Dans les réglages ou le menu JAIS, **Décharger les modèles** arrête les services locaux possédés par l’application, y compris F5 et le LLM chargé. L’application reste ouverte et les fichiers de modèles restent sur disque. La commande est désactivée pendant une demande ou un déchargement. Le rechargement n’est proposé qu’après la fin du superviseur, qui attend et récupère ses processus enfants. **Recharger les modèles** redémarre les services et une nouvelle session vocale ; la conversation est réinitialisée.
 
-Le sélecteur commun utilise la même instance de poids et de tokenizer pour le nettoyage et l’agent. Les deux checkpoints 1B et 4B sont chacun chargés une fois pour permettre de changer de taille immédiatement ; il ne s’agit pas de deux copies du checkpoint sélectionné. Les prompts et caches de génération restent propres à chaque demande.
+Le sélecteur commun utilise la même instance de poids et de tokenizer pour le nettoyage et l’agent. Une seule taille est résidente : en charger une autre libère la précédente. Les prompts et caches de génération restent propres à chaque demande. **Supprimer** un modèle (icône corbeille, avec confirmation) le décharge puis efface son dossier.

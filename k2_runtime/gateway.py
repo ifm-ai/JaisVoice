@@ -21,6 +21,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
+from . import model_store
 from .cleanup_guard import cleanup_problem
 from .prompts import cleaner_messages
 from .protocol import K2Parser, normalize_messages, tool_call_deltas
@@ -28,69 +29,26 @@ from .protocol import K2Parser, normalize_messages, tool_call_deltas
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("HORIZON_RUNTIME_DIR", ROOT / ".runtime"))
 logger = logging.getLogger("horizon.mlx")
-MODEL_ALIASES = ("k2-cleaner", "k2-agent")
+MODEL_ROLES = ("k2-cleaner", "k2-agent")
 # Agent model IDs for OpenAI clients that select a size by model name (Pi).
-AGENT_MODEL_IDS = {"k2-1b": "1B", "k2-4b": "4B"}
+AGENT_MODEL_IDS = {f"k2-{size.lower()}": size for size in model_store.SIZES}
+DEFAULT_SIZE = "4B"
 
 
-def model_size(entry: dict) -> str | None:
-    """Recognize the advertised checkpoint size, never infer it from its role."""
-    match = re.search(r"(?<![\w.])(0\.9|1|4)B\b", entry.get("display_name", ""), re.IGNORECASE)
-    return ("1B" if match[1] in {"0.9", "1"} else "4B") if match else None
+def role_effort(entry: dict, role: str) -> str:
+    """An explicit environment override, otherwise the model's catalog default."""
+    variable = "HORIZON_CLEANER_REASONING_EFFORT" if role == "k2-cleaner" else "HORIZON_AGENT_REASONING_EFFORT"
+    return os.environ.get(variable) or entry["cleaner_reasoning_effort" if role == "k2-cleaner" else "agent_reasoning_effort"]
 
 
-def model_manifest_path() -> Path:
-    """A profile is explicit; a failed profile never falls back to other weights."""
-    return Path(os.environ.get("HORIZON_MODEL_MANIFEST", RUNTIME / "models" / "manifest.json")).expanduser().resolve()
+def read_inventory() -> dict:
+    """Catalog language models by size, with local path and installation state.
 
-
-def read_model_manifest(path: Path) -> dict:
-    manifest = json.loads(path.read_text())
-    if not isinstance(manifest, dict) or any(alias not in manifest for alias in MODEL_ALIASES):
-        raise ValueError("Model manifest must contain k2-cleaner and k2-agent")
-    entries = {}
-    for alias in MODEL_ALIASES:
-        value = manifest[alias]
-        if not isinstance(value, dict) or not isinstance(value.get("path"), str) or not value["path"].strip():
-            raise ValueError(f"Missing local model path for {alias}")
-        entry = dict(value)
-        entry.setdefault("loader", "horizon-native-mlx-v1")
-        entry.setdefault("protocol", "ifm-k2-v1")
-        if entry["loader"] != "horizon-native-mlx-v1" or entry["protocol"] != "ifm-k2-v1":
-            raise ValueError(f"Unsupported model loader or protocol for {alias}")
-        entry.setdefault("display_name", entry.get("repo") or alias)
-        if not isinstance(entry["display_name"], str) or not entry["display_name"].strip():
-            raise ValueError(f"Invalid display_name for {alias}")
-        entry.setdefault("context_limit", 4096 if alias == "k2-cleaner" else 16384)
-        if type(entry["context_limit"]) is not int or not 256 <= entry["context_limit"] <= 131072:
-            raise ValueError(f"context_limit for {alias} must be an integer from 256 to 131072")
-        entry.setdefault("reasoning_efforts", ["low", "medium", "high"])
-        efforts = entry["reasoning_efforts"]
-        if not isinstance(efforts, list) or not efforts or any(not isinstance(effort, str) or effort not in {"low", "medium", "high"} for effort in efforts):
-            raise ValueError(f"Invalid reasoning_efforts for {alias}")
-        entry.setdefault("default_reasoning_effort", "low" if alias == "k2-cleaner" else "medium")
-        if not isinstance(entry["default_reasoning_effort"], str) or entry["default_reasoning_effort"] not in efforts:
-            raise ValueError(f"default_reasoning_effort must be one of reasoning_efforts for {alias}")
-        for key, default, allowed in (
-            ("tool_call_format", "xml", {"json", "xml", "xml_typed"}),
-            ("tool_presentation_format", "markdown", {"json", "xml", "markdown"}),
-        ):
-            entry.setdefault(key, default)
-            if not isinstance(entry[key], str) or entry[key] not in allowed:
-                raise ValueError(f"Invalid {key} for {alias}")
-        model_path = Path(entry["path"]).expanduser()
-        if not model_path.is_absolute():
-            model_path = path.parent / model_path
-        elif not model_path.exists():
-            # Keep the previous bundle-relocation behavior, scoped to this profile.
-            relocated = path.parent / model_path.name
-            if relocated.exists():
-                model_path = relocated
-        if not model_path.is_dir() or not (model_path / "config.json").is_file():
-            raise ValueError(f"Prepared model directory is missing for {alias}: {model_path}")
-        entry["path"] = str(model_path.resolve())
-        entries[alias] = entry
-    return entries
+    Read again on demand: downloads and deletions happen outside this process.
+    """
+    base = model_store.models_dir(RUNTIME)
+    return {entry["size"]: {**entry, "path": str(model_store.model_path(entry, base)), "installed": model_store.is_installed(entry, base)}
+            for entry in model_store.load_catalog() if entry["kind"] == "llm"}
 
 
 def prepare_k2_prompt(tokenizer, messages, tools, effort: str, entry: dict):
@@ -121,7 +79,7 @@ def prepare_k2_prompt(tokenizer, messages, tools, effort: str, entry: dict):
 class CompletionRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
     model: str
-    model_size: Literal["1B", "4B"] | None = None
+    model_size: Literal["1B", "4B", "7B"] | None = None
     messages: list[dict] = Field(min_length=1, max_length=256)
     tools: list[dict] | None = None
     tool_choice: str | dict | None = None
@@ -137,134 +95,131 @@ class CompletionRequest(BaseModel):
 class Worker:
     def __init__(self):
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="horizon-mlx")
-        self.models = {}
+        self.models = {}  # size -> (model, tokenizer, config, entry)
         self._state_lock = threading.Lock()
-        self._model_health = {}
-        self.manifest_path = model_manifest_path()
-        self.status, self.message = "starting", "Chargement du modèle 4B…"
+        self._model_health = {}  # size -> catalog entry and status
+        self.status, self.message = "starting", "Chargement des modèles…"
         self.lifecycle_busy = False
         self.pending = 0
         self.active_flags = set()
         self.active_request = None
 
+    def refresh_inventory(self):
+        inventory = read_inventory()
+        with self._state_lock:
+            previous, self._model_health = self._model_health, {}
+            for size, entry in inventory.items():
+                before = previous.get(size, {})
+                if size in self.models:
+                    status = "ready"
+                elif not entry["installed"]:
+                    status = "not_installed"
+                else:
+                    status = before.get("status") if before.get("status") in {"loading", "error"} else "unloaded"
+                self._model_health[size] = {**entry, "status": status}
+                if status == "error" and "error" in before:
+                    self._model_health[size]["error"] = before["error"]
+
     def health_snapshot(self):
         # Loading and inference run on the executor. Never hold this lock while
         # reading weights, compiling kernels, or waiting for Metal evaluation.
+        try:
+            self.refresh_inventory()
+        except (OSError, ValueError) as exc:
+            with self._state_lock:
+                self.status, self.message = "error", f"Catalogue des modèles invalide : {exc}"
         with self._state_lock:
-            return {"status": self.status, "message": self.message,
-                    "model_manifest": str(self.manifest_path),
-                    "models": {alias: {**deepcopy(entry), "model_size": model_size(entry)}
-                               for alias, entry in self._model_health.items()}, "pending": self.pending,
+            models = {size: {"model_size": size, "display_name": entry["display_name"], "status": entry["status"],
+                             "installed": entry["installed"], "downloadable": entry["download"] is not None,
+                             "cleaner_reasoning_effort": role_effort(entry, "k2-cleaner"),
+                             "agent_reasoning_effort": role_effort(entry, "k2-agent"),
+                             **({"error": entry["error"]} if "error" in entry else {})}
+                      for size, entry in self._model_health.items()}
+            return {"status": self.status, "message": self.message, "model_catalog": str(model_store.catalog_path()),
+                    "models": models, "pending": self.pending,
                     "active_request": dict(self.active_request) if self.active_request else None}
 
     def model_catalog(self):
         # Preserve the OpenAI model-list contract: only warmed-up loaded models.
         with self._state_lock:
             return {"object": "list", "data": [
-                {"id": alias, "object": "model", "created": 0, "owned_by": "local",
-                 "display_name": item[3].get("display_name", alias)}
-                for alias, item in self.models.items()
+                {"id": f"k2-{size.lower()}", "object": "model", "created": 0, "owned_by": "local", "display_name": item[3]["display_name"]}
+                for size, item in self.models.items()
             ]}
 
     def load(self):
+        """Load the default size when installed, else the first installed model."""
         try:
-            manifest = read_model_manifest(self.manifest_path)
+            self.refresh_inventory()
+            installed = [size for size, entry in self._model_health.items() if entry["installed"]]
+            preferred = os.environ.get("HORIZON_DEFAULT_MODEL_SIZE", DEFAULT_SIZE)
+            size = preferred if preferred in installed else (installed[0] if installed else None)
+            if size:
+                self.change_model(size, "load")
             with self._state_lock:
-                self._model_health = {
-                    alias: {**entry, "status": "waiting"}
-                    for alias, entry in manifest.items()
-                }
-                for entry in self._model_health.values():
-                    entry.pop("error", None)
-            from .model import load_model
-            import mlx.core as mx
-            for alias in MODEL_ALIASES:
-                entry = manifest[alias]
-                if model_size(entry) != "4B":
-                    with self._state_lock:
-                        self._model_health[alias]["status"] = "unloaded"
-                    continue
-                path = Path(entry["path"])
-                with self._state_lock:
-                    self.message = f"Chargement {entry['display_name']}…"
-                    self._model_health[alias]["status"] = "loading"
-                model, tokenizer, config = load_model(path)
-                maximum = config.get("max_position_embeddings")
-                if isinstance(maximum, int) and entry["context_limit"] > maximum:
-                    raise ValueError(f"Configured context exceeds the checkpoint limit for {alias}")
-                for effort in entry["reasoning_efforts"]:
-                    prepare_k2_prompt(tokenizer, [{"role": "user", "content": "Ready?"}], [], effort, entry)
-                mx.eval(model(mx.array([[0, 1]])))
-                with self._state_lock:
-                    self.models[alias] = (model, tokenizer, config, entry)
-                    self._model_health[alias]["status"] = "ready"
-                logger.info("Loaded %s; active memory %.2f GB", alias, mx.get_active_memory() / 1e9)
-            with self._state_lock:
-                self.status, self.message = "ready", "Prêt · " + " + ".join(entry[3]["display_name"] for entry in self.models.values())
+                self.status = "ready"
+                self.message = "Prêt · " + self._model_health[size]["display_name"] if size else "Aucun modèle de langage installé"
         except Exception as exc:
             logger.exception("MLX model loading failed")
             with self._state_lock:
                 self.status, self.message = "error", str(exc)
-                for entry in self._model_health.values():
-                    if entry["status"] not in {"ready", "unloaded"}:
-                        entry["error"] = str(exc) if entry["status"] == "loading" else "Chargement interrompu : " + str(exc)
-                        entry["status"] = "error"
 
     def change_model(self, size, action):
         """Runs on the same single executor as inference; no Metal work races."""
-        aliases = [alias for alias, entry in self._model_health.items() if model_size(entry) == size]
-        if len(aliases) != 1:
-            raise ValueError(f"Le modèle {size} n’est pas disponible dans ce profil.")
-        alias = aliases[0]
+        self.refresh_inventory()
+        if size not in self._model_health:
+            raise ValueError(f"Le modèle {size} n’existe pas dans le catalogue.")
         import mlx.core as mx
         if action == "unload":
             with self._state_lock:
-                self.models.pop(alias, None)
+                self.models.pop(size, None)
             gc.collect()
             mx.clear_cache()
             with self._state_lock:
-                self._model_health[alias].update(status="unloaded")
-                self._model_health[alias].pop("error", None)
+                health = self._model_health[size]
+                health["status"] = "unloaded" if health["installed"] else "not_installed"
+                health.pop("error", None)
             return
+        if not self._model_health[size]["installed"]:
+            raise ValueError(f"Le modèle {size} n’est pas installé : téléchargez-le dans les réglages.")
         for other in list(self.models):
-            if other != alias:
-                self.change_model(model_size(self._model_health[other]), "unload")
-        if alias in self.models:
+            if other != size:
+                self.change_model(other, "unload")
+        if size in self.models:
             return
         with self._state_lock:
-            entry = dict(self._model_health[alias])
-            self._model_health[alias].update(status="loading")
-            self._model_health[alias].pop("error", None)
+            entry = dict(self._model_health[size])
+            self._model_health[size]["status"] = "loading"
+            self._model_health[size].pop("error", None)
         try:
             from .model import load_model
             model, tokenizer, config = load_model(Path(entry["path"]))
             maximum = config.get("max_position_embeddings")
             if isinstance(maximum, int) and entry["context_limit"] > maximum:
-                raise ValueError(f"Configured context exceeds the checkpoint limit for {alias}")
+                raise ValueError(f"Configured context exceeds the checkpoint limit for {size}")
             for effort in entry["reasoning_efforts"]:
                 prepare_k2_prompt(tokenizer, [{"role": "user", "content": "Ready?"}], [], effort, entry)
             mx.eval(model(mx.array([[0, 1]])))
             with self._state_lock:
-                self.models[alias] = (model, tokenizer, config, entry)
-                self._model_health[alias].update(status="ready")
+                self.models[size] = (model, tokenizer, config, entry)
+                self._model_health[size]["status"] = "ready"
+            logger.info("Loaded %s; active memory %.2f GB", size, mx.get_active_memory() / 1e9)
         except Exception as exc:
             with self._state_lock:
-                self._model_health[alias].update(status="error", error=str(exc))
+                self._model_health[size].update(status="error", error=str(exc))
             raise
 
     def resolve_model(self, body):
-        original = self.models.get(body.model)
-        if body.model_size is None:
-            if original is None:
-                raise ValueError("Le modèle demandé n’est pas disponible : chargez-le dans les réglages.")
-            return original
-        candidates = [item for item in self.models.values() if model_size(item[3]) == body.model_size]
-        if len(candidates) != 1:
-            raise ValueError(f"Le modèle {body.model_size} n’est pas disponible dans le profil chargé.")
-        model, tokenizer, config, entry = candidates[0]
-        # Role context survives unloading the checkpoint originally assigned to it.
-        role_entry = self._model_health.get(body.model, original[3] if original else {})
-        limit = role_entry.get("context_limit", 4096 if body.model == "k2-cleaner" else 16384)
+        """The requested size (or the only loaded one), with the role's context budget."""
+        size = body.model_size
+        if size is None:
+            if len(self.models) != 1:
+                raise ValueError("Précisez la taille du modèle : aucun ou plusieurs modèles sont chargés.")
+            size = next(iter(self.models))
+        if size not in self.models:
+            raise ValueError(f"Le modèle {size} n’est pas disponible : chargez-le dans les réglages.")
+        model, tokenizer, config, entry = self.models[size]
+        limit = model_store.CLEANER_CONTEXT if body.model == "k2-cleaner" else entry["context_limit"]
         entry = {**entry, "context_limit": min(limit, config.get("max_position_embeddings", limit))}
         return model, tokenizer, config, entry
 
@@ -279,7 +234,7 @@ class Worker:
             import mlx.core as mx
             model, tokenizer, config, entry = self.resolve_model(body)
             with self._state_lock:
-                self.active_request = {"model": body.model, "model_size": model_size(entry), "stage": "prefill", "started_at": time.time(), "generated_tokens": 0}
+                self.active_request = {"model": body.model, "model_size": entry["size"], "stage": "prefill", "started_at": time.time(), "generated_tokens": 0}
             messages = normalize_messages(body.messages)
             tools = body.tools or []
             if body.tool_choice == "none":
@@ -382,12 +337,12 @@ class ModelMemoryRequest(BaseModel):
 
 
 @app.post("/models/{size}/memory")
-async def model_memory(size: Literal["1B", "4B"], body: ModelMemoryRequest):
+async def model_memory(size: Literal["1B", "4B", "7B"], body: ModelMemoryRequest):
     # Reserve before yielding so concurrent HTTP requests cannot race inference.
     if worker.status == "starting" or worker.lifecycle_busy or worker.pending or worker.active_request:
         raise HTTPException(409, "Une opération est en cours. Réessayez après sa fin.")
-    if not any(model_size(entry) == size for entry in worker._model_health.values()):
-        raise HTTPException(404, "Ce modèle n’est pas disponible dans ce profil.")
+    if size not in worker._model_health:
+        raise HTTPException(404, "Ce modèle n’existe pas dans le catalogue.")
     worker.lifecycle_busy = True
     async def perform():
         try:
@@ -411,13 +366,12 @@ async def begin_generation(body: CompletionRequest, request: Request):
         raise HTTPException(409, "La mémoire des modèles est en cours de modification.")
     if worker.status != "ready":
         raise HTTPException(503, worker.message)
-    if body.model not in worker.models and body.model not in worker._model_health:
+    if body.model not in MODEL_ROLES:
         raise HTTPException(404, "Unknown model alias")
-    if worker._model_health:
-        try:
-            worker.resolve_model(body)
-        except ValueError as exc:
-            raise HTTPException(409, str(exc)) from exc
+    try:
+        worker.resolve_model(body)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
     if worker.pending >= 8:
         raise HTTPException(429, "Local generation queue is full")
     loop = asyncio.get_running_loop()
@@ -509,18 +463,13 @@ async def completions(body: CompletionRequest, request: Request):
 class CleanRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     text: str = Field(min_length=1, max_length=4000)
-    model_size: Literal["1B", "4B"] | None = None
+    model_size: Literal["1B", "4B", "7B"] | None = None
     # Only a JSON boolean: a malformed value must never silently disable the guard.
     guard: StrictBool = True
 
 
 def clean_failure(status: int, code: str, message: str) -> HTTPException:
     return HTTPException(status, {"code": code, "message": message})
-
-
-def cleaner_effort() -> str:
-    effort = os.environ.get("HORIZON_CLEANER_REASONING_EFFORT")
-    return effort or worker._model_health.get("k2-cleaner", {}).get("default_reasoning_effort", "low")
 
 
 @app.post("/v1/clean")
@@ -530,8 +479,10 @@ async def clean(body: CleanRequest, request: Request):
     Incomplete, empty or (with the guard) uncertain corrections are refused;
     the raw transcript is never forwarded as a fallback.
     """
+    size = body.model_size or (next(iter(worker.models)) if len(worker.models) == 1 else None)
+    entry = worker._model_health.get(size)
     completion = CompletionRequest(model="k2-cleaner", model_size=body.model_size, messages=cleaner_messages(body.text),
-                                   temperature=0, max_tokens=2048, reasoning_effort=cleaner_effort())
+                                   temperature=0, max_tokens=2048, reasoning_effort=role_effort(entry, "k2-cleaner") if entry else "low")
     started = time.perf_counter()
     try:
         next_event, release = await begin_generation(completion, request)

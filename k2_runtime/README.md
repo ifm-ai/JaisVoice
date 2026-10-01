@@ -15,64 +15,49 @@ runs the transcript cleaner with its fixed prompt and, unless `guard` is `false`
 the lexical `cleanup_guard`; it returns `{text}` or an error `{detail: {code,
 message}}` and never falls back to the raw transcript.
 
-## Explicit checkpoint profiles
+## Model catalog
 
-`HORIZON_MODEL_MANIFEST=/absolute/path/to/manifest-mblab.json` selects another
-local pair at process startup. A directly launched gateway without that variable
-uses `.runtime/models/manifest.json` unchanged. A missing or invalid profile is an
-error, never a silent fallback to other weights. Stop and restart the services
-to change profiles.
+`models/catalog.json` lists every model the app can use: the ASR and one K2
+checkpoint per size (`1B`, `4B`, `7B`). `HORIZON_MODEL_CATALOG` selects another
+catalog, for example `models/catalog-ifm.json` for the historical IFM
+0.9B/7B pair. A model is installed when its `directory` exists under
+`.runtime/models`; the gateway reads this state again on each request, so a
+download or deletion needs no restart. An invalid catalog stops startup.
 
-For daily launches from the macOS application, persist a validated selection:
-
-```
-.venv/bin/python scripts/select_model_profile.py --manifest .runtime/models/manifest-mblab.json
-```
-
-This atomically writes only `.runtime/models/active-profile.json`. It does not
-alter `manifest.json` or any checkpoint. The service launcher resolves, in order:
-an explicit `HORIZON_MODEL_MANIFEST`, the persisted selection, then the original
-IFM manifest if no selection exists. A broken selection stops startup with an
-error rather than silently choosing a different model. The complete pair is
-structurally checked before activation and before any service is started:
-configuration, tokenizer/template presence, shard index, payload completeness,
-tensor names, shapes and dtypes, including 8-bit affine/group-64 layouts. This
-does not replace source checksum verification or real-inference quality tests.
-
-To restore the original default on the next app launch:
-
-```
-.venv/bin/python scripts/select_model_profile.py --reset
-```
-
-Reset removes only the selector; all manifests and downloaded models remain.
-The explicit environment override, if present, still has priority. These
-commands accept `--runtime-dir` for a separate installation or test environment.
-
-The manifest keeps the two role aliases `k2-cleaner` and `k2-agent`; each entry
-requires `path` (relative to the manifest, or absolute). Existing provenance
-fields such as `repo`, `revision` and `precision` are preserved. Optional fields:
+Each size serves both roles with the same weights: the cleaner gets a 4096-token
+budget, the agent the entry's `context_limit` (both capped by the checkpoint).
+At startup the gateway loads `HORIZON_DEFAULT_MODEL_SIZE` (default `4B`) when it
+is installed, otherwise the first installed size. Agent requests select a size
+with the model ID `k2-1b`, `k2-4b` or `k2-7b`.
 
 | Field | Default / accepted values |
 | --- | --- |
-| `display_name` | `repo`, otherwise the alias; surfaced through `/health` |
-| `loader` | `horizon-native-mlx-v1` only |
-| `protocol` | `ifm-k2-v1` only |
-| `context_limit` | 4096 cleaner / 16384 agent, including output reservation |
+| `id`, `size`, `display_name`, `directory` | required; one entry per size |
+| `download` | `null` (not published yet) or `{repo, revision}` with a full 40-character commit; optional `bytes` for display |
+| `source` | provenance of the original weights, informative |
+| `loader` / `protocol` | `horizon-native-mlx-v1` / `ifm-k2-v1` only |
+| `context_limit` | 16384 agent budget, including output reservation |
 | `reasoning_efforts` | `["low", "medium", "high"]`; unsupported efforts fail |
-| `default_reasoning_effort` | `low` cleaner / `medium` agent for legacy profiles; must belong to `reasoning_efforts` |
+| `cleaner_reasoning_effort` / `agent_reasoning_effort` | `low`; must belong to `reasoning_efforts` |
 | `tool_call_format` | `xml`; also `xml_typed` or `json` |
 | `tool_presentation_format` | `markdown`; also `xml` or `json` |
 
-The service launcher uses each profile's `default_reasoning_effort` unless the
-corresponding `HORIZON_CLEANER_REASONING_EFFORT` or
-`HORIZON_AGENT_REASONING_EFFORT` is explicitly set. An unsupported override
-fails before service startup. The MB lab profile selects `low` for both roles;
-returning to the unchanged IFM profile restores cleaner `low` and agent
-`medium`. These preferences do not modify weights or conversion provenance.
+`HORIZON_CLEANER_REASONING_EFFORT` and `HORIZON_AGENT_REASONING_EFFORT` override
+the catalog defaults. The app applies the agent effort of the selected model to
+Pi when it switches size.
+
+`scripts/models.py list|download <id>|delete <id>` manages installations (the
+app runs it for its settings). A download is pinned to the catalog commit,
+written to a hidden `.<directory>.download` folder (resumable after an
+interruption), checked, then renamed into place. A K2 download must pass the
+structural check (configuration, tokenizer/template, shard index, complete
+payloads, tensor names, shapes and dtypes, including 8-bit affine/group-64
+layouts); the ASR profile is checked against its published SHA-256 list, then
+its Python 3.11 environment is built with the repository's `install.sh`. Once
+the MLX repositories are published, setting their `download` entry is enough.
 
 This is bounded support for compatible dense K2 checkpoints, not a generic
-architecture loader. Downloaded Python model code is never executed. Profile
+architecture loader. Downloaded Python model code is never executed. Model
 selection does not disable the transcript guard or alter browser permissions.
 
 Some checkpoint templates, including the MB lab 1B/4B exports, already close

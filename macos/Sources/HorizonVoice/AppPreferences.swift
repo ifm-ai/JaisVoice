@@ -85,7 +85,7 @@ enum MicrophoneAuthorization: Equatable {
     }
 
     static func normalizedModel(_ value: String?, fallback: String) -> String {
-        ["1B", "4B"].contains(value ?? "") ? value! : fallback
+        ["1B", "4B", "7B"].contains(value ?? "") ? value! : fallback
     }
 
     func setInterfaceLanguage(_ language: InterfaceLanguage) {

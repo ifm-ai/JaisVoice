@@ -17,19 +17,49 @@
           "id": "k2-4b",
           "name": "K2 4B (local MLX)",
           "reasoning": true,
-          "input": ["text"],
+          "input": [
+            "text"
+          ],
           "contextWindow": 16384,
           "maxTokens": 2048,
-          "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
         },
         {
           "id": "k2-1b",
           "name": "K2 1B (local MLX)",
           "reasoning": true,
-          "input": ["text"],
+          "input": [
+            "text"
+          ],
           "contextWindow": 16384,
           "maxTokens": 2048,
-          "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
+        },
+        {
+          "id": "k2-7b",
+          "name": "K2 7B (local MLX)",
+          "reasoning": true,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 16384,
+          "maxTokens": 2048,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
         }
       ]
     }

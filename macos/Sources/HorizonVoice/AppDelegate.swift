@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
     private let shortcut = GlobalShortcut()
     private let launcher = ServiceLauncher()
     private let preferences = AppPreferences()
+    private let modelStore = ModelStore()
     private var configuration: ConfigurationWindowController!
     private var panels: FloatingPanels!
     private var statusItem: NSStatusItem!
@@ -49,8 +50,12 @@ import UniformTypeIdentifiers
             onShowLast: { [weak self] in self?.showLast() },
             onImportAudio: { [weak self] in self?.importAudio() },
             onTextRequest: { [weak self] in self?.textRequest() },
+            modelStore: modelStore,
             onChangeModelMemory: { [weak self] in self?.changeModelMemory($0) },
             onToggleModelMemory: { [weak self] in self?.toggleModelMemory() },
+            onDownloadModel: { [weak self] in self?.modelStore.download($0) },
+            onCancelDownload: { [weak self] in self?.modelStore.cancel($0) },
+            onDeleteModel: { [weak self] in self?.deleteModel($0) },
             onShowServiceLog: { [weak self] in self?.showServiceLog() },
             onQuit: { [weak self] in self?.quit() }
         )
@@ -94,7 +99,13 @@ import UniformTypeIdentifiers
         shortcut.onDown = { [weak self] in self?.press() }
         shortcut.onUp = { [weak self] in self?.release() }
         registerShortcut(preferences.shortcutChoice)
-        if smokeFile == nil && smokeText == nil { configuration.show() }
+        modelStore.onChange = { [weak self] model in self?.modelInstallationChanged(model) }
+        let interactive = smokeFile == nil && smokeText == nil
+        if interactive { configuration.show() }
+        Task { @MainActor in
+            await modelStore.refresh()
+            if interactive { offerMissingDownloads() }
+        }
         startServices()
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(sleeping), name: NSWorkspace.willSleepNotification, object: nil)
     }
@@ -116,7 +127,7 @@ import UniformTypeIdentifiers
         guard !shuttingDown else { return .terminateLater }
         shuttingDown = true
         startupTask?.cancel(); uploadTask?.cancel()
-        recorder.cancel(); shortcut.unregister()
+        recorder.cancel(); shortcut.unregister(); modelStore.cancelAll()
         menuRefreshTimer?.invalidate()
         Task { @MainActor in
             await transport.shutdown()
@@ -170,7 +181,6 @@ import UniformTypeIdentifiers
 
     private func startServices() {
         guard !state.modelsChanging, !state.modelsUnloaded else { return }
-        preferences.setModelSize("4B")
         startupTask?.cancel()
         serviceRequiresRelaunch = false
         state.ready = false; state.serviceMessage = "Démarrage des services…"
@@ -192,8 +202,12 @@ import UniformTypeIdentifiers
                     }
                     self.state.serviceMessage = health.message
                     self.latestHealth = health
+                    self.followLoadedModel(health)
                     self.updateSelectedModelHealth()
-                    if health.status == "error" {
+                    if let missing = self.modelStore.blockingMessage {
+                        self.state.ready = false
+                        self.state.serviceMessage = missing
+                    } else if health.status == "error" {
                         // Reconnecting does not reload a failed MLX worker. Keep the
                         // diagnostic visible until a deliberate application restart.
                         self.serviceFailed(health.message)
@@ -225,6 +239,81 @@ import UniformTypeIdentifiers
                 }
                 try? await Task.sleep(nanoseconds: self.state.ready ? 2_000_000_000 : 500_000_000)
             }
+        }
+    }
+
+    /// The gateway loads a default model at startup: follow it unless the user's
+    /// own choice is the one in memory.
+    private func followLoadedModel(_ health: ServiceHealth) {
+        guard !state.ready, !state.modelsChanging,
+              health.models?.values.first(where: { $0.model_size == preferences.modelSize })?.status != "ready",
+              let loaded = health.models?.values.first(where: { $0.status == "ready" })?.model_size else { return }
+        preferences.setModelSize(loaded)
+    }
+
+    /// Offer once per launch the required models that are published but absent.
+    private func offerMissingDownloads() {
+        let missing = modelStore.missingDownloads
+        guard !missing.isEmpty, !preview else { return }
+        let alert = NSAlert()
+        alert.messageText = L("Télécharger les modèles ?")
+        let lines = missing.map { model in
+            "• " + model.display_name + (model.download_bytes.map { " (" + ModelStore.formatBytes($0) + ")" } ?? "")
+        }
+        alert.informativeText = L("JAIS Voice a besoin de ces modèles pour fonctionner :") + "\n" + lines.joined(separator: "\n") + "\n\n"
+            + L("Ils sont téléchargés depuis Hugging Face et restent sur ce Mac. Vous pourrez les supprimer depuis les réglages.")
+        alert.addButton(withTitle: L("Télécharger"))
+        alert.addButton(withTitle: L("Plus tard"))
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        missing.forEach { modelStore.download($0.id) }
+        configuration.show()
+    }
+
+    /// A model was installed or removed outside the services: refresh their view,
+    /// and load a newly installed language model when none is ready.
+    private func modelInstallationChanged(_ model: CatalogModel) {
+        Task { @MainActor in
+            self.latestHealth = try? await self.transport.health()
+            self.updateSelectedModelHealth()
+            guard model.installed, let size = model.size, !self.state.modelsUnloaded,
+                  self.state.modelPhase(self.preferences.modelSize) != .ready else { return }
+            self.preferences.setModelSize(size)
+            self.changeModelMemory(size)
+        }
+    }
+
+    private func deleteModel(_ id: String) {
+        guard let model = modelStore.models.first(where: { $0.id == id }), !state.isBusy, !state.modelsChanging else { return }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = L("Supprimer {0} ?", String(describing: model.display_name))
+        var details = L("{0} seront libérés sur ce Mac.", String(describing: ModelStore.formatBytes(model.diskBytes)))
+        details += " " + (model.downloadable
+            ? L("Vous pourrez le télécharger de nouveau depuis les réglages.")
+            : L("Ce modèle n’est pas encore publié sur Hugging Face : il faudra le reconvertir pour le réutiliser."))
+        alert.informativeText = details
+        alert.addButton(withTitle: L("Supprimer")).hasDestructiveAction = true
+        alert.addButton(withTitle: L("Annuler"))
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        Task { @MainActor in
+            do {
+                // Release the weights before removing their files.
+                if let size = model.size, self.state.modelPhase(size) == .ready {
+                    self.latestHealth = try await self.transport.changeModelMemory(size: size, load: false)
+                }
+                try await self.modelStore.delete(id)
+                if model.size == self.preferences.modelSize,
+                   let other = self.modelStore.languageModels.last(where: \.installed)?.size {
+                    self.preferences.setModelSize(other)
+                }
+                self.state.ready = false
+            } catch {
+                self.modelStore.error = ServiceDiagnostics.concise(error.localizedDescription)
+            }
+            self.latestHealth = try? await self.transport.health()
+            self.updateSelectedModelHealth()
         }
     }
 
@@ -548,6 +637,12 @@ import UniformTypeIdentifiers
             "k2-agent": ServiceModelHealth(model_size: "4B", display_name: "MBZUAI · 4B", repo: nil, status: CommandLine.arguments.contains("--settings-unloaded") ? "unloaded" : state.agentModelPhase.rawValue, error: nil)
         ])
         state.modelInventory["ASR"] = ServiceModelHealth(model_size: "ASR", display_name: "JAIS-ASR F5", repo: nil, status: "ready", error: nil)
+        modelStore.show(models: [
+            CatalogModel(id: "asr-f5", kind: "asr", display_name: "JAIS-ASR · F5", installed: true, downloadable: true, download_bytes: 4_780_192_247, disk_bytes: 5_995_121_326),
+            CatalogModel(id: "k2-1b", kind: "llm", display_name: "MBZUAI · 1B", size: "1B", installed: true, downloadable: false, disk_bytes: 2_161_683_689),
+            CatalogModel(id: "k2-4b", kind: "llm", display_name: "MBZUAI · 4B", size: "4B", installed: true, downloadable: false, disk_bytes: 5_395_435_984),
+            CatalogModel(id: "k2-7b", kind: "llm", display_name: "MBZUAI · 7B", size: "7B", installed: false, downloadable: CommandLine.arguments.contains("--settings-download"))
+        ], downloads: CommandLine.arguments.contains("--settings-download") ? ["k2-7b": DownloadProgress(bytes: 3_100_000_000, total: 7_600_000_000)] : [:])
         let previewHealth = ServiceHealth(status: "ready", message: "", models: state.modelInventory)
         state.updateModelHealth(previewHealth.selectedModels(cleaner: preferences.cleanerModel, agent: preferences.agentModel), serviceStatus: "ready")
         configuration.show()

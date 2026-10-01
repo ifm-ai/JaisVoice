@@ -23,6 +23,8 @@ struct ServiceModelHealth: Decodable {
     let status: String?
     var error: String? = nil
     var message: String? = nil
+    var installed: Bool? = nil
+    var agent_reasoning_effort: String? = nil
 
     func label(fallback: String) -> String {
         guard let name = display_name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else {
@@ -52,6 +54,9 @@ struct PipelineFailure: Error {
     private var activeTurnID: String?
     private var agentConversation: String?
     private var agentModel = "k2-4b"
+    private var agentThinking: String?
+    /// Each model's agent reasoning effort, from the gateway's catalog.
+    private var agentEfforts: [String: String] = [:]
     private var run: AgentRun?
     var onEvent: ((WireEvent) -> Void)?
     var onDisconnect: ((String) -> Void)?
@@ -61,7 +66,7 @@ struct PipelineFailure: Error {
         agent.onExit = { [weak self] detail in
             guard let self else { return }
             self.run?.fail(PipelineFailure(code: "agent_unavailable", message: L("L’agent local s’est arrêté. Vérifiez l’état des services dans le menu.")))
-            self.agentConversation = nil; self.agentModel = "k2-4b"
+            self.agentConversation = nil; self.agentModel = "k2-4b"; self.agentThinking = nil
             self.onDisconnect?(detail)
         }
     }
@@ -100,7 +105,11 @@ struct PipelineFailure: Error {
         var payload: [String: Any] = ["status": modelsReady && asrReady ? "ready" : (failed ? "error" : "starting"), "message": message,
                                       "models": models["models"] ?? [:]]
         if let asr { payload["asr"] = asr }
-        return try JSONDecoder().decode(ServiceHealth.self, from: JSONSerialization.data(withJSONObject: payload))
+        let health = try JSONDecoder().decode(ServiceHealth.self, from: JSONSerialization.data(withJSONObject: payload))
+        for model in health.models?.values ?? Dictionary<String, ServiceModelHealth>().values {
+            if let size = model.model_size, let effort = model.agent_reasoning_effort { agentEfforts[size] = effort }
+        }
+        return health
     }
 
     func changeModelMemory(size: String, load: Bool) async throws -> ServiceHealth {
@@ -116,7 +125,7 @@ struct PipelineFailure: Error {
     func connect() async throws {
         if !agent.isRunning {
             try agent.start()
-            agentConversation = nil; agentModel = "k2-4b"
+            agentConversation = nil; agentModel = "k2-4b"; agentThinking = nil
         }
         try await agent.call("get_state")
     }
@@ -215,7 +224,7 @@ struct PipelineFailure: Error {
         return body
     }
 
-    static func agentModelID(_ size: String?) -> String { size == "1B" ? "k2-1b" : "k2-4b" }
+    static func agentModelID(_ size: String?) -> String { "k2-" + (size ?? "4B").lowercased() }
 
     private func transcribe(_ audio: Data, language: String?) async throws -> String {
         let body = Self.asrBody(audio: audio, language: language)
@@ -269,6 +278,11 @@ struct PipelineFailure: Error {
         if model != agentModel {
             try await agent.call("set_model", ["provider": .string("jais"), "modelId": .string(model)])
             agentModel = model
+        }
+        // The agent's effort follows the selected model's catalog default.
+        if let effort = agentEfforts[options.agentModel ?? "4B"], effort != agentThinking {
+            try await agent.call("set_thinking_level", ["level": .string(effort)])
+            agentThinking = effort
         }
         try Task.checkCancellation()
         let run = AgentRun { [weak self] type, fields in

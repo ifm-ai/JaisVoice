@@ -52,9 +52,9 @@ def main():
     if resource_dir.exists():
         shutil.copytree(resource_dir, contents / "Resources", dirs_exist_ok=True)
     # Model services are supervised together; the agent is a pipe child of the app.
-    for name, script in (("launch-services", "run_services.py"), ("launch-agent", "run_agent.py")):
+    for name, script in (("launch-services", "run_services.py"), ("launch-agent", "run_agent.py"), ("launch-models", "models.py")):
         launcher = contents / "Resources" / name
-        launcher.write_text("#!/bin/sh\nexec " + shlex.quote(str(ROOT / ".venv/bin/python")) + " " + shlex.quote(str(ROOT / "scripts" / script)) + "\n")
+        launcher.write_text("#!/bin/sh\nexec " + shlex.quote(str(ROOT / ".venv/bin/python")) + " " + shlex.quote(str(ROOT / "scripts" / script)) + ' "$@"\n')
         launcher.chmod(0o755)
     entitlements = ROOT / "macos/Entitlements.plist"
     signature = ["/usr/bin/codesign", "--force", "--sign", "-"]

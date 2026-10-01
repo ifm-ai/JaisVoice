@@ -4,13 +4,14 @@ import threading
 from fastapi.testclient import TestClient
 import pytest
 from k2_runtime import gateway
+from model_fixtures import loaded
 
 
 @pytest.fixture
 def client(monkeypatch):
     test_worker = gateway.Worker()
     test_worker.status = 'ready'
-    test_worker.models = {'k2-cleaner': (None, None, {}, {'test_fixture': True})}
+    test_worker.models = loaded(['4B'])
     monkeypatch.setattr(test_worker, 'load', lambda: None)
     monkeypatch.setattr(gateway, 'worker', test_worker)
     with TestClient(gateway.app) as client:

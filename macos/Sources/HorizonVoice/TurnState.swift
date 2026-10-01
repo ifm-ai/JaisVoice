@@ -69,10 +69,12 @@ struct ToolAction: Identifiable {
 
 enum ModelLoadPhase: String, CaseIterable {
     case waiting, loading, ready, error, unavailable, unloaded
+    case notInstalled = "not_installed"
 
     var label: String {
         switch self {
         case .unloaded: return L("Déchargé")
+        case .notInstalled: return L("Non installé")
         case .waiting: return L("En attente")
         case .loading: return L("Chargement…")
         case .ready: return L("Chargé")
@@ -84,6 +86,7 @@ enum ModelLoadPhase: String, CaseIterable {
     var symbolName: String {
         switch self {
         case .unloaded: return "memorychip"
+        case .notInstalled: return "arrow.down.circle"
         case .waiting: return "clock"
         case .loading: return "arrow.trianglehead.2.clockwise.rotate.90"
         case .ready: return "checkmark.circle.fill"

@@ -1,94 +1,85 @@
-"""Model profile and native-prompt framing checks; no inference substitutions."""
+"""Model catalog and native-prompt framing checks; no inference substitutions."""
 import json
 
 import pytest
 
-from k2_runtime import gateway
+from k2_runtime import gateway, model_store
 
 
-@pytest.fixture
-def profile(tmp_path):
-    entries = {}
-    for alias in gateway.MODEL_ALIASES:
-        directory = tmp_path / alias
-        directory.mkdir()
-        (directory / "config.json").write_text('{}')
-        entries[alias] = {"path": alias, "repo": "fixture/" + alias}
-    path = tmp_path / "manifest-local.json"
-    path.write_text(json.dumps(entries))
-    return path, entries
+def write_catalog(tmp_path, models):
+    path = tmp_path / "catalog.json"
+    path.write_text(json.dumps({"format": "jais-voice-models-v1", "models": models}))
+    return path
 
 
-def test_default_and_explicit_profile_selection(monkeypatch, tmp_path):
-    monkeypatch.setattr(gateway, "RUNTIME", tmp_path)
-    monkeypatch.delenv("HORIZON_MODEL_MANIFEST", raising=False)
-    assert gateway.model_manifest_path() == tmp_path / "models/manifest.json"
-    selected = tmp_path / "models/manifest-mblab.json"
-    monkeypatch.setenv("HORIZON_MODEL_MANIFEST", str(selected))
-    assert gateway.model_manifest_path() == selected
-    with pytest.raises(FileNotFoundError):
-        gateway.read_model_manifest(selected)
+def llm(size="4B", **fields):
+    return {"id": "k2-" + size.lower(), "kind": "llm", "size": size, "display_name": "Test " + size,
+            "directory": "model-" + size, "download": None, **fields}
 
 
-def test_legacy_profile_defaults_and_relative_paths(profile):
-    path, original = profile
-    entries = gateway.read_model_manifest(path)
-    assert entries["k2-cleaner"]["context_limit"] == 4096
-    assert entries["k2-agent"]["context_limit"] == 16384
-    assert entries["k2-agent"]["display_name"] == "fixture/k2-agent"
-    assert entries["k2-agent"]["loader"] == "horizon-native-mlx-v1"
-    assert entries["k2-cleaner"]["default_reasoning_effort"] == "low"
-    assert entries["k2-agent"]["default_reasoning_effort"] == "medium"
-    assert entries["k2-cleaner"]["path"] == str(path.parent / "k2-cleaner")
-    assert json.loads(path.read_text()) == original
+ASR = {"id": "asr-f5", "kind": "asr", "display_name": "ASR", "directory": "ASR",
+       "download": {"repo": "org/asr", "revision": "a" * 40, "profile": "F5", "bytes": 10}}
 
 
-def test_explicit_profile_labels_context_and_options(profile):
-    path, entries = profile
-    entries["k2-agent"].update(display_name="MBZUAI · 4B", context_limit=8192,
-                               reasoning_efforts=["medium"], tool_call_format="json")
-    path.write_text(json.dumps(entries))
-    loaded = gateway.read_model_manifest(path)["k2-agent"]
-    assert loaded["display_name"] == "MBZUAI · 4B"
-    assert loaded["context_limit"] == 8192
-    assert loaded["reasoning_efforts"] == ["medium"]
-    assert loaded["tool_call_format"] == "json"
+def test_shipped_catalogs_are_valid():
+    for name in ("catalog.json", "catalog-ifm.json"):
+        entries = model_store.load_catalog(model_store.ROOT / "models" / name)
+        assert [entry["kind"] for entry in entries].count("asr") == 1
+    sizes = [entry["size"] for entry in model_store.load_catalog(model_store.ROOT / "models/catalog.json") if entry["kind"] == "llm"]
+    assert sizes == ["1B", "4B", "7B"]
+
+
+def test_catalog_defaults_and_override(monkeypatch, tmp_path):
+    path = write_catalog(tmp_path, [ASR, llm(), llm("1B", agent_reasoning_effort="medium", context_limit=8192)])
+    monkeypatch.setenv("HORIZON_MODEL_CATALOG", str(path))
+    assert model_store.catalog_path() == path
+    entries = {entry["id"]: entry for entry in model_store.load_catalog()}
+    assert entries["k2-4b"]["context_limit"] == 16384 and entries["k2-4b"]["agent_reasoning_effort"] == "low"
+    assert entries["k2-1b"]["agent_reasoning_effort"] == "medium" and entries["k2-1b"]["context_limit"] == 8192
+    assert entries["asr-f5"]["download"] == {"repo": "org/asr", "revision": "a" * 40, "profile": "F5", "bytes": 10}
+    monkeypatch.delenv("HORIZON_MODEL_CATALOG")
+    assert model_store.catalog_path() == model_store.ROOT / "models/catalog.json"
 
 
 @pytest.mark.parametrize("field,value", [
-    ("path", ""), ("path", "missing"), ("display_name", " "),
+    ("size", "13B"), ("directory", "../escape"), ("directory", ".hidden"), ("display_name", " "),
     ("context_limit", True), ("context_limit", 0), ("context_limit", 9999999),
     ("loader", "arbitrary-code"), ("protocol", "guess"),
-    ("reasoning_efforts", []), ("reasoning_efforts", ["none"]),
-    ("reasoning_efforts", [{}]), ("tool_call_format", "python"),
-    ("tool_presentation_format", "guess"),
-    ("default_reasoning_effort", "none"), ("default_reasoning_effort", None),
+    ("reasoning_efforts", []), ("reasoning_efforts", ["none"]), ("tool_call_format", "python"),
+    ("tool_presentation_format", "guess"), ("agent_reasoning_effort", "none"),
+    ("download", {"repo": "org/model", "revision": "main"}),
+    ("download", {"repo": "not a repo", "revision": "a" * 40}),
+    ("download", {"repo": "org/model", "revision": "a" * 40, "bytes": -1}),
 ])
-def test_invalid_profile_is_rejected(profile, field, value):
-    path, entries = profile
-    entries["k2-agent"][field] = value
-    path.write_text(json.dumps(entries))
+def test_invalid_catalog_entry_rejects_the_catalog(tmp_path, field, value):
     with pytest.raises(ValueError):
-        gateway.read_model_manifest(path)
+        model_store.load_catalog(write_catalog(tmp_path, [llm(**{field: value})]))
 
 
-def test_incomplete_pair_rejected(profile):
-    path, entries = profile
-    del entries["k2-cleaner"]
-    path.write_text(json.dumps(entries))
-    with pytest.raises(ValueError, match="k2-cleaner and k2-agent"):
-        gateway.read_model_manifest(path)
+@pytest.mark.parametrize("models", [
+    [llm(), llm()], [llm("1B"), llm("1B", id="other", directory="other")], [ASR, dict(ASR, id="asr-2", directory="B")], [ASR],
+])
+def test_duplicates_and_missing_language_models_are_rejected(tmp_path, models):
+    with pytest.raises(ValueError):
+        model_store.load_catalog(write_catalog(tmp_path, models))
 
 
-def test_explicit_default_effort_must_be_supported(profile):
-    path, entries = profile
-    entries['k2-agent'].update(default_reasoning_effort='low', reasoning_efforts=['medium'])
-    path.write_text(json.dumps(entries))
-    with pytest.raises(ValueError, match='default_reasoning_effort'):
-        gateway.read_model_manifest(path)
-    entries['k2-agent']['reasoning_efforts'] = ['low', 'medium']
-    path.write_text(json.dumps(entries))
-    assert gateway.read_model_manifest(path)['k2-agent']['default_reasoning_effort'] == 'low'
+def test_default_effort_must_be_supported(tmp_path):
+    with pytest.raises(ValueError, match="agent_reasoning_effort"):
+        model_store.load_catalog(write_catalog(tmp_path, [llm(reasoning_efforts=["medium"], cleaner_reasoning_effort="medium")]))
+
+
+def test_inventory_follows_directories_on_disk(monkeypatch, tmp_path):
+    monkeypatch.setenv("HORIZON_MODEL_CATALOG", str(write_catalog(tmp_path, [llm("1B"), llm()])))
+    monkeypatch.setattr(gateway, "RUNTIME", tmp_path)
+    assert {size: entry["installed"] for size, entry in gateway.read_inventory().items()} == {"1B": False, "4B": False}
+    (tmp_path / "models/model-4B").mkdir(parents=True)
+    (tmp_path / "models/model-4B/config.json").write_text("{}")
+    inventory = gateway.read_inventory()
+    assert inventory["4B"]["installed"] and inventory["4B"]["path"] == str(tmp_path / "models/model-4B")
+    monkeypatch.setenv("HORIZON_AGENT_REASONING_EFFORT", "high")
+    assert gateway.role_effort(inventory["4B"], "k2-agent") == "high"
+    assert gateway.role_effort(inventory["4B"], "k2-cleaner") == "low"
 
 
 class FixtureTokenizer:

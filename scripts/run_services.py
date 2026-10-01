@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Own and supervise the model services (ASR, MLX gateway) for one JAIS Voice instance.
 
+The gateway always runs. The ASR service runs while its model is installed:
+it starts after a download and stops after a deletion, without a restart.
 The Pi agent is not supervised here: the native app runs it as a pipe child.
 """
 import fcntl
@@ -17,8 +19,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from scripts.select_model_profile import resolve_model_profile
-from k2_runtime.gateway import read_model_manifest
+from k2_runtime import model_store
 
 RUNTIME = Path(os.environ.get("HORIZON_RUNTIME_DIR", ROOT / ".runtime"))
 STOP = threading.Event()
@@ -26,14 +27,6 @@ STOP = threading.Event()
 
 def shutdown(signum=None, frame=None):
     STOP.set()
-
-
-def apply_profile_reasoning(env: dict, entries: dict) -> None:
-    for alias, variable in (("k2-cleaner", "HORIZON_CLEANER_REASONING_EFFORT"),
-                            ("k2-agent", "HORIZON_AGENT_REASONING_EFFORT")):
-        env.setdefault(variable, entries[alias]["default_reasoning_effort"])
-        if env[variable] not in entries[alias]["reasoning_efforts"]:
-            raise ValueError(f"{variable}={env[variable]!r} n’est pas pris en charge par le profil sélectionné.")
 
 
 def acquire_lock(lock, timeout=15):
@@ -98,13 +91,14 @@ def main():
         lock.close()
         return 0
     env = os.environ.copy()
-    # Validate the whole selected pair before starting any local service.
-    # An explicit environment path takes precedence over the daily app selector.
-    selected_manifest = resolve_model_profile(RUNTIME, env)
-    env["HORIZON_MODEL_MANIFEST"] = str(selected_manifest)
-    apply_profile_reasoning(env, read_model_manifest(selected_manifest))
-    print(f"Model profile: {selected_manifest}", flush=True)
+    # An invalid catalog stops startup before any service runs.
+    catalog_file = model_store.catalog_path(env)
+    catalog = model_store.load_catalog(catalog_file)
+    print(f"Model catalog: {catalog_file}", flush=True)
+    base = model_store.models_dir(RUNTIME)
+    asr = next((entry for entry in catalog if entry["kind"] == "asr"), None)
     env.update({
+        "HORIZON_MODEL_CATALOG": str(catalog_file),
         "PYTHONPATH": os.pathsep.join([str(ROOT), str(ROOT / "backend")]),
         "HORIZON_PROJECT_ROOT": str(ROOT),
         "HORIZON_RUNTIME_DIR": str(RUNTIME),
@@ -114,11 +108,11 @@ def main():
         "PATH": os.pathsep.join([str(ROOT / ".venv/bin"), "/usr/bin", "/bin", "/usr/sbin", "/sbin"]),
     })
     python = str(ROOT / ".venv/bin/python")
-    asr_root = Path(env.get("HORIZON_ASR_MODEL_DIR", ROOT / ".runtime/models/JAIS-ASR-MLX"))
-    commands = [
-        ("asr", [str(asr_root / ".venv/bin/python"), str(ROOT / "backend/horizon_voice/local_asr.py")]),
-        ("mlx", [python, "-m", "k2_runtime.gateway", "--host", "127.0.0.1", "--port", "8788"]),
-    ]
+    asr_root = model_store.model_path(asr, base) if asr else None
+    if asr_root:
+        env["HORIZON_ASR_MODEL_DIR"] = str(asr_root)
+    asr_command = [str(asr_root / ".venv/bin/python"), str(ROOT / "backend/horizon_voice/local_asr.py")] if asr_root else None
+    asr_installed = lambda: asr is not None and model_store.is_installed(asr, base)
     for port in (8788, 8790):
         with socket.socket() as probe:
             if probe.connect_ex(("127.0.0.1", port)) == 0:
@@ -127,17 +121,29 @@ def main():
     signal.signal(signal.SIGINT, shutdown)
     processes = []
     streams = []
-    try:
-        for name, command in commands:
-            if STOP.is_set():
-                break
-            stream = (logs / f"{name}.log").open("a", buffering=1)
-            streams.append(stream)
-            child = subprocess.Popen(command, cwd=ROOT, env=env, stdin=subprocess.DEVNULL, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
-            processes.append((name, child))
-            print(f"{name}: started ({child.pid})", flush=True)
+
+    def start(name, command):
+        stream = (logs / f"{name}.log").open("a", buffering=1)
+        streams.append(stream)
+        child = subprocess.Popen(command, cwd=ROOT, env=env, stdin=subprocess.DEVNULL, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
+        processes.append((name, child))
+        print(f"{name}: started ({child.pid})", flush=True)
         (RUNTIME / "services.json").write_text(json.dumps({"supervisor": os.getpid(), "children": {name: child.pid for name, child in processes}}))
+
+    try:
+        if asr_installed() and not STOP.is_set():
+            start("asr", asr_command)
+        if not STOP.is_set():
+            start("mlx", [python, "-m", "k2_runtime.gateway", "--host", "127.0.0.1", "--port", "8788"])
         while not STOP.wait(0.5):
+            running = {name: child for name, child in processes}
+            if "asr" in running and not asr_installed():
+                # The model was deleted: stop its service rather than report a crash.
+                stop_processes([("asr", running["asr"])], grace=3)
+                processes[:] = [item for item in processes if item[0] != "asr"]
+                print("asr: stopped (model removed)", flush=True)
+            elif "asr" not in running and asr_installed():
+                start("asr", asr_command)
             for name, child in processes:
                 if child.poll() is not None:
                     raise RuntimeError(f"Le service {name} s'est arrêté (code {child.returncode}). Voir {logs / (name + '.log')}")
