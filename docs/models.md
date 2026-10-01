@@ -26,7 +26,7 @@ Clicking **Download** on a Jais 3 model:
 | Model | Download | On disk after conversion |
 | --- | --- | --- |
 | Jais 3 · 0.9B | 2.2 GB | about 2 GB |
-| Jais 3 · 3.7B | 10.1 GB | about 4.6 GB |
+| Jais 3 · 3.7B | 10.1 GB | about 5 GB |
 | Jais 3 · 7B | 18 GB | about 8 GB |
 
 ### Without access to the repository
