@@ -218,7 +218,7 @@ def load_model(path: Path):
     return model, tokenizer, config
 
 
-def convert_checkpoint(source: Path, target: Path, bits=None):
+def convert_checkpoint(source: Path, target: Path, bits=None, on_shard=None):
     """Convert shards independently, explicitly rounding stored source values to BF16.
 
     Source config dtype is not trusted: these HF exports may physically store FP32.
@@ -250,6 +250,8 @@ def convert_checkpoint(source: Path, target: Path, bits=None):
         del converted
         mx.clear_cache()
         print(f"Converted shard {n}/{len(shards)}", flush=True)
+        if on_shard:
+            on_shard(n, len(shards))
     config["dtype"] = "bfloat16"
     if bits:
         config["quantization"] = {"group_size": 64, "bits": bits, "mode": "affine"}

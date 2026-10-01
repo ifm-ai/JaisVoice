@@ -14,7 +14,7 @@ from model_fixtures import inventory
 @pytest.fixture
 def loading_fixture(monkeypatch, tmp_path):
     worker = gateway.Worker()
-    installed = inventory(tmp_path, ("1B", "4B", "7B"), context_limit=512, reasoning_efforts=["low"])
+    installed = inventory(tmp_path, ("0.9B", "3.7B", "7B"), context_limit=512, reasoning_efforts=["low"])
     installed["7B"]["installed"] = False
     monkeypatch.setattr(gateway, "worker", worker)
     monkeypatch.setattr(gateway, "read_inventory", lambda: {size: dict(entry) for size, entry in installed.items()})
@@ -76,17 +76,17 @@ def test_health_responds_during_load_and_ready_follows_warmup(loading_fixture):
             snapshot = http.get("/health").json()
             assert time.monotonic() - before < 1
             assert snapshot["status"] == "starting"
-            assert states(snapshot) == {"1B": "unloaded", "4B": "loading", "7B": "not_installed"}
+            assert states(snapshot) == {"0.9B": "unloaded", "3.7B": "loading", "7B": "not_installed"}
             assert http.get("/v1/models").json()["data"] == []
             load_release.set()
             assert warm_entered.wait(3)
-            assert states(http.get("/health").json())["4B"] == "loading"
+            assert states(http.get("/health").json())["3.7B"] == "loading"
             warm_release.set()
             assert finished.wait(3)
             snapshot = http.get("/health").json()
-            assert snapshot["status"] == "ready" and snapshot["message"] == "Ready · Test 4B"
-            assert states(snapshot) == {"1B": "unloaded", "4B": "ready", "7B": "not_installed"}
-            assert [model["id"] for model in http.get("/v1/models").json()["data"]] == ["k2-4b"]
+            assert snapshot["status"] == "ready" and snapshot["message"] == "Ready · Test 3.7B"
+            assert states(snapshot) == {"0.9B": "unloaded", "3.7B": "ready", "7B": "not_installed"}
+            assert [model["id"] for model in http.get("/v1/models").json()["data"]] == ["k2-3.7b"]
             assert all("error" not in entry for entry in snapshot["models"].values())
             assert snapshot["models"]["7B"]["installed"] is False
         finally:
@@ -95,7 +95,7 @@ def test_health_responds_during_load_and_ready_follows_warmup(loading_fixture):
 
 
 @pytest.mark.parametrize("default,installed_sizes,expected", [
-    ("4B", ["1B"], "1B"), ("1B", ["1B", "4B"], "1B"), ("4B", [], None),
+    ("3.7B", ["0.9B"], "0.9B"), ("0.9B", ["0.9B", "3.7B"], "0.9B"), ("3.7B", [], None),
 ])
 def test_startup_loads_the_default_or_first_installed_size(loading_fixture, monkeypatch, default, installed_sizes, expected):
     worker, installed, _, _ = loading_fixture
@@ -128,9 +128,9 @@ def test_load_or_warmup_failure_marks_the_model_and_the_service(loading_fixture,
     worker.load()
     snapshot = worker.health_snapshot()
     assert snapshot["status"] == "error"
-    assert snapshot["models"]["4B"]["error"] == f"Explicit {phase} failure"
-    assert states(snapshot) == {"1B": "unloaded", "4B": "error", "7B": "not_installed"}
-    assert "error" not in snapshot["models"]["1B"]
+    assert snapshot["models"]["3.7B"]["error"] == f"Explicit {phase} failure"
+    assert states(snapshot) == {"0.9B": "unloaded", "3.7B": "error", "7B": "not_installed"}
+    assert "error" not in snapshot["models"]["0.9B"]
     assert worker.model_catalog()["data"] == []
 
 
@@ -138,8 +138,8 @@ def test_health_snapshot_does_not_expose_mutable_worker_state(loading_fixture):
     worker, _, _, _ = loading_fixture
     worker.load()
     snapshot = worker.health_snapshot()
-    snapshot["models"]["1B"]["status"] = "error"
-    assert worker.health_snapshot()["models"]["1B"]["status"] == "unloaded"
+    snapshot["models"]["0.9B"]["status"] = "error"
+    assert worker.health_snapshot()["models"]["0.9B"]["status"] == "unloaded"
 
 
 def test_catalog_error_remains_a_truthful_global_error(loading_fixture, monkeypatch):

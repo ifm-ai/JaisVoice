@@ -79,6 +79,7 @@ struct ConfigurationView: View {
             ForEach(modelStore.languageModels) { model in modelRow(model) }
             ForEach([state.modelMemoryError, modelStore.error].compactMap { $0 }, id: \.self) { error in
                 Text(error).font(.system(size: 10)).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
             }
             Button(action: onToggleModelMemory) {
                 Label(state.modelsChanging ? L("Updating…") : state.modelMemoryButton,
@@ -149,6 +150,7 @@ struct ConfigurationView: View {
     private func downloadLabel(_ progress: DownloadProgress) -> String {
         switch progress.phase {
         case "verify": return L("Verifying…")
+        case "convert": return progress.fraction.map { L("Converting {0} %", String(Int($0 * 100))) } ?? L("Converting…")
         case "install": return L("Installing…")
         default: return progress.fraction.map { "\(Int($0 * 100)) %" } ?? L("Preparing…")
         }

@@ -5,10 +5,10 @@ Native macOS app + Python supervisor (`scripts/run_services.py`) for the local J
 ## Native app: one turn
 - The app owns the turn. Audio: complete WAV PCM signed 16-bit mono 16000 Hz, at most 30 seconds.
 - 1. ASR: `POST :8790/transcribe` `{audio: base64 WAV, language?: ar|msa|fr|en|es|it}`; omit language for automatic detection. Response `{text, refused, truncated, language}`. A refused, truncated or empty transcript stops the turn.
-- 2. Cleanup: `POST :8788/v1/clean` `{text, model_size?: "1B"|"4B"|"7B", guard?: bool}` (strict JSON boolean, default true). Success `{text, elapsed_ms}`; failure 4xx `{detail: {code, message}}` with `cleaner_incomplete`, `cleaner_empty`, `cleaner_uncertain` or `cleaner_unavailable`. The raw transcript is never forwarded as a fallback. Explicit text input skips step 1 only.
+- 2. Cleanup: `POST :8788/v1/clean` `{text, model_size?: "0.9B"|"3.7B"|"7B", guard?: bool}` (strict JSON boolean, default true). Success `{text, elapsed_ms}`; failure 4xx `{detail: {code, message}}` with `cleaner_incomplete`, `cleaner_empty`, `cleaner_uncertain` or `cleaner_unavailable`. The raw transcript is never forwarded as a fallback. Explicit text input skips step 1 only.
 - 3. Agent: Pi RPC `prompt` with the cleaned text only. Before it, `new_session` when the conversation changes, `set_model {provider: "jais", modelId: "k2-1b"|"k2-4b"|"k2-7b"}` when the size changes and `set_thinking_level` with that model's catalog effort.
 - Cancellation or a new turn: cancel the turn task, send Pi `abort`. Events of a stale turn are never shown.
-- Health: `GET :8788/health` (models by size: `status` ready|loading|unloaded|error|not_installed, `installed`, `downloadable`, efforts) and `GET :8790/health`; memory: `POST :8788/models/{1B|4B|7B}/memory` and `POST :8790/memory` `{action: load|unload}`.
+- Health: `GET :8788/health` (models by size: `status` ready|loading|unloaded|error|not_installed, `installed`, `downloadable`, efforts) and `GET :8790/health`; memory: `POST :8788/models/{0.9B|3.7B|7B}/memory` and `POST :8790/memory` `{action: load|unload}`.
 
 ## Models
 - `models/catalog.json` (or `HORIZON_MODEL_CATALOG`): ASR + one K2 checkpoint per size. `download: null` = not published yet.

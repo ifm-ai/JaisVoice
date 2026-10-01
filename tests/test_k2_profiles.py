@@ -12,7 +12,7 @@ def write_catalog(tmp_path, models):
     return path
 
 
-def llm(size="4B", **fields):
+def llm(size="3.7B", **fields):
     return {"id": "k2-" + size.lower(), "kind": "llm", "size": size, "display_name": "Test " + size,
             "directory": "model-" + size, "download": None, **fields}
 
@@ -26,16 +26,16 @@ def test_shipped_catalogs_are_valid():
         entries = model_store.load_catalog(model_store.ROOT / "models" / name)
         assert [entry["kind"] for entry in entries].count("asr") == 1
     sizes = [entry["size"] for entry in model_store.load_catalog(model_store.ROOT / "models/catalog.json") if entry["kind"] == "llm"]
-    assert sizes == ["1B", "4B", "7B"]
+    assert sizes == ["0.9B", "3.7B", "7B"]
 
 
 def test_catalog_defaults_and_override(monkeypatch, tmp_path):
-    path = write_catalog(tmp_path, [ASR, llm(), llm("1B", agent_reasoning_effort="medium", context_limit=8192)])
+    path = write_catalog(tmp_path, [ASR, llm(), llm("0.9B", agent_reasoning_effort="medium", context_limit=8192)])
     monkeypatch.setenv("HORIZON_MODEL_CATALOG", str(path))
     assert model_store.catalog_path() == path
     entries = {entry["id"]: entry for entry in model_store.load_catalog()}
-    assert entries["k2-4b"]["context_limit"] == 16384 and entries["k2-4b"]["agent_reasoning_effort"] == "low"
-    assert entries["k2-1b"]["agent_reasoning_effort"] == "medium" and entries["k2-1b"]["context_limit"] == 8192
+    assert entries["k2-3.7b"]["context_limit"] == 16384 and entries["k2-3.7b"]["agent_reasoning_effort"] == "low"
+    assert entries["k2-0.9b"]["agent_reasoning_effort"] == "medium" and entries["k2-0.9b"]["context_limit"] == 8192
     assert entries["asr-f5"]["download"] == {"repo": "org/asr", "revision": "a" * 40, "profile": "F5", "bytes": 10}
     monkeypatch.delenv("HORIZON_MODEL_CATALOG")
     assert model_store.catalog_path() == model_store.ROOT / "models/catalog.json"
@@ -57,7 +57,7 @@ def test_invalid_catalog_entry_rejects_the_catalog(tmp_path, field, value):
 
 
 @pytest.mark.parametrize("models", [
-    [llm(), llm()], [llm("1B"), llm("1B", id="other", directory="other")], [ASR, dict(ASR, id="asr-2", directory="B")], [ASR],
+    [llm(), llm()], [llm("0.9B"), llm("0.9B", id="other", directory="other")], [ASR, dict(ASR, id="asr-2", directory="B")], [ASR],
 ])
 def test_duplicates_and_missing_language_models_are_rejected(tmp_path, models):
     with pytest.raises(ValueError):
@@ -70,16 +70,16 @@ def test_default_effort_must_be_supported(tmp_path):
 
 
 def test_inventory_follows_directories_on_disk(monkeypatch, tmp_path):
-    monkeypatch.setenv("HORIZON_MODEL_CATALOG", str(write_catalog(tmp_path, [llm("1B"), llm()])))
+    monkeypatch.setenv("HORIZON_MODEL_CATALOG", str(write_catalog(tmp_path, [llm("0.9B"), llm()])))
     monkeypatch.setattr(gateway, "RUNTIME", tmp_path)
-    assert {size: entry["installed"] for size, entry in gateway.read_inventory().items()} == {"1B": False, "4B": False}
-    (tmp_path / "models/model-4B").mkdir(parents=True)
-    (tmp_path / "models/model-4B/config.json").write_text("{}")
+    assert {size: entry["installed"] for size, entry in gateway.read_inventory().items()} == {"0.9B": False, "3.7B": False}
+    (tmp_path / "models/model-3.7B").mkdir(parents=True)
+    (tmp_path / "models/model-3.7B/config.json").write_text("{}")
     inventory = gateway.read_inventory()
-    assert inventory["4B"]["installed"] and inventory["4B"]["path"] == str(tmp_path / "models/model-4B")
+    assert inventory["3.7B"]["installed"] and inventory["3.7B"]["path"] == str(tmp_path / "models/model-3.7B")
     monkeypatch.setenv("HORIZON_AGENT_REASONING_EFFORT", "high")
-    assert gateway.role_effort(inventory["4B"], "k2-agent") == "high"
-    assert gateway.role_effort(inventory["4B"], "k2-cleaner") == "low"
+    assert gateway.role_effort(inventory["3.7B"], "k2-agent") == "high"
+    assert gateway.role_effort(inventory["3.7B"], "k2-cleaner") == "low"
 
 
 class FixtureTokenizer:

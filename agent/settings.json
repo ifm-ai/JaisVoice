@@ -1,6 +1,6 @@
 {
   "defaultProvider": "jais",
-  "defaultModel": "k2-4b",
+  "defaultModel": "k2-3.7b",
   "defaultThinkingLevel": "low",
   "defaultTools": [],
   "defaultProjectTrust": "never",

@@ -32,7 +32,7 @@ logger = logging.getLogger("horizon.mlx")
 MODEL_ROLES = ("k2-cleaner", "k2-agent")
 # Agent model IDs for OpenAI clients that select a size by model name (Pi).
 AGENT_MODEL_IDS = {f"k2-{size.lower()}": size for size in model_store.SIZES}
-DEFAULT_SIZE = "4B"
+DEFAULT_SIZE = "3.7B"
 
 
 def role_effort(entry: dict, role: str) -> str:
@@ -79,7 +79,7 @@ def prepare_k2_prompt(tokenizer, messages, tools, effort: str, entry: dict):
 class CompletionRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
     model: str
-    model_size: Literal["1B", "4B", "7B"] | None = None
+    model_size: Literal["0.9B", "3.7B", "7B"] | None = None
     messages: list[dict] = Field(min_length=1, max_length=256)
     tools: list[dict] | None = None
     tool_choice: str | dict | None = None
@@ -337,7 +337,7 @@ class ModelMemoryRequest(BaseModel):
 
 
 @app.post("/models/{size}/memory")
-async def model_memory(size: Literal["1B", "4B", "7B"], body: ModelMemoryRequest):
+async def model_memory(size: Literal["0.9B", "3.7B", "7B"], body: ModelMemoryRequest):
     # Reserve before yielding so concurrent HTTP requests cannot race inference.
     if worker.status == "starting" or worker.lifecycle_busy or worker.pending or worker.active_request:
         raise HTTPException(409, "An operation is in progress. Try again when it ends.")
@@ -463,7 +463,7 @@ async def completions(body: CompletionRequest, request: Request):
 class CleanRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     text: str = Field(min_length=1, max_length=4000)
-    model_size: Literal["1B", "4B", "7B"] | None = None
+    model_size: Literal["0.9B", "3.7B", "7B"] | None = None
     # Only a JSON boolean: a malformed value must never silently disable the guard.
     guard: StrictBool = True
 

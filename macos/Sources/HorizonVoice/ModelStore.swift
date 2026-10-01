@@ -146,7 +146,11 @@ struct DownloadProgress: Equatable {
             if case .number(let total)? = record["total"] { progress.total = Int64(total) }
             if processes[id] != nil { downloads[id] = progress }
         case "error":
-            error = record["message"].flatMap(\.string).map { L($0) } ?? L("The download failed.")
+            if record["code"]?.string == "no_access", let repo = record["repo"]?.string, let folder = record["folder"]?.string {
+                error = L("No access to {0} on Hugging Face. Request access on huggingface.co/{0} and sign in with `hf auth login`, or download the repository files yourself into {1}, then click Download again.", repo, folder)
+            } else {
+                error = record["message"].flatMap(\.string).map { L($0) } ?? L("The download failed.")
+            }
         default: break
         }
     }

@@ -11,7 +11,7 @@ from model_fixtures import loaded
 def client(monkeypatch):
     test_worker = gateway.Worker()
     test_worker.status = 'ready'
-    test_worker.models = loaded(['4B'])
+    test_worker.models = loaded(['3.7B'])
     monkeypatch.setattr(test_worker, 'load', lambda: None)
     monkeypatch.setattr(gateway, 'worker', test_worker)
     with TestClient(gateway.app) as client:

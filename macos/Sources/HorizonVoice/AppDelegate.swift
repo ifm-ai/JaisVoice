@@ -622,8 +622,8 @@ import UniformTypeIdentifiers
     private func showSettingsPreview() {
         state.ready = true
         state.serviceMessage = "Preview · no services or microphone started"
-        state.cleanerModelLabel = "MBZUAI · 1B"
-        state.agentModelLabel = "MBZUAI · 4B"
+        state.cleanerModelLabel = "Jais 3 · 3.7B"
+        state.agentModelLabel = "Jais 3 · 3.7B"
         state.cleanerModelPhase = .ready
         state.agentModelPhase = .ready
         if CommandLine.arguments.contains("--settings-loading") {
@@ -638,16 +638,16 @@ import UniformTypeIdentifiers
             state.agentModelError = L("Example loading diagnostic.")
         }
         state.updateModelInventory([
-            "k2-cleaner": ServiceModelHealth(model_size: "1B", display_name: "MBZUAI · 1B", repo: nil, status: "unloaded", error: nil),
-            "k2-agent": ServiceModelHealth(model_size: "4B", display_name: "MBZUAI · 4B", repo: nil, status: CommandLine.arguments.contains("--settings-unloaded") ? "unloaded" : state.agentModelPhase.rawValue, error: nil)
+            "k2-cleaner": ServiceModelHealth(model_size: "0.9B", display_name: "Jais 3 · 0.9B", repo: nil, status: "unloaded", error: nil),
+            "k2-agent": ServiceModelHealth(model_size: "3.7B", display_name: "Jais 3 · 3.7B", repo: nil, status: CommandLine.arguments.contains("--settings-unloaded") ? "unloaded" : state.agentModelPhase.rawValue, error: nil)
         ])
         state.modelInventory["ASR"] = ServiceModelHealth(model_size: "ASR", display_name: "JAIS-ASR F5", repo: nil, status: "ready", error: nil)
         modelStore.show(models: [
             CatalogModel(id: "asr-f5", kind: "asr", display_name: "JAIS-ASR · F5", installed: true, downloadable: true, download_bytes: 4_780_192_247, disk_bytes: 5_995_121_326),
-            CatalogModel(id: "k2-1b", kind: "llm", display_name: "MBZUAI · 1B", size: "1B", installed: true, downloadable: false, disk_bytes: 2_161_683_689),
-            CatalogModel(id: "k2-4b", kind: "llm", display_name: "MBZUAI · 4B", size: "4B", installed: true, downloadable: false, disk_bytes: 5_395_435_984),
-            CatalogModel(id: "k2-7b", kind: "llm", display_name: "MBZUAI · 7B", size: "7B", installed: false, downloadable: CommandLine.arguments.contains("--settings-download"))
-        ], downloads: CommandLine.arguments.contains("--settings-download") ? ["k2-7b": DownloadProgress(bytes: 3_100_000_000, total: 7_600_000_000)] : [:])
+            CatalogModel(id: "jais-3-0.9b", kind: "llm", display_name: "Jais 3 · 0.9B", size: "0.9B", installed: true, downloadable: true, disk_bytes: 2_161_683_689),
+            CatalogModel(id: "jais-3-3.7b", kind: "llm", display_name: "Jais 3 · 3.7B", size: "3.7B", installed: true, downloadable: true, disk_bytes: 4_610_000_000),
+            CatalogModel(id: "jais-3-7b", kind: "llm", display_name: "Jais 3 · 7B", size: "7B", installed: false, downloadable: true, download_bytes: 18_019_111_674)
+        ], downloads: CommandLine.arguments.contains("--settings-download") ? ["jais-3-7b": DownloadProgress(bytes: 7_400_000_000, total: 18_019_111_674)] : [:])
         let previewHealth = ServiceHealth(status: "ready", message: "", models: state.modelInventory)
         state.updateModelHealth(previewHealth.selectedModels(cleaner: preferences.cleanerModel, agent: preferences.agentModel), serviceStatus: "ready")
         configuration.show()

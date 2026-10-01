@@ -11,7 +11,7 @@
     {
       "id": "ifm-0.9b",
       "kind": "llm",
-      "size": "1B",
+      "size": "0.9B",
       "display_name": "IFM K2-Horizon · 0.9B",
       "directory": "K2-Horizon-0.9B-bf16",
       "download": null,

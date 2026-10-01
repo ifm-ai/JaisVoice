@@ -53,7 +53,7 @@ struct PipelineFailure: Error {
     private var turnTask: Task<Void, Never>?
     private var activeTurnID: String?
     private var agentConversation: String?
-    private var agentModel = "k2-4b"
+    private var agentModel = LocalPipeline.agentModelID(nil)
     private var agentThinking: String?
     /// Each model's agent reasoning effort, from the gateway's catalog.
     private var agentEfforts: [String: String] = [:]
@@ -76,7 +76,7 @@ struct PipelineFailure: Error {
             guard let self else { return }
             self.dismissApprovals?()
             self.run?.fail(PipelineFailure(code: "agent_unavailable", message: L("The local agent stopped. Check service status in the menu.")))
-            self.agentConversation = nil; self.agentModel = "k2-4b"; self.agentThinking = nil
+            self.agentConversation = nil; self.agentModel = Self.agentModelID(nil); self.agentThinking = nil
             self.onDisconnect?(detail)
         }
     }
@@ -135,7 +135,7 @@ struct PipelineFailure: Error {
     func connect() async throws {
         if !agent.isRunning {
             try agent.start()
-            agentConversation = nil; agentModel = "k2-4b"; agentThinking = nil
+            agentConversation = nil; agentModel = Self.agentModelID(nil); agentThinking = nil
         }
         try await agent.call("get_state")
     }
@@ -260,7 +260,7 @@ struct PipelineFailure: Error {
         return body
     }
 
-    static func agentModelID(_ size: String?) -> String { "k2-" + (size ?? "4B").lowercased() }
+    static func agentModelID(_ size: String?) -> String { "k2-" + (size ?? AppPreferences.defaultModelSize).lowercased() }
 
     private func transcribe(_ audio: Data, language: String?) async throws -> String {
         let body = Self.asrBody(audio: audio, language: language)
@@ -316,7 +316,7 @@ struct PipelineFailure: Error {
             agentModel = model
         }
         // The agent's effort follows the selected model's catalog default.
-        if let effort = agentEfforts[options.agentModel ?? "4B"], effort != agentThinking {
+        if let effort = agentEfforts[options.agentModel ?? AppPreferences.defaultModelSize], effort != agentThinking {
             try await agent.call("set_thinking_level", ["level": .string(effort)])
             agentThinking = effort
         }

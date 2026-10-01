@@ -98,7 +98,7 @@ enum MicrophoneAuthorization: Equatable {
         modelSize = Self.normalizedModel(
             defaults.string(forKey: Self.modelSizeKey)
                 ?? defaults.string(forKey: Self.agentModelKey)
-                ?? defaults.string(forKey: Self.cleanerModelKey), fallback: "4B")
+                ?? defaults.string(forKey: Self.cleanerModelKey), fallback: Self.defaultModelSize)
         cleanupGuardEnabled = defaults.object(forKey: Self.cleanupGuardKey) as? Bool ?? true
         actionPermission = defaults.string(forKey: Self.actionPermissionKey).flatMap(ActionPermission.init(rawValue:)) ?? .ask
         defaults.set(modelSize, forKey: Self.modelSizeKey)
@@ -123,8 +123,13 @@ enum MicrophoneAuthorization: Equatable {
         return ASRLanguageChoice.choices.contains(where: { $0.code == code }) ? code : ""
     }
 
+    static let modelSizes = ["0.9B", "3.7B", "7B"]
+    static let defaultModelSize = "3.7B"
+
+    /// Sizes from before Jais 3 map to the closest current size.
     static func normalizedModel(_ value: String?, fallback: String) -> String {
-        ["1B", "4B", "7B"].contains(value ?? "") ? value! : fallback
+        let value = ["1B": "0.9B", "4B": "3.7B"][value ?? ""] ?? value ?? ""
+        return modelSizes.contains(value) ? value : fallback
     }
 
     func setInterfaceLanguage(_ language: InterfaceLanguage) {
@@ -143,7 +148,7 @@ enum MicrophoneAuthorization: Equatable {
     }
 
     func setModelSize(_ value: String) {
-        modelSize = Self.normalizedModel(value, fallback: "4B")
+        modelSize = Self.normalizedModel(value, fallback: Self.defaultModelSize)
         defaults.set(modelSize, forKey: Self.modelSizeKey)
     }
 
