@@ -83,7 +83,7 @@ export interface ShellResult { exit_code: number | null; output: string; error: 
 
 /** Run one command in its own process group; bounded time and output, cancellable. */
 export function runShell(command: string, signal?: AbortSignal, seconds = SHELL_SECONDS): Promise<ShellResult> {
-  const directory = join(homedir(), "Library/Caches/local.horizon.voice/Shell");
+  const directory = join(homedir(), "Library/Caches/ae.ac.mbzuai.jaisvoice/Shell");
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   return new Promise((resolvePromise) => {
     if (signal?.aborted) return resolvePromise({ exit_code: null, output: "", error: "Command cancelled.", timed_out: false });

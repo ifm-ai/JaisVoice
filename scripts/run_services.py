@@ -105,9 +105,10 @@ def main():
         "HF_HOME": str(RUNTIME / "huggingface"),
         "TOKENIZERS_PARALLELISM": "false",
         "PYTHONUNBUFFERED": "1",
-        "PATH": os.pathsep.join([str(ROOT / ".venv/bin"), "/usr/bin", "/bin", "/usr/sbin", "/sbin"]),
+        "PATH": os.pathsep.join([str(Path(sys.executable).parent), "/usr/bin", "/bin", "/usr/sbin", "/sbin"]),
     })
-    python = str(ROOT / ".venv/bin/python")
+    # The interpreter running this supervisor: the project .venv or the one embedded in the app.
+    python = sys.executable
     asr_root = model_store.model_path(asr, base) if asr else None
     if asr_root:
         env["HORIZON_ASR_MODEL_DIR"] = str(asr_root)
