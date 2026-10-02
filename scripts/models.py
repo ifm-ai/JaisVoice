@@ -6,8 +6,7 @@
     models.py delete <id>
 
 Downloads use the default Hugging Face login when one exists; published
-repositories need none. Interrupting a download keeps it resumable. Models
-built from an original checkpoint are converted to MLX after the download.
+repositories need none. Interrupting a download keeps it resumable.
 """
 import argparse
 import json

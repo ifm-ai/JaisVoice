@@ -150,7 +150,6 @@ struct ConfigurationView: View {
     private func downloadLabel(_ progress: DownloadProgress) -> String {
         switch progress.phase {
         case "verify": return L("Verifying…")
-        case "convert": return progress.fraction.map { L("Converting {0} %", String(Int($0 * 100))) } ?? L("Converting…")
         case "install": return L("Installing…")
         default: return progress.fraction.map { "\(Int($0 * 100)) %" } ?? L("Preparing…")
         }

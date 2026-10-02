@@ -5,7 +5,7 @@ JAIS Voice uses one speech model and one language model. The same language model
 | Role | Repository |
 | --- | --- |
 | Speech recognition | [MBZUAI-Paris/JAIS-ASR-MLX](https://huggingface.co/MBZUAI-Paris/JAIS-ASR-MLX) |
-| Cleanup and agent (one model for both) | [IFM/Jais-3-3.7B](https://huggingface.co/IFM/Jais-3-3.7B) (default) · [IFM/Jais-3-0.9B](https://huggingface.co/IFM/Jais-3-0.9B) · [IFM/Jais-3-7B](https://huggingface.co/IFM/Jais-3-7B) |
+| Cleanup and agent (one model for both) | [IFM/Jais-3-3.7B-MLX-8bit](https://huggingface.co/IFM/Jais-3-3.7B-MLX-8bit) (default) · [IFM/Jais-3-0.9B-MLX-bf16](https://huggingface.co/IFM/Jais-3-0.9B-MLX-bf16) · [IFM/Jais-3-7B-MLX-8bit](https://huggingface.co/IFM/Jais-3-7B-MLX-8bit) |
 
 These repositories currently require access on Hugging Face. The app uses your Hugging Face login: run `hf auth login` once, or set `HF_TOKEN`.
 
@@ -18,26 +18,27 @@ On first launch the app offers to download JAIS-ASR (profile F5, 4.8 GB). The do
 Clicking **Download** on a Jais 3 model:
 
 1. checks that your account can read the repository;
-2. downloads the original checkpoint at its pinned revision (weights, configuration, tokenizer and chat template; never Python files) into `models/sources/<repository name>`, resumably;
+2. downloads the MLX build at its pinned revision (weights, configuration, tokenizer and chat template; never Python files), resumably;
 3. checks every file's size and SHA-256 against Hugging Face;
-4. converts it to MLX on your Mac: BF16 for the 0.9B, 8-bit affine (groups of 64) for the 3.7B and 7B;
-5. validates the converted tensors, installs the model and deletes the downloaded source.
+4. validates the tensors against the architecture and installs the model.
 
-| Model | Download | On disk after conversion |
+| Model | Precision | Download |
 | --- | --- | --- |
-| Jais 3 · 0.9B | 2.2 GB | about 2 GB |
-| Jais 3 · 3.7B | 10.1 GB | about 5 GB |
-| Jais 3 · 7B | 18 GB | about 8 GB |
+| Jais 3 · 0.9B | BF16 | 2.2 GB |
+| Jais 3 · 3.7B | 8-bit affine (groups of 64) | 5.4 GB |
+| Jais 3 · 7B | 8-bit affine (groups of 64) | 9.6 GB |
+
+The collection [IFM/jais-3-mlx](https://huggingface.co/collections/IFM/jais-3-mlx) also has 4-bit builds and larger models; the runtime loads BF16 and 8-bit only.
 
 ### Without access to the repository
 
 If your account cannot read the repository, the app explains how to get access and where to put the files instead. You can download the repository files yourself (for example from the **Files** tab on Hugging Face, or with `hf download`) into the folder the message gives:
 
 ```sh
-hf download IFM/Jais-3-3.7B --revision 4ba23d50550ab52a0398dd1d735a3116b7a66679 --local-dir "$HOME/Library/Application Support/JAIS Voice/models/sources/Jais-3-3.7B"
+hf download IFM/Jais-3-3.7B-MLX-8bit --revision b10d70beb6c8259b9af1f6dfcd465f469b8e95e2 --local-dir "$HOME/Library/Application Support/JAIS Voice/models/sources/Jais-3-3.7B-MLX-8bit"
 ```
 
-Then click **Download** again: the app finds the complete checkpoint and converts it without contacting Hugging Face. The folder needs `config.json`, `model.safetensors.index.json`, every shard it lists, `tokenizer.json`, `tokenizer_config.json` and `chat_template.jinja`. Files downloaded by hand are checked for structure and tensor shapes, not against Hugging Face's hashes.
+Then click **Download** again: the app finds the complete files and installs a copy without contacting Hugging Face. The folder needs `config.json`, `model.safetensors.index.json`, every shard it lists, `tokenizer.json`, `tokenizer_config.json` and `chat_template.jinja`. Files downloaded by hand are checked for structure and tensor shapes, not against Hugging Face's hashes.
 
 ## One model for both stages
 
@@ -45,12 +46,12 @@ The settings offer a single **0.9B / 3.7B / 7B** selector, shared by transcript 
 
 ## Catalog entries
 
-A language model entry has either `download` (a published MLX build, fetched as is) or `convert` (an original checkpoint converted on the Mac):
+A language model entry's `download` points to a published MLX build:
 
 ```json
 {"id": "jais-3-3.7b", "kind": "llm", "size": "3.7B", "display_name": "Jais 3 · 3.7B",
- "directory": "Jais-3-3.7B-8bit-4ba23d50550a",
- "convert": {"repo": "IFM/Jais-3-3.7B", "revision": "4ba23d50550ab52a0398dd1d735a3116b7a66679", "bits": 8, "bytes": 10137265961}}
+ "directory": "Jais-3-3.7B-MLX-8bit-b10d70beb6c8",
+ "download": {"repo": "IFM/Jais-3-3.7B-MLX-8bit", "revision": "b10d70beb6c8259b9af1f6dfcd465f469b8e95e2", "bytes": 5395429334}}
 ```
 
-`revision` must be a full commit hash. When MLX builds are published, replace `convert` with `download` pointing to them. `HORIZON_MODEL_CATALOG=models/catalog-ifm.json` selects the older IFM K2-Horizon pair instead.
+`revision` must be a full commit hash; `bytes` is the size shown before downloading. `HORIZON_MODEL_CATALOG=models/catalog-ifm.json` selects the older IFM K2-Horizon pair instead.

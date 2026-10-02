@@ -279,5 +279,3 @@
 "Local transcription failed" = "Échec de la transcription locale";
 "Invalid audio or language" = "Audio ou langue invalide";
 "No access to {0} on Hugging Face. Request access on huggingface.co/{0} and sign in with `hf auth login`, or download the repository files yourself into {1}, then click Download again." = "Pas d’accès à {0} sur Hugging Face. Demandez l’accès sur huggingface.co/{0} et connectez-vous avec `hf auth login`, ou téléchargez vous-même les fichiers du dépôt dans {1}, puis cliquez à nouveau sur Télécharger.";
-"Converting {0} %" = "Conversion {0} %";
-"Converting…" = "Conversion…";
