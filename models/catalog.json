@@ -1,44 +1,9 @@
 {
   "format": "jais-voice-models-v1",
   "models": [
-    {
-      "id": "asr-f5",
-      "kind": "asr",
-      "display_name": "JAIS-ASR · F5",
-      "directory": "JAIS-ASR-MLX",
-      "download": {"repo": "MBZUAI-Paris/JAIS-ASR-MLX", "revision": "de134588d64e222f5251b706a64b0281a0eeb091", "profile": "F5", "bytes": 4780192247}
-    },
-    {
-      "id": "k2-1b",
-      "kind": "llm",
-      "size": "1B",
-      "display_name": "MBZUAI · 1B",
-      "directory": "MBZUAI-1B-32bfb4a00c1e-bf16",
-      "download": null,
-      "source": {"repo": "MBZUAI-Paris/A13x1-1Bcv5c189-sft-reasoningv9.5.2k2horCT-ckpt10711-FTPO_es035", "revision": "32bfb4a00c1e56a9956fd279b2743e1336ea7fe6"},
-      "cleaner_reasoning_effort": "low",
-      "agent_reasoning_effort": "low"
-    },
-    {
-      "id": "k2-4b",
-      "kind": "llm",
-      "size": "4B",
-      "display_name": "MBZUAI · 4B",
-      "directory": "MBZUAI-4B-20e95a2e3f44-8bit",
-      "download": null,
-      "source": {"repo": "MBZUAI-Paris/A13cs_A13x1-4Bc10248_sft_reasoningv9.5.1k2horCT_FTPO_es035", "revision": "20e95a2e3f4452c6d26374d48cbc9902259d49bf"},
-      "cleaner_reasoning_effort": "low",
-      "agent_reasoning_effort": "low"
-    },
-    {
-      "id": "k2-7b",
-      "kind": "llm",
-      "size": "7B",
-      "display_name": "MBZUAI · 7B",
-      "directory": "MBZUAI-7B-mlx",
-      "download": null,
-      "cleaner_reasoning_effort": "low",
-      "agent_reasoning_effort": "low"
-    }
+    {"id": "asr-f5", "kind": "asr", "display_name": "JAIS-ASR · F5", "directory": "JAIS-ASR-MLX", "download": {"repo": "MBZUAI-Paris/JAIS-ASR-MLX", "revision": "de134588d64e222f5251b706a64b0281a0eeb091", "profile": "F5", "bytes": 4780192247}},
+    {"id": "jais-3-0.9b", "kind": "llm", "size": "0.9B", "display_name": "Jais 3 · 0.9B", "directory": "Jais-3-0.9B-MLX-bf16-a777f3820160", "download": {"repo": "IFM/Jais-3-0.9B-MLX-bf16", "revision": "a777f382016021046857d1ed208a26faa54f336e", "bytes": 2161620448}, "cleaner_reasoning_effort": "low", "agent_reasoning_effort": "low"},
+    {"id": "jais-3-3.7b", "kind": "llm", "size": "3.7B", "display_name": "Jais 3 · 3.7B", "directory": "Jais-3-3.7B-MLX-8bit-b10d70beb6c8", "download": {"repo": "IFM/Jais-3-3.7B-MLX-8bit", "revision": "b10d70beb6c8259b9af1f6dfcd465f469b8e95e2", "bytes": 5395429334}, "cleaner_reasoning_effort": "low", "agent_reasoning_effort": "low"},
+    {"id": "jais-3-7b", "kind": "llm", "size": "7B", "display_name": "Jais 3 · 7B", "directory": "Jais-3-7B-MLX-8bit-cb9852e33707", "download": {"repo": "IFM/Jais-3-7B-MLX-8bit", "revision": "cb9852e337078a8aa3a62b7d96217a5760b1af24", "bytes": 9582764791}, "cleaner_reasoning_effort": "low", "agent_reasoning_effort": "low"}
   ]
 }

@@ -11,7 +11,6 @@
 "Allow…" = "Allow…";
 "System Settings…" = "System Settings…";
 "Type a request without a microphone…" = "Type a request without a microphone…";
-"Your voice assistant settings" = "Your voice assistant settings";
 "CLEANUP" = "CLEANUP";
 "RESPONSE AND TOOLS" = "RESPONSE AND TOOLS";
 "Choices saved · applied to your next request" = "Choices saved · applied to your next request";
@@ -278,3 +277,11 @@
 "A local transcription is already running" = "A local transcription is already running";
 "Local transcription failed" = "Local transcription failed";
 "Invalid audio or language" = "Invalid audio or language";
+"No access to {0} on Hugging Face. Request access on huggingface.co/{0} and sign in with `hf auth login`, or download the repository files yourself into {1}, then click Download again." = "No access to {0} on Hugging Face. Request access on huggingface.co/{0} and sign in with `hf auth login`, or download the repository files yourself into {1}, then click Download again.";
+"Downloading…" = "Downloading…";
+"No data received for a while" = "No data received for a while";
+"General" = "General";
+"Assistant" = "Assistant";
+"Models" = "Models";
+"Needs attention" = "Needs attention";
+"Type a request" = "Type a request";

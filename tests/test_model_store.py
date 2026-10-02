@@ -1,4 +1,5 @@
 """Model catalog storage, downloads and launchers with tiny real files; no network or Metal."""
+import fnmatch
 import json
 import os
 from pathlib import Path
@@ -49,8 +50,8 @@ def store(tmp_path, monkeypatch):
     catalog.write_text(json.dumps({"format": "jais-voice-models-v1", "models": [
         {"id": "asr-f5", "kind": "asr", "display_name": "ASR", "directory": "ASR",
          "download": {"repo": "org/asr", "revision": REVISION, "profile": "F5"}},
-        {"id": "k2-1b", "kind": "llm", "size": "1B", "display_name": "Test 1B", "directory": "model-1B", "download": None},
-        {"id": "k2-4b", "kind": "llm", "size": "4B", "display_name": "Test 4B", "directory": "model-4B",
+        {"id": "k2-0.9b", "kind": "llm", "size": "0.9B", "display_name": "Test 0.9B", "directory": "model-1B", "download": None},
+        {"id": "k2-3.7b", "kind": "llm", "size": "3.7B", "display_name": "Test 3.7B", "directory": "model-4B",
          "download": {"repo": "org/model-4b", "revision": REVISION}},
     ]}))
     monkeypatch.setenv("HORIZON_MODEL_CATALOG", str(catalog))
@@ -58,15 +59,25 @@ def store(tmp_path, monkeypatch):
     return model_store.load_catalog(), base, tmp_path
 
 
+class RepositoryNotFoundError(Exception):
+    """Named like huggingface_hub's error for a private repository."""
+
+
 class FakeHub:
-    """Stands in for huggingface_hub; copies prepared files like a snapshot."""
-    def __init__(self, source, interrupt_after=None):
-        self.source, self.interrupt_after, self.calls = Path(source), interrupt_after, []
+    """Stands in for huggingface_hub; copies prepared files like a snapshot, with LFS hashes."""
+    def __init__(self, source, interrupt_after=None, error=None, wrong_hash=None):
+        self.source, self.interrupt_after, self.error, self.calls = Path(source), interrupt_after, error, []
         hub = self
         class HfApi:
             def model_info(self, repo, revision=None, files_metadata=False):
-                files = [path for path in hub.source.rglob("*") if path.is_file()]
-                return type("Info", (), {"siblings": [type("Sibling", (), {"size": path.stat().st_size})() for path in files]})()
+                if hub.error:
+                    raise hub.error
+                siblings = []
+                for path in sorted(p for p in hub.source.rglob("*") if p.is_file()):
+                    digest = "0" * 64 if path.name == wrong_hash else model_store.sha256(path)
+                    lfs = type("Lfs", (), {"sha256": digest})() if path.suffix == ".safetensors" else None
+                    siblings.append(type("Sibling", (), {"rfilename": str(path.relative_to(hub.source)), "size": path.stat().st_size, "lfs": lfs})())
+                return type("Info", (), {"siblings": siblings})()
         self.HfApi = HfApi
 
     def hf_hub_download(self, repo, filename, revision=None, local_dir=None):
@@ -80,7 +91,7 @@ class FakeHub:
         (Path(local_dir) / ".cache/huggingface").mkdir(parents=True, exist_ok=True)
         for index, path in enumerate(sorted(path for path in self.source.rglob("*") if path.is_file())):
             relative = path.relative_to(self.source)
-            if allow_patterns is not None and str(relative) not in allow_patterns:
+            if allow_patterns is not None and not any(fnmatch.fnmatch(str(relative), pattern) for pattern in allow_patterns):
                 continue
             if self.interrupt_after is not None and index >= self.interrupt_after:
                 self.interrupt_after = None
@@ -107,28 +118,30 @@ def asr_repository(directory):
 def test_states_follow_disk_and_publication(store):
     catalog, base, tmp = store
     states = {state["id"]: state for state in (model_store.state(entry, base) for entry in catalog)}
-    assert [states[i]["installed"] for i in ("asr-f5", "k2-1b", "k2-4b")] == [False, False, False]
-    assert states["k2-1b"]["downloadable"] is False and states["k2-4b"]["downloadable"] is True
+    assert [states[i]["installed"] for i in ("asr-f5", "k2-0.9b", "k2-3.7b")] == [False, False, False]
+    assert states["k2-0.9b"]["downloadable"] is False and states["k2-3.7b"]["downloadable"] is True
     write_model(base / "model-1B")
-    state = model_store.state(model_store.find(catalog, "k2-1b"), base)
-    assert state["installed"] and state["disk_bytes"] > 0 and state["size"] == "1B"
+    state = model_store.state(model_store.find(catalog, "k2-0.9b"), base)
+    assert state["installed"] and state["disk_bytes"] > 0 and state["size"] == "0.9B"
 
 
 def test_llm_download_is_validated_then_atomically_installed(store):
     catalog, base, tmp = store
     write_model(tmp / "repo", quantized=True)
+    (tmp / "repo/k2_horizon.py").write_text("raise SystemExit('never fetched')")
     events = []
     hub = FakeHub(tmp / "repo")
-    target = model_store.download(model_store.find(catalog, "k2-4b"), base, events.append, hub=hub)
+    target = model_store.download(model_store.find(catalog, "k2-3.7b"), base, events.append, hub=hub)
     assert target == base / "model-4B" and (target / "config.json").is_file()
-    assert hub.calls == [("org/model-4b", REVISION, None)]
+    assert hub.calls == [("org/model-4b", REVISION, model_store.MODEL_PATTERNS)]
+    assert not (target / "k2_horizon.py").exists()
     assert not (base / ".model-4B.download").exists() and not (target / ".cache").exists()
     assert json.loads((target / model_store.PROVENANCE).read_text())["revision"] == REVISION
-    assert events[-1] == {"event": "done", "id": "k2-4b"}
+    assert events[-1] == {"event": "done", "id": "k2-3.7b"}
     progress = [event for event in events if event.get("phase") == "download"]
     assert progress[-1]["bytes"] == progress[-1]["total"] > 0
     with pytest.raises(RuntimeError, match="already installed"):
-        model_store.download(model_store.find(catalog, "k2-4b"), base, events.append, hub=hub)
+        model_store.download(model_store.find(catalog, "k2-3.7b"), base, events.append, hub=hub)
 
 
 def test_invalid_download_is_never_installed(store):
@@ -138,14 +151,14 @@ def test_invalid_download_is_never_installed(store):
     config["vocab_size"] += 1
     (tmp / "repo/config.json").write_text(json.dumps(config))
     with pytest.raises(ValueError, match="shape or type"):
-        model_store.download(model_store.find(catalog, "k2-4b"), base, lambda event: None, hub=FakeHub(tmp / "repo"))
+        model_store.download(model_store.find(catalog, "k2-3.7b"), base, lambda event: None, hub=FakeHub(tmp / "repo"))
     assert not (base / "model-4B").exists() and (base / ".model-4B.download").is_dir()
 
 
 def test_interrupted_download_resumes(store):
     catalog, base, tmp = store
     write_model(tmp / "repo")
-    entry = model_store.find(catalog, "k2-4b")
+    entry = model_store.find(catalog, "k2-3.7b")
     with pytest.raises(KeyboardInterrupt):
         model_store.download(entry, base, lambda event: None, hub=FakeHub(tmp / "repo", interrupt_after=2))
     assert model_store.state(entry, base)["partial_bytes"] > 0 and not model_store.is_installed(entry, base)
@@ -156,7 +169,7 @@ def test_interrupted_download_resumes(store):
 def test_unpublished_model_cannot_be_downloaded(store):
     catalog, base, _ = store
     with pytest.raises(RuntimeError, match="not published"):
-        model_store.download(model_store.find(catalog, "k2-1b"), base, lambda event: None, hub=object())
+        model_store.download(model_store.find(catalog, "k2-0.9b"), base, lambda event: None, hub=object())
 
 
 def test_asr_download_fetches_one_profile_verifies_and_installs_its_environment(store):
@@ -184,11 +197,11 @@ def test_delete_removes_model_and_partial_download_only(store):
     write_model(base / "model-4B")
     (base / ".model-4B.download").mkdir()
     write_model(base / "model-1B")
-    model_store.delete(model_store.find(catalog, "k2-4b"), base)
+    model_store.delete(model_store.find(catalog, "k2-3.7b"), base)
     assert not (base / "model-4B").exists() and not (base / ".model-4B.download").exists()
     assert not (base / ".model-4B.deleting").exists()
-    assert model_store.is_installed(model_store.find(catalog, "k2-1b"), base)
-    model_store.delete(model_store.find(catalog, "k2-4b"), base)  # nothing left: no error
+    assert model_store.is_installed(model_store.find(catalog, "k2-0.9b"), base)
+    model_store.delete(model_store.find(catalog, "k2-3.7b"), base)  # nothing left: no error
 
 
 def test_symlinked_model_is_not_followed(store):
@@ -197,13 +210,13 @@ def test_symlinked_model_is_not_followed(store):
     base.mkdir(parents=True)
     (base / "model-4B").symlink_to(tmp / "elsewhere")
     with pytest.raises(RuntimeError, match="symbolic link"):
-        model_store.delete(model_store.find(catalog, "k2-4b"), base)
+        model_store.delete(model_store.find(catalog, "k2-3.7b"), base)
     assert (tmp / "elsewhere/config.json").is_file()
 
 
 def test_one_operation_per_model(store):
     catalog, base, _ = store
-    entry = model_store.find(catalog, "k2-4b")
+    entry = model_store.find(catalog, "k2-3.7b")
     with model_store.operation_lock(entry, base):
         with pytest.raises(RuntimeError, match="already in progress"):
             model_store.delete(entry, base)
@@ -214,14 +227,14 @@ def test_cli_lists_and_reports_errors_as_json(store, capsys):
     runtime = ["--runtime-dir", str(tmp / "runtime")]
     assert models_cli.main([*runtime, "list"]) == 0
     listing = json.loads(capsys.readouterr().out)
-    assert [model["id"] for model in listing["models"]] == ["asr-f5", "k2-1b", "k2-4b"]
-    assert models_cli.main([*runtime, "download", "k2-1b"]) == 1
+    assert [model["id"] for model in listing["models"]] == ["asr-f5", "k2-0.9b", "k2-3.7b"]
+    assert models_cli.main([*runtime, "download", "k2-0.9b"]) == 1
     assert "not published" in json.loads(capsys.readouterr().out)["message"]
     assert models_cli.main([*runtime, "download", "missing"]) == 1
     assert json.loads(capsys.readouterr().out)["event"] == "error"
     write_model(base / "model-1B")
-    assert models_cli.main([*runtime, "delete", "k2-1b"]) == 0
-    assert json.loads(capsys.readouterr().out) == {"event": "deleted", "id": "k2-1b"}
+    assert models_cli.main([*runtime, "delete", "k2-0.9b"]) == 0
+    assert json.loads(capsys.readouterr().out) == {"event": "deleted", "id": "k2-0.9b"}
     assert not (base / "model-1B").exists()
 
 
@@ -346,3 +359,51 @@ def test_bundled_asr_python_is_copied_out_of_the_app(tmp_path, monkeypatch):
     # Later calls reuse the copy, even after the app has moved.
     shutil.rmtree(tmp_path / "App.app")
     assert Path(model_store.find_python311()) == python
+
+
+def test_altered_model_file_is_never_installed(store):
+    catalog, base, tmp = store
+    write_model(tmp / "repo")
+    hub = FakeHub(tmp / "repo", wrong_hash="model-00001-of-00001.safetensors")
+    with pytest.raises(RuntimeError, match="altered"):
+        model_store.download(model_store.find(catalog, "k2-3.7b"), base, lambda event: None, hub=hub)
+    assert not (base / "model-4B").exists()
+
+
+def test_no_access_without_local_copy_asks_the_user(store):
+    catalog, base, tmp = store
+    entry = model_store.find(catalog, "k2-3.7b")
+    assert model_store.source_path(entry, base) == base / "sources/model-4b"
+    hub = FakeHub(tmp / "repo", error=RepositoryNotFoundError("401"))
+    with pytest.raises(model_store.NoAccess) as raised:
+        model_store.download(entry, base, lambda event: None, hub=hub)
+    assert raised.value.repo == "org/model-4b" and raised.value.folder == base / "sources/model-4b"
+    assert "hf auth login" in str(raised.value) and not (base / "model-4B").exists()
+
+
+def test_files_the_user_downloaded_are_validated_and_installed_without_access(store):
+    catalog, base, tmp = store
+    write_model(base / "sources/model-4b", quantized=True)
+    target = model_store.download(model_store.find(catalog, "k2-3.7b"), base, lambda event: None,
+                                  hub=FakeHub(tmp / "repo", error=RepositoryNotFoundError("401")))
+    assert (target / "config.json").is_file() and not (base / "sources/model-4b").exists()
+
+
+def test_invalid_files_the_user_downloaded_are_kept_and_not_installed(store):
+    catalog, base, tmp = store
+    write_model(base / "sources/model-4b")
+    (base / "sources/model-4b/chat_template.jinja").write_text(" ")
+    with pytest.raises(ValueError, match="Empty template"):
+        model_store.download(model_store.find(catalog, "k2-3.7b"), base, lambda event: None,
+                             hub=FakeHub(tmp / "repo", error=RepositoryNotFoundError("401")))
+    assert not (base / "model-4B").exists() and (base / "sources/model-4b/config.json").is_file()
+
+
+def test_cli_reports_missing_access_for_the_app(store, monkeypatch, capsys):
+    _, base, tmp = store
+    def no_access(*args, **kwargs):
+        raise model_store.NoAccess("org/model-4b", base / "sources/model-4b")
+    monkeypatch.setattr(model_store, "download", no_access)
+    assert models_cli.main(["--runtime-dir", str(tmp / "runtime"), "download", "k2-3.7b"]) == 1
+    record = json.loads(capsys.readouterr().out)
+    assert record["code"] == "no_access" and record["repo"] == "org/model-4b" and record["folder"].endswith("sources/model-4b")

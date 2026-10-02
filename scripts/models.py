@@ -51,6 +51,10 @@ def main(argv=None) -> int:
     except KeyboardInterrupt:
         emit({"event": "cancelled"})
         return 130
+    except model_store.NoAccess as error:
+        # The app shows its own localized explanation from these fields.
+        emit({"event": "error", "code": "no_access", "repo": error.repo, "folder": str(error.folder), "message": str(error)})
+        return 1
     except Exception as error:
         message = str(error) or type(error).__name__
         if type(error).__name__ in {"RepositoryNotFoundError", "GatedRepoError"}:

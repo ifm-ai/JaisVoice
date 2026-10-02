@@ -62,7 +62,7 @@ def command(env: dict) -> tuple[list[str], dict, Path]:
         "--mode", "rpc", "--no-session",
         "--no-builtin-tools", "--no-extensions", "-e", "builtin:mcp", "-e", str(ROOT / "agent/extensions/jais"),
         "--no-skills", "--no-prompt-templates", "--no-themes", "--no-context-files",
-        "--provider", "jais", "--model", "k2-4b", "--thinking", thinking,
+        "--provider", "jais", "--model", "k2-3.7b", "--thinking", thinking,
     ]
     return argv, env, workspace
 

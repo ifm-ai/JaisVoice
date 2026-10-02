@@ -24,7 +24,37 @@ struct DownloadProgress: Equatable {
     var phase = "download"
     var bytes: Int64 = 0
     var total: Int64 = 0
+    /// When the downloaded bytes last grew, or the phase last changed.
+    var lastActivity = Date()
+    /// Smoothed download speed in bytes per second, once measured.
+    var speed: Double?
+    var sample: (bytes: Int64, date: Date)?
+    /// Seconds without new bytes before a download is shown as waiting.
+    static let stallDelay: TimeInterval = 15
     var fraction: Double? { total > 0 ? min(1, Double(bytes) / Double(total)) : nil }
+
+    /// Record the bytes present at `now`; the speed is averaged over windows of 2 seconds.
+    mutating func update(bytes: Int64, at now: Date = Date()) {
+        if bytes > self.bytes { lastActivity = now }
+        self.bytes = bytes
+        // The first record counts what an earlier download left: it is not speed.
+        guard let sample else { self.sample = (bytes, now); return }
+        let elapsed = now.timeIntervalSince(sample.date)
+        guard elapsed >= 2 else { return }
+        let rate = max(0, Double(bytes - sample.bytes) / elapsed)
+        speed = speed.map { 0.7 * $0 + 0.3 * rate } ?? rate
+        self.sample = (bytes, now)
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.phase == rhs.phase && lhs.bytes == rhs.bytes && lhs.total == rhs.total
+            && lhs.lastActivity == rhs.lastActivity && lhs.speed == rhs.speed
+    }
+
+    /// Verification and installation work locally; a download is active while bytes keep arriving.
+    func isActive(at now: Date) -> Bool {
+        phase != "download" || now.timeIntervalSince(lastActivity) < Self.stallDelay
+    }
 }
 
 /// Download and delete catalog models with the project's model tool, as a child process.
@@ -141,12 +171,18 @@ struct DownloadProgress: Equatable {
         switch record["event"]?.string {
         case "progress":
             var progress = downloads[id] ?? DownloadProgress()
-            progress.phase = record["phase"]?.string ?? progress.phase
-            if case .number(let bytes)? = record["bytes"] { progress.bytes = Int64(bytes) }
+            let phase = record["phase"]?.string ?? progress.phase
+            if phase != progress.phase { progress.lastActivity = Date() }
+            progress.phase = phase
+            if case .number(let bytes)? = record["bytes"] { progress.update(bytes: Int64(bytes)) }
             if case .number(let total)? = record["total"] { progress.total = Int64(total) }
             if processes[id] != nil { downloads[id] = progress }
         case "error":
-            error = record["message"].flatMap(\.string).map { L($0) } ?? L("The download failed.")
+            if record["code"]?.string == "no_access", let repo = record["repo"]?.string, let folder = record["folder"]?.string {
+                error = L("No access to {0} on Hugging Face. Request access on huggingface.co/{0} and sign in with `hf auth login`, or download the repository files yourself into {1}, then click Download again.", repo, folder)
+            } else {
+                error = record["message"].flatMap(\.string).map { L($0) } ?? L("The download failed.")
+            }
         default: break
         }
     }

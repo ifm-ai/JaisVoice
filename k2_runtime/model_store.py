@@ -3,15 +3,20 @@
 `models/catalog.json` (or HORIZON_MODEL_CATALOG) is the only list of model
 choices. A model is installed when its directory exists under the runtime
 models directory. Downloads are pinned to a commit, written to a hidden
-staging directory (resumable), checked, then renamed into place. A model whose
-`download` is null is not published yet: it can be used or deleted when
-already on disk, never fetched.
+staging directory (resumable), checked, then renamed into place.
+
+A language model's `download` is a published MLX build, fetched as is and
+checked against Hugging Face's sizes and SHA-256. When the repository is not
+accessible, the files the user downloaded into `models/sources/<repository
+name>` are validated and installed instead. A model without `download` can be
+used or deleted when already on disk, never fetched.
 """
 from __future__ import annotations
 
 import contextlib
 from datetime import datetime, timezone
 import fcntl
+import fnmatch
 import hashlib
 import json
 import os
@@ -27,7 +32,9 @@ from safetensors import safe_open
 from .checkpoint import expected_weight_shapes
 
 ROOT = Path(__file__).resolve().parents[1]
-SIZES = ("1B", "4B", "7B")
+SIZES = ("0.9B", "3.7B", "7B")
+# Files of a published MLX build; Python files are never fetched or run.
+MODEL_PATTERNS = ["*.json", "*.jinja", "*.safetensors"]
 EFFORTS = ("low", "medium", "high")
 CLEANER_CONTEXT = 4096
 PROVENANCE = "jais_download.json"
@@ -141,6 +148,22 @@ def staging_path(entry: dict, base: Path) -> Path:
     return base / f".{entry['directory']}.download"
 
 
+def source_path(entry: dict, base: Path) -> Path | None:
+    """Where the user can put a language model's files downloaded by hand."""
+    spec = entry["download"]
+    return base / "sources" / spec["repo"].split("/")[-1] if spec and entry["kind"] == "llm" else None
+
+
+class NoAccess(RuntimeError):
+    """The repository is private or gated for this user, and no local copy exists."""
+
+    def __init__(self, repo: str, folder: Path):
+        self.repo, self.folder = repo, folder
+        super().__init__(f"No access to {repo} on Hugging Face. Request access on https://huggingface.co/{repo} "
+                         f"and sign in with `hf auth login`, or download the repository files yourself into {folder}, "
+                         "then download the model again.")
+
+
 def asr_profile(entry: dict) -> str:
     return (entry.get("download") or {}).get("profile", "F5")
 
@@ -167,10 +190,12 @@ def state(entry: dict, base: Path) -> dict:
     result = {key: entry[key] for key in ("id", "kind", "display_name") if key in entry}
     if "size" in entry:
         result["size"] = entry["size"]
+    source = source_path(entry, base)
+    partial = sum(disk_bytes(path) for path in (staging, source) if path and path.is_dir())
     result.update(installed=installed, downloadable=entry["download"] is not None,
                   download_bytes=(entry["download"] or {}).get("bytes"),
                   disk_bytes=disk_bytes(model_path(entry, base)) if installed else 0,
-                  partial_bytes=disk_bytes(staging) if staging.is_dir() else 0)
+                  partial_bytes=partial)
     return result
 
 
@@ -299,17 +324,6 @@ def find_python311() -> str:
     raise RuntimeError("Python 3.11 is required for the ASR and was not found (install it, for example with Homebrew).")
 
 
-def _download_llm(entry: dict, staging: Path, progress: Progress, hub) -> None:
-    spec = entry["download"]
-    info = hub.HfApi().model_info(spec["repo"], revision=spec["revision"], files_metadata=True)
-    total = sum(sibling.size or 0 for sibling in info.siblings)
-    with reporting(staging, total, progress):
-        hub.snapshot_download(spec["repo"], revision=spec["revision"], local_dir=staging, max_workers=8)
-    progress({"event": "progress", "phase": "verify"})
-    shutil.rmtree(staging / ".cache", ignore_errors=True)
-    validate_prepared_model(staging, entry)
-
-
 def _download_asr(entry: dict, staging: Path, progress: Progress, hub, python: str) -> None:
     spec, profile = entry["download"], asr_profile(entry)
     manifest_name = f"manifests/{profile}.json"
@@ -333,8 +347,60 @@ def _download_asr(entry: dict, staging: Path, progress: Progress, hub, python: s
                    env={**os.environ, "PYTHON_BIN": python}, stdout=subprocess.DEVNULL, stderr=None)
 
 
+def _access_error(error: Exception) -> bool:
+    """Private, gated or unknown to this account (Hugging Face hides private repositories)."""
+    if type(error).__name__ in {"GatedRepoError", "RepositoryNotFoundError", "RevisionNotFoundError"}:
+        return True
+    status = getattr(getattr(error, "response", None), "status_code", None)
+    return status in (401, 403, 404)
+
+
+def _source_complete(source: Path) -> bool:
+    try:
+        index = json.loads((source / "model.safetensors.index.json").read_text())
+        needed = {"config.json", "tokenizer.json", "tokenizer_config.json", "chat_template.jinja", *index["weight_map"].values()}
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    return all((source / name).is_file() for name in needed)
+
+
+def _download_llm(entry: dict, staging: Path, base: Path, progress: Progress, hub) -> None:
+    """Fetch and check the MLX build, or take the copy the user downloaded by hand."""
+    spec, source = entry["download"], source_path(entry, base)
+    try:
+        info = hub.HfApi().model_info(spec["repo"], revision=spec["revision"], files_metadata=True)
+    except Exception as error:
+        if _source_complete(source):
+            info = None  # Offline or no access: use the copy the user provided.
+        elif _access_error(error):
+            raise NoAccess(spec["repo"], source) from None
+        else:
+            raise
+    if info is None:
+        shutil.rmtree(staging, ignore_errors=True)
+        shutil.copytree(source, staging, ignore=shutil.ignore_patterns(".cache"))
+        progress({"event": "progress", "phase": "verify"})
+        validate_prepared_model(staging, entry)
+        return
+    files = [sibling for sibling in info.siblings
+             if any(fnmatch.fnmatch(sibling.rfilename, pattern) for pattern in MODEL_PATTERNS)]
+    total = sum(sibling.size or 0 for sibling in files)
+    with reporting(staging, total, progress):
+        hub.snapshot_download(spec["repo"], revision=spec["revision"], local_dir=staging,
+                              allow_patterns=MODEL_PATTERNS, max_workers=8)
+    shutil.rmtree(staging / ".cache", ignore_errors=True)
+    progress({"event": "progress", "phase": "verify"})
+    for sibling in files:
+        path = staging / sibling.rfilename
+        if not path.is_file() or (sibling.size is not None and path.stat().st_size != sibling.size):
+            raise RuntimeError(f"Incomplete model file: {sibling.rfilename}")
+        if sibling.lfs is not None and sha256(path) != sibling.lfs.sha256:
+            raise RuntimeError(f"Model file altered: {sibling.rfilename}")
+    validate_prepared_model(staging, entry)
+
+
 def download(entry: dict, base: Path, progress: Progress, *, hub=None, python: str | None = None) -> Path:
-    """Fetch a published model; resumes a previous partial download."""
+    """Fetch a published model, checked then installed atomically; resumes partial downloads."""
     if entry["download"] is None:
         raise RuntimeError(f"{entry['display_name']} is not published on Hugging Face yet.")
     if hub is None:
@@ -347,10 +413,14 @@ def download(entry: dict, base: Path, progress: Progress, *, hub=None, python: s
         if entry["kind"] == "asr":
             _download_asr(entry, staging, progress, hub, python or find_python311())
         else:
-            _download_llm(entry, staging, progress, hub)
+            _download_llm(entry, staging, base, progress, hub)
         record = {"id": entry["id"], **entry["download"], "downloaded_at": datetime.now(timezone.utc).isoformat()}
         (staging / PROVENANCE).write_text(json.dumps(record, indent=2) + "\n")
         os.replace(staging, target)
+        # The installed model is a checked copy: free the space of the user's files.
+        source = source_path(entry, base)
+        if source and source.is_dir() and not source.is_symlink():
+            shutil.rmtree(source, ignore_errors=True)
     progress({"event": "done", "id": entry["id"]})
     return target
 
@@ -371,3 +441,6 @@ def delete(entry: dict, base: Path) -> None:
                     shutil.rmtree(doomed)
                 os.rename(path, doomed)
                 shutil.rmtree(doomed)
+        source = source_path(entry, base)
+        if source and source.is_dir() and not source.is_symlink() and source.resolve().parent == (base / "sources").resolve():
+            shutil.rmtree(source)

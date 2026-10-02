@@ -18,7 +18,7 @@ message}}` and never falls back to the raw transcript.
 ## Model catalog
 
 `models/catalog.json` lists every model the app can use: the ASR and one K2
-checkpoint per size (`1B`, `4B`, `7B`). `HORIZON_MODEL_CATALOG` selects another
+checkpoint per size (`0.9B`, `3.7B`, `7B`, the Jais 3 models). `HORIZON_MODEL_CATALOG` selects another
 catalog, for example `models/catalog-ifm.json` for the historical IFM
 0.9B/7B pair. A model is installed when its `directory` exists under
 `.runtime/models`; the gateway reads this state again on each request, so a
@@ -26,9 +26,9 @@ download or deletion needs no restart. An invalid catalog stops startup.
 
 Each size serves both roles with the same weights: the cleaner gets a 4096-token
 budget, the agent the entry's `context_limit` (both capped by the checkpoint).
-At startup the gateway loads `HORIZON_DEFAULT_MODEL_SIZE` (default `4B`) when it
+At startup the gateway loads `HORIZON_DEFAULT_MODEL_SIZE` (default `3.7B`) when it
 is installed, otherwise the first installed size. Agent requests select a size
-with the model ID `k2-1b`, `k2-4b` or `k2-7b`.
+with the model ID `k2-0.9b`, `k2-3.7b` or `k2-7b`.
 
 | Field | Default / accepted values |
 | --- | --- |

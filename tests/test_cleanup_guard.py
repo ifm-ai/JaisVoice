@@ -63,7 +63,7 @@ def gateway_client(monkeypatch):
     """The real /v1/clean endpoint with an explicitly substituted generation worker."""
     worker = gateway.Worker()
     worker.status = "ready"
-    worker.models = loaded(["4B"])
+    worker.models = loaded(["3.7B"])
     worker.outputs, worker.requests = [], []
     def fake_run(body, cancelled, emit):
         worker.requests.append(body)
