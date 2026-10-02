@@ -2,16 +2,16 @@
 
 This folder is the development root of JAIS Voice, moved here on 17 September 2026 at Florian's request. Use `/Users/florian/Workspace/JAISVoice` for further development.
 
-- macOS interface: `macos/Sources/HorizonVoice/`.
+- macOS interface: `macos/Sources/JAISVoice/`.
 - Agent: Pi harness in `agent/` (prompt, models, `extensions/jais/` extension), started by `scripts/run_agent.py`.
-- Local ASR: `backend/horizon_voice/local_asr.py`. Cleanup and safeguard: `k2_runtime/` (`/v1/clean`).
-- Local inference: `k2_runtime/`.
+- Local ASR: `jais_runtime/asr_service.py`.
+- Language model (Jais 3 under MLX, model catalog and downloads, `/v1/clean` cleanup, agent completions): `jais_runtime/`.
 - Models and services: `.runtime/`; model catalog (Hugging Face repositories, sizes): `models/catalog.json`, managed by `scripts/models.py`.
 - Python environment: `.venv/`.
 - Documentation: `README.md` (users), `docs/models.md`, `docs/development.md`, `INTERFACES.md`. Built app and deliverables: `outputs/`. Installed app: `/Applications/JAIS Voice.app`.
-- Build: `.venv/bin/python scripts/build_app.py --direct` (shareable self-contained app, data in `~/Library/Application Support/JAIS Voice`); `--dev` for an app that runs this checkout and `.runtime/`; `--dmg` for the drag-to-install disk image. Pushing to `main` publishes a release through `.github/workflows/release.yml`.
+- Build: `.venv/bin/python scripts/build_app.py` (shareable self-contained app, data in `~/Library/Application Support/JAIS Voice`); `--dev` for an app that runs this checkout and `.runtime/`; `--dmg` for the drag-to-install disk image. Pushing to `main` publishes a release through `.github/workflows/release.yml`.
 - Repository: https://github.com/MBZUAI-IFM/JaisVoice (`main` branch).
-- Python tests: `PYTHONPATH=.:backend .venv/bin/python -m pytest backend/tests tests -q -o asyncio_mode=auto`.
+- Python tests: `.venv/bin/python -m pytest -q`.
 - Pi extension tests: `node --test agent/`.
 - Native tests: `outputs/JAIS Voice.app/Contents/MacOS/JAISVoice --self-test`.
 - Language: code, comments, documentation and messages are in English. Interface strings are English keys passed to `L(...)`; add the French translation to `macos/Resources/fr.lproj/Localizable.strings` and the key to `en.lproj`.

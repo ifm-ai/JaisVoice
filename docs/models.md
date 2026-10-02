@@ -42,11 +42,11 @@ Then click **Download** again: the app finds the complete files and installs a c
 
 ## One model for both stages
 
-The settings offer a single **0.9B / 3.7B / 7B** selector, shared by transcript cleanup and the agent. Both stages keep their own prompts and parameters but use the same weights, loaded once; loading another size frees the previous one. Each catalog entry sets the reasoning effort of both stages (`cleaner_reasoning_effort`, `agent_reasoning_effort`); `HORIZON_CLEANER_REASONING_EFFORT` and `HORIZON_AGENT_REASONING_EFFORT` override them.
+The settings offer a single **0.9B / 3.7B / 7B** selector, shared by transcript cleanup and the agent. Both stages keep their own prompts and parameters but use the same weights, loaded once; loading another size frees the previous one. Both use the `low` reasoning effort.
 
 ## Catalog entries
 
-A language model entry's `download` points to a published MLX build:
+A language model entry's `download` points to its MLX build:
 
 ```json
 {"id": "jais-3-3.7b", "kind": "llm", "size": "3.7B", "display_name": "Jais 3 · 3.7B",
@@ -54,4 +54,4 @@ A language model entry's `download` points to a published MLX build:
  "download": {"repo": "IFM/Jais-3-3.7B-MLX-8bit", "revision": "b10d70beb6c8259b9af1f6dfcd465f469b8e95e2", "bytes": 5395429334}}
 ```
 
-`revision` must be a full commit hash; `bytes` is the size shown before downloading. `HORIZON_MODEL_CATALOG=models/catalog-ifm.json` selects the older IFM K2-Horizon pair instead.
+`revision` must be a full commit hash; `bytes` is the size shown before downloading. The runtime loads this dense architecture (its `config.json` says `model_type: k2_horizon`) in BF16 or 8-bit affine (groups of 64).

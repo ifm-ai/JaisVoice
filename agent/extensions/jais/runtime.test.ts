@@ -58,7 +58,7 @@ test("note text stays in argv and is HTML-escaped", () => {
   const command = noteCommand("Courses", "pain & <lait>\n'œufs'");
   assert.ok(command.startsWith("/usr/bin/osascript - 'Courses' "));
   assert.ok(command.includes("<div>pain &amp; &lt;lait&gt;<br>&#x27;œufs&#x27;</div>"));
-  assert.ok(command.endsWith("end run\nHORIZON_NOTES_APPLESCRIPT"));
+  assert.ok(command.endsWith("end run\nNOTES_APPLESCRIPT"));
   assert.throws(() => noteCommand("", "x"), /title/);
   assert.throws(() => noteCommand("t", "x".repeat(4001)), /4000/);
   assert.equal(execFileSync("/bin/sh", ["-c", "printf %s " + shellQuote("a'b $HOME")]).toString(), "a'b $HOME");

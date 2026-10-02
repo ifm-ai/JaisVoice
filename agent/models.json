@@ -14,23 +14,7 @@
       },
       "models": [
         {
-          "id": "k2-3.7b",
-          "name": "Jais 3 3.7B (local MLX)",
-          "reasoning": true,
-          "input": [
-            "text"
-          ],
-          "contextWindow": 16384,
-          "maxTokens": 2048,
-          "cost": {
-            "input": 0,
-            "output": 0,
-            "cacheRead": 0,
-            "cacheWrite": 0
-          }
-        },
-        {
-          "id": "k2-0.9b",
+          "id": "jais-3-0.9b",
           "name": "Jais 3 0.9B (local MLX)",
           "reasoning": true,
           "input": [
@@ -46,7 +30,23 @@
           }
         },
         {
-          "id": "k2-7b",
+          "id": "jais-3-3.7b",
+          "name": "Jais 3 3.7B (local MLX)",
+          "reasoning": true,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 16384,
+          "maxTokens": 2048,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
+        },
+        {
+          "id": "jais-3-7b",
           "name": "Jais 3 7B (local MLX)",
           "reasoning": true,
           "input": [

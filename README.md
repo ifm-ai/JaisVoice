@@ -54,13 +54,14 @@ These repositories currently require access on Hugging Face. The app downloads t
 
 - Hold **⌥ Space**, speak, release. The answer appears in a small bubble at the bottom of the screen.
 - Hold the shortcut again while the bubble is visible to follow up in the same conversation.
+- Released versions look for updates at launch and once a day; **Check for Updates…** in the menu bar does it on demand. Updating means downloading the new disk image and replacing the app.
 - Open the settings from the menu bar to change the shortcut, the transcription language, the model size, the interface language (English or French) and **Actions on this Mac**.
 
 ## Build from source
 
 ```sh
 python3.12 scripts/setup.py
-.venv/bin/python scripts/build_app.py --direct --dmg
+.venv/bin/python scripts/build_app.py --dmg
 ```
 
 The app and the disk image land in `outputs/`. Every push to `main` builds, tests and publishes a release through GitHub Actions. See [docs/development.md](docs/development.md) for the architecture, tests and release process.

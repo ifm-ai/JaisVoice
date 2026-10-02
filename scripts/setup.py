@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare this local demo without changing global Python or Homebrew packages."""
-import argparse
+"""Prepare the development environment without changing global Python or Homebrew packages."""
 import os
 from pathlib import Path
 import shutil
@@ -16,9 +15,6 @@ def run(*args, env=None):
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--skip-models", action="store_true")
-    args = parser.parse_args()
     if sys.version_info < (3, 12):
         raise SystemExit("Run this setup with Python 3.12 or newer.")
     python = ROOT / ".venv/bin/python"
@@ -35,8 +31,6 @@ def main():
     env = os.environ.copy()
     env["PLAYWRIGHT_BROWSERS_PATH"] = str(ROOT / ".runtime/browsers")
     run(node, ROOT / "node_modules/playwright/cli.js", "install", "chromium", "--no-shell", env=env)
-    if not args.skip_models:
-        run(python, ROOT / "scripts/prepare_models.py")
     print("Setup complete. Then build the app with scripts/build_app.py.")
 
 

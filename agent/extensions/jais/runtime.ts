@@ -7,18 +7,15 @@
  * is not a sandbox; macOS privacy permissions still apply.
  */
 import { spawn } from "node:child_process";
-import { closeSync, constants, existsSync, mkdirSync, openSync, readSync, realpathSync } from "node:fs";
+import { closeSync, constants, mkdirSync, openSync, readSync, realpathSync } from "node:fs";
 import { constants as osConstants, homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const ROOT = process.env.HORIZON_PROJECT_ROOT || resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-export const RUNTIME = process.env.HORIZON_RUNTIME_DIR || join(ROOT, ".runtime");
-export const NODE = process.env.HORIZON_NODE || process.execPath;
-export const PYTHON = process.env.HORIZON_PYTHON || join(ROOT, ".venv/bin/python");
-export const PLAYWRIGHT_CLI = process.env.HORIZON_PLAYWRIGHT_CLI || join(ROOT, "node_modules/@playwright/mcp/cli.js");
-export const BLUEUTIL = join(RUNTIME, "macos-tools/bin/blueutil");
-export const RADIO_SCRIPT = join(ROOT, "scripts/macos_radios.py");
+export const ROOT = process.env.JAIS_PROJECT_ROOT || resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+export const RUNTIME = process.env.JAIS_RUNTIME_DIR || join(ROOT, ".runtime");
+export const NODE = process.env.JAIS_NODE || process.execPath;
+export const PLAYWRIGHT_CLI = process.env.JAIS_PLAYWRIGHT_CLI || join(ROOT, "node_modules/@playwright/mcp/cli.js");
 export const WORKSPACE = process.cwd();
 export const BROWSER_OUTPUT = join(RUNTIME, "browser-output", String(process.pid));
 
@@ -43,7 +40,7 @@ export const BROWSER_TOOLS = [
   "browser_type", "browser_press_key", "browser_select_option", "browser_wait_for",
   "browser_tabs", "browser_fill_form", "browser_find",
 ];
-export const DESKTOP_TOOLS = ["shell_execute", "macos_create_note", "macos_radio_status", "macos_set_airplane_mode"];
+export const DESKTOP_TOOLS = ["shell_execute", "macos_create_note"];
 export const SHELL_ENV = {
   PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
   LANG: "en_US.UTF-8",
@@ -154,7 +151,7 @@ export function noteCommand(title: string, body: string): string {
   }
   // Notes prepends the title itself; repeating it in the body would duplicate it.
   const html = "<div>" + escapeHTML(body).replace(/\r\n?/g, "\n").replace(/\n/g, "<br>") + "</div>";
-  const command = `/usr/bin/osascript - ${shellQuote(title)} ${shellQuote(html)} <<'HORIZON_NOTES_APPLESCRIPT'\n${NOTE_SCRIPT}\nHORIZON_NOTES_APPLESCRIPT`;
+  const command = `/usr/bin/osascript - ${shellQuote(title)} ${shellQuote(html)} <<'NOTES_APPLESCRIPT'\n${NOTE_SCRIPT}\nNOTES_APPLESCRIPT`;
   if (bytes(command) > MAX_COMMAND_BYTES) throw new Error("This note is too long after safe escaping. Ask for shorter content; do not silently truncate it.");
   return command;
 }

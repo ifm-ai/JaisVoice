@@ -24,7 +24,9 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUTS = ROOT / "outputs"
 CACHE = ROOT / ".runtime/build-cache"
 # Project files needed at run time, copied into Contents/Resources/app.
-APP_SOURCES = ("agent", "backend/horizon_voice", "k2_runtime", "models", "scripts", "package.json", "package-lock.json")
+APP_SOURCES = ("agent", "jais_runtime", "models", "scripts", "package.json", "package-lock.json")
+# The latest release, as published by .github/workflows/release.yml.
+UPDATE_FEED = "https://api.github.com/repos/MBZUAI-IFM/JaisVoice/releases/latest"
 LAUNCHERS = (("launch-services", "run_services.py"), ("launch-agent", "run_agent.py"), ("launch-models", "models.py"))
 IGNORED = shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store", "*.test.ts")
 
@@ -45,7 +47,7 @@ def managed_python(version: str) -> Path:
 
 
 def portable_node() -> Path:
-    node = Path(os.environ.get("HORIZON_NODE") or shutil.which("node") or "")
+    node = Path(os.environ.get("JAIS_NODE") or shutil.which("node") or "")
     if not node.is_file():
         raise SystemExit("Node.js is required (official build from nodejs.org).")
     node = node.resolve()
@@ -53,7 +55,7 @@ def portable_node() -> Path:
     libraries = subprocess.check_output(["/usr/bin/otool", "-L", str(node)], text=True).splitlines()[1:]
     foreign = [line.strip() for line in libraries if not line.strip().startswith(("/usr/lib/", "/System/"))]
     if foreign:
-        raise SystemExit(f"{node} is not a standalone build ({foreign[0]}). Set HORIZON_NODE to the official nodejs.org binary.")
+        raise SystemExit(f"{node} is not a standalone build ({foreign[0]}). Set JAIS_NODE to the official nodejs.org binary.")
     return node
 
 
@@ -114,10 +116,10 @@ def write_launchers(resources: Path, dev: bool) -> None:
         else:
             # Paths are relative to the bundle, which may live anywhere.
             body = f'''HERE="$(cd "$(dirname "$0")" && pwd)"
-: "${{HORIZON_RUNTIME_DIR:=$HOME/Library/Application Support/JAIS Voice}}"
-export HORIZON_RUNTIME_DIR
-export HORIZON_NODE="$HERE/runtime/node/bin/node"
-export HORIZON_ASR_PYTHON_HOME="$HERE/runtime/python3.11"
+: "${{JAIS_RUNTIME_DIR:=$HOME/Library/Application Support/JAIS Voice}}"
+export JAIS_RUNTIME_DIR
+export JAIS_NODE="$HERE/runtime/node/bin/node"
+export JAIS_ASR_PYTHON_HOME="$HERE/runtime/python3.11"
 export PLAYWRIGHT_BROWSERS_PATH="$HERE/runtime/browsers"
 export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
 exec "$HERE/runtime/python/bin/python3.12" "$HERE/app/scripts/{script}" "$@"
@@ -129,25 +131,12 @@ exec "$HERE/runtime/python/bin/python3.12" "$HERE/app/scripts/{script}" "$@"
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--binary", type=Path, help="Use a prebuilt native binary")
-    parser.add_argument("--direct", action="store_true", help="Build with swiftc, without SwiftPM")
-    parser.add_argument("--swift", default=os.environ.get("HORIZON_SWIFT", "swift"))
     parser.add_argument("--dev", action="store_true", help="Launchers run this checkout instead of an embedded runtime")
-    parser.add_argument("--zip", action="store_true", help="Also write a zip archive to share the app")
     parser.add_argument("--dmg", action="store_true", help="Also write a drag-to-install disk image")
     parser.add_argument("--build-number", help="CFBundleVersion of this build (CI run number)")
     args = parser.parse_args()
-    if args.direct:
-        run(sys.executable, ROOT / "macos/build_direct.py", cwd=ROOT)
-        binary = ROOT / "macos/.build/direct/HorizonVoice"
-    elif args.binary:
-        binary = args.binary.resolve()
-    else:
-        run(args.swift, "build", "-c", "release", "--disable-sandbox", cwd=ROOT / "macos")
-        location = subprocess.check_output([args.swift, "build", "-c", "release", "--show-bin-path"], cwd=ROOT / "macos", text=True).strip()
-        binary = Path(location) / "HorizonVoice"
-    if not binary.is_file():
-        raise SystemExit(f"Native binary missing: {binary}")
+    run(sys.executable, ROOT / "macos/build_direct.py", cwd=ROOT)
+    binary = ROOT / "macos/.build/direct/JAISVoice"
     node = None if args.dev else portable_node()
     app = OUTPUTS / "JAIS Voice.app"
     # Assemble into a new sibling; keep the previous app as a recoverable backup.
@@ -162,7 +151,9 @@ def main():
         info = plistlib.load(source)
     info["CFBundleExecutable"] = "JAISVoice"
     if args.build_number:
+        # CI release builds: numbered, and they look for newer releases.
         info["CFBundleVersion"] = args.build_number
+        info["JAISUpdateFeedURL"] = UPDATE_FEED
     with (contents / "Info.plist").open("wb") as destination:
         plistlib.dump(info, destination)
     resources = contents / "Resources"
@@ -195,11 +186,6 @@ def main():
         print(f"Previous app preserved: {backup}")
     staging.rename(app)
     print(f"Application ready: {app}")
-    if args.zip:
-        archive = OUTPUTS / f"JAIS-Voice-{info['CFBundleShortVersionString']}.zip"
-        archive.unlink(missing_ok=True)
-        run("/usr/bin/ditto", "-c", "-k", "--keepParent", app, archive)
-        print(f"Archive ready: {archive}")
     if args.dmg:
         from make_dmg import make_dmg
         make_dmg(app, OUTPUTS / f"JAIS-Voice-{info['CFBundleShortVersionString']}.dmg", info["CFBundleDisplayName"])
