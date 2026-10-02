@@ -24,7 +24,16 @@ struct DownloadProgress: Equatable {
     var phase = "download"
     var bytes: Int64 = 0
     var total: Int64 = 0
+    /// When the downloaded bytes last grew, or the phase last changed.
+    var lastActivity = Date()
+    /// Seconds without new bytes before a download is shown as waiting.
+    static let stallDelay: TimeInterval = 15
     var fraction: Double? { total > 0 ? min(1, Double(bytes) / Double(total)) : nil }
+
+    /// Verification and installation work locally; a download is active while bytes keep arriving.
+    func isActive(at now: Date) -> Bool {
+        phase != "download" || now.timeIntervalSince(lastActivity) < Self.stallDelay
+    }
 }
 
 /// Download and delete catalog models with the project's model tool, as a child process.
@@ -141,8 +150,13 @@ struct DownloadProgress: Equatable {
         switch record["event"]?.string {
         case "progress":
             var progress = downloads[id] ?? DownloadProgress()
-            progress.phase = record["phase"]?.string ?? progress.phase
-            if case .number(let bytes)? = record["bytes"] { progress.bytes = Int64(bytes) }
+            let phase = record["phase"]?.string ?? progress.phase
+            if phase != progress.phase { progress.lastActivity = Date() }
+            progress.phase = phase
+            if case .number(let bytes)? = record["bytes"] {
+                if Int64(bytes) > progress.bytes { progress.lastActivity = Date() }
+                progress.bytes = Int64(bytes)
+            }
             if case .number(let total)? = record["total"] { progress.total = Int64(total) }
             if processes[id] != nil { downloads[id] = progress }
         case "error":

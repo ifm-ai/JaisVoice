@@ -135,6 +135,11 @@ import AVFoundation
             store.show(models: catalog, downloads: ["k2-7b": DownloadProgress(bytes: 5, total: 10)])
             try check(store.missingDownloads.isEmpty && store.blockingMessage == nil && store.busy, "nothing is offered when required models are present")
             try check(DownloadProgress(bytes: 5, total: 10).fraction == 0.5 && DownloadProgress().fraction == nil, "download progress")
+            let started = Date()
+            let stalled = DownloadProgress(bytes: 5, total: 10, lastActivity: started)
+            try check(stalled.isActive(at: started.addingTimeInterval(5)) && !stalled.isActive(at: started.addingTimeInterval(20))
+                      && DownloadProgress(phase: "verify", lastActivity: started).isActive(at: started.addingTimeInterval(60)),
+                      "a download without new bytes for 15 s is shown as waiting, never verification")
             defaults.removeObject(forKey: AppPreferences.modelSizeKey)
             defaults.set("0.9B", forKey: AppPreferences.agentModelKey)
             defaults.set("3.7B", forKey: AppPreferences.cleanerModelKey)

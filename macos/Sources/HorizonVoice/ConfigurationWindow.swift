@@ -107,6 +107,16 @@ struct ConfigurationView: View {
                 Text(modelDetail(model)).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
             }
             if let progress {
+                // Redrawn every second so a download that stops receiving data shows it.
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    if progress.isActive(at: context.date) {
+                        ProgressView().controlSize(.small).scaleEffect(0.6).frame(width: 14, height: 14)
+                            .help(L("Downloading…"))
+                    } else {
+                        Image(systemName: "exclamationmark.circle").font(.system(size: 11)).foregroundStyle(.orange)
+                            .frame(width: 14, height: 14).help(L("No data received for a while"))
+                    }
+                }
                 ProgressView(value: progress.fraction ?? 0).frame(width: 70)
                     .accessibilityLabel(L("Downloading {0}", String(describing: model.display_name)))
                 Text(downloadLabel(progress)).font(.system(size: 10)).foregroundStyle(.secondary).monospacedDigit()
