@@ -203,6 +203,32 @@ export function compactContext(messages: Message[]): Message[] {
       if (part.type === "text" && part.text.length > 1600) part.text = part.text.slice(0, 1600) + "…";
     }
   }
+  // Remind after each Arabic request and each tool result answering it: the
+  // English system prompt and English pages otherwise pull replies to English.
+  let arabic = false;
+  for (const message of kept) {
+    if (message.role === "user") arabic = mostlyArabic(textOf(message.content));
+    if (arabic && (message.role === "user" || message.role === "toolResult")) message.content = withReminder(message.content);
+  }
   return kept;
 }
 
+/** Appended to Arabic requests and their tool results in the model's context. */
+export const ARABIC_REMINDER = "\n\n(اكتب ردك كله بالعربية، بما في ذلك أي نص بين استدعاءات الأدوات.)";
+
+function mostlyArabic(text: string): boolean {
+  return (text.match(/[\u0600-\u06ff]/g) ?? []).length > (text.match(/[A-Za-z]/g) ?? []).length;
+}
+
+function textOf(content: any): string {
+  if (typeof content === "string") return content;
+  return Array.isArray(content) ? content.filter((part) => part.type === "text").map((part) => part.text).join(" ") : "";
+}
+
+function withReminder(content: any): any {
+  if (typeof content === "string") return content + ARABIC_REMINDER;
+  if (!Array.isArray(content)) return content;
+  const last = content.findLastIndex((part) => part.type === "text");
+  if (last < 0) return [...content, { type: "text", text: ARABIC_REMINDER.trim() }];
+  return content.map((part, index) => index === last ? { ...part, text: part.text + ARABIC_REMINDER } : part);
+}

@@ -7,5 +7,5 @@
   "quietStartup": true,
   "cacheWarming": "off",
   "retry": {"enabled": false},
-  "compaction": {"enabled": true, "reserveTokens": 2560, "keepRecentTokens": 6000}
+  "compaction": {"enabled": false}
 }
