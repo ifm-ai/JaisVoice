@@ -699,7 +699,7 @@ import UniformTypeIdentifiers
             WireEvent(type: "correction", turn_id: id, text: "ابحث عن متحف اللوفر في باريس. افتح الموقع الرسمي."),
             WireEvent(type: "tool_start", turn_id: id, tool_id: "preview-only", tool_name: "browser_navigate", arguments: .object(["url": .string("https://www.louvre.fr")])),
             WireEvent(type: "tool_end", turn_id: id, tool_id: "preview-only", result: L("Visual example, no browsing performed.")),
-            WireEvent(type: "complete", turn_id: id, text: "هذا مثال بصري للواجهة. لم يُنفَّذ بحث أو استدلال.\n\n[Louvre Museum](https://www.louvre.fr)")
+            WireEvent(type: "complete", turn_id: id, text: "وجدتُ الموقع الرسمي لمتحف اللوفر، وأفتح الصفحة الآن.\n\n[Louvre Museum](https://www.louvre.fr)")
         ]
         for event in events { state.accept(event) }
         if CommandLine.arguments.contains("--preview-followup") {
@@ -716,7 +716,7 @@ import UniformTypeIdentifiers
         if CommandLine.arguments.contains("--preview-approval") {
             let approval = state.begin()
             state.accept(WireEvent(type: "correction", turn_id: approval, text: "Open Safari on the home page."))
-            state.pendingApproval = ActionRequest(tool: "macOS command", reason: "Ouvrir Safari.", details: "/usr/bin/open -a Safari")
+            state.pendingApproval = ActionRequest(tool: "macOS command", reason: "Open Safari.", details: "/usr/bin/open -a Safari")
         }
         state.showOriginal = true
         let previousFrontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
