@@ -45,7 +45,7 @@ node --test agent/
 "outputs/JAIS Voice.app/Contents/MacOS/JAISVoice" --smoke-text "What is the capital of France?"
 ```
 
-`--smoke-text` and `--smoke-file clip.wav` run the real pipeline with the installed models and print `HORIZON_SMOKE_RESULT=`. `HORIZON_ACTION_PERMISSION=never|ask|always` overrides the action setting for these runs. `--render-preview` and `--render-settings` export screenshots of the bubble and the settings.
+`--smoke-text` and `--smoke-file clip.wav` run the real pipeline with the installed models and print `HORIZON_SMOKE_RESULT=`. `HORIZON_ACTION_PERMISSION=never|ask|always` overrides the action setting for these runs. `--render-preview` and `--render-settings` export screenshots of the bubble and the settings; add `--settings-tab general|assistant|models` to pick the settings tab and `--settings-download` to show a download in progress.
 
 ## Continuous integration and releases
 

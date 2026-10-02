@@ -24,7 +24,7 @@ The bundle supports explicit validation modes:
 
 - `--self-test [--audio-fixture /path/clip.wav]`: turn states, cancellation, Arabic diff, dismissal delay, WAV and keeping the last sound while resampling. No microphone recording.
 - `--preview`: preview labelled “PREVIEW”, without starting services and without inference. `--preview-followup`, `--preview-clarification` and `--preview-approval` add a follow-up turn, a clarifying question or an action approval.
-- `--render-preview /path/preview.png`: the same preview, exports the panel content then quits. `--render-settings` does the same for the settings window.
+- `--render-preview /path/preview.png`: the same preview, exports the panel content then quits. `--render-settings` does the same for the settings window (`--settings-tab general|assistant|models` picks the tab).
 - `--smoke-file /path/clip.wav` and `--smoke-text "…"`: real ASR → cleanup → Pi → response pipeline, without microphone capture. Shows the panel, prints `HORIZON_SMOKE_RESULT=` with the JSON result, then quits. `--smoke-stay` keeps the app open for visual inspection.
 
 The core tests can also be compiled separately:

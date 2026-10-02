@@ -34,7 +34,6 @@ with the model ID `k2-0.9b`, `k2-3.7b` or `k2-7b`.
 | --- | --- |
 | `id`, `size`, `display_name`, `directory` | required; one entry per size |
 | `download` | `null` (not published yet) or `{repo, revision}` with a full 40-character commit; optional `bytes` for display |
-| `convert` | instead of `download`: `{repo, revision, bits}` of an original checkpoint downloaded and converted to MLX on the Mac (`bits`: `null` for BF16, `8` for 8-bit); see [docs/models.md](../docs/models.md) |
 | `source` | provenance of the original weights, informative |
 | `loader` / `protocol` | `horizon-native-mlx-v1` / `ifm-k2-v1` only |
 | `context_limit` | 16384 agent budget, including output reservation |

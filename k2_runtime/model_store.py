@@ -5,13 +5,11 @@ choices. A model is installed when its directory exists under the runtime
 models directory. Downloads are pinned to a commit, written to a hidden
 staging directory (resumable), checked, then renamed into place.
 
-A language model is installed in one of two ways:
-- `download`: a published MLX build, fetched as is;
-- `convert`: the original Hugging Face checkpoint, fetched into
-  `models/sources/<repository name>` and converted to MLX on this Mac. When
-  the repository is not accessible, files the user downloaded there
-  themselves are converted instead.
-A model with neither can be used or deleted when already on disk, never fetched.
+A language model's `download` is a published MLX build, fetched as is and
+checked against Hugging Face's sizes and SHA-256. When the repository is not
+accessible, the files the user downloaded into `models/sources/<repository
+name>` are validated and installed instead. A model without `download` can be
+used or deleted when already on disk, never fetched.
 """
 from __future__ import annotations
 
@@ -35,8 +33,8 @@ from .checkpoint import expected_weight_shapes
 
 ROOT = Path(__file__).resolve().parents[1]
 SIZES = ("0.9B", "3.7B", "7B")
-# Source files needed for conversion; Python files are never fetched or run.
-SOURCE_PATTERNS = ["*.json", "*.jinja", "*.safetensors"]
+# Files of a published MLX build; Python files are never fetched or run.
+MODEL_PATTERNS = ["*.json", "*.jinja", "*.safetensors"]
 EFFORTS = ("low", "medium", "high")
 CLEANER_CONTEXT = 4096
 PROVENANCE = "jais_download.json"
@@ -92,16 +90,6 @@ def _download_spec(value, kind: str, model_id: str) -> dict | None:
     return spec
 
 
-def _convert_spec(value, model_id: str) -> dict | None:
-    if value is None:
-        return None
-    spec = _download_spec(value, "llm", model_id)
-    bits = value.get("bits")
-    _require(bits in (None, 8), f"Unsupported conversion precision for {model_id}")
-    spec["bits"] = bits
-    return spec
-
-
 def load_catalog(path: Path | None = None) -> list[dict]:
     """Read and normalize the catalog; any invalid entry rejects the whole file."""
     path = path or catalog_path()
@@ -123,8 +111,6 @@ def load_catalog(path: Path | None = None) -> list[dict]:
         if isinstance(raw.get("source"), dict):
             entry["source"] = raw["source"]
         if kind == "llm":
-            entry["convert"] = _convert_spec(raw.get("convert"), model_id)
-            _require(not (entry["download"] and entry["convert"]), f"{model_id} cannot have both download and convert")
             size = raw.get("size")
             _require(size in SIZES and size not in sizes, f"Invalid or duplicate size for {model_id}")
             entry["size"] = size
@@ -163,13 +149,9 @@ def staging_path(entry: dict, base: Path) -> Path:
 
 
 def source_path(entry: dict, base: Path) -> Path | None:
-    """Where the original checkpoint of a converted model is downloaded."""
-    spec = entry.get("convert")
-    return base / "sources" / spec["repo"].split("/")[-1] if spec else None
-
-
-def fetch_spec(entry: dict) -> dict | None:
-    return entry["download"] or entry.get("convert")
+    """Where the user can put a language model's files downloaded by hand."""
+    spec = entry["download"]
+    return base / "sources" / spec["repo"].split("/")[-1] if spec and entry["kind"] == "llm" else None
 
 
 class NoAccess(RuntimeError):
@@ -210,8 +192,8 @@ def state(entry: dict, base: Path) -> dict:
         result["size"] = entry["size"]
     source = source_path(entry, base)
     partial = sum(disk_bytes(path) for path in (staging, source) if path and path.is_dir())
-    result.update(installed=installed, downloadable=fetch_spec(entry) is not None,
-                  download_bytes=(fetch_spec(entry) or {}).get("bytes"),
+    result.update(installed=installed, downloadable=entry["download"] is not None,
+                  download_bytes=(entry["download"] or {}).get("bytes"),
                   disk_bytes=disk_bytes(model_path(entry, base)) if installed else 0,
                   partial_bytes=partial)
     return result
@@ -342,17 +324,6 @@ def find_python311() -> str:
     raise RuntimeError("Python 3.11 is required for the ASR and was not found (install it, for example with Homebrew).")
 
 
-def _download_llm(entry: dict, staging: Path, progress: Progress, hub) -> None:
-    spec = entry["download"]
-    info = hub.HfApi().model_info(spec["repo"], revision=spec["revision"], files_metadata=True)
-    total = sum(sibling.size or 0 for sibling in info.siblings)
-    with reporting(staging, total, progress):
-        hub.snapshot_download(spec["repo"], revision=spec["revision"], local_dir=staging, max_workers=8)
-    progress({"event": "progress", "phase": "verify"})
-    shutil.rmtree(staging / ".cache", ignore_errors=True)
-    validate_prepared_model(staging, entry)
-
-
 def _download_asr(entry: dict, staging: Path, progress: Progress, hub, python: str) -> None:
     spec, profile = entry["download"], asr_profile(entry)
     manifest_name = f"manifests/{profile}.json"
@@ -393,9 +364,9 @@ def _source_complete(source: Path) -> bool:
     return all((source / name).is_file() for name in needed)
 
 
-def _convert_llm(entry: dict, staging: Path, base: Path, progress: Progress, hub) -> None:
-    """Fetch the original checkpoint if possible, then convert it to MLX in staging."""
-    spec, source = entry["convert"], source_path(entry, base)
+def _download_llm(entry: dict, staging: Path, base: Path, progress: Progress, hub) -> None:
+    """Fetch and check the MLX build, or take the copy the user downloaded by hand."""
+    spec, source = entry["download"], source_path(entry, base)
     try:
         info = hub.HfApi().model_info(spec["repo"], revision=spec["revision"], files_metadata=True)
     except Exception as error:
@@ -405,37 +376,32 @@ def _convert_llm(entry: dict, staging: Path, base: Path, progress: Progress, hub
             raise NoAccess(spec["repo"], source) from None
         else:
             raise
-    if info is not None:
-        files = [sibling for sibling in info.siblings
-                 if any(fnmatch.fnmatch(sibling.rfilename, pattern) for pattern in SOURCE_PATTERNS)]
-        total = sum(sibling.size or 0 for sibling in files)
-        source.mkdir(parents=True, exist_ok=True)
-        with reporting(source, total, progress):
-            hub.snapshot_download(spec["repo"], revision=spec["revision"], local_dir=source,
-                                  allow_patterns=SOURCE_PATTERNS, max_workers=8)
-        shutil.rmtree(source / ".cache", ignore_errors=True)
+    if info is None:
+        shutil.rmtree(staging, ignore_errors=True)
+        shutil.copytree(source, staging, ignore=shutil.ignore_patterns(".cache"))
         progress({"event": "progress", "phase": "verify"})
-        for sibling in files:
-            path = source / sibling.rfilename
-            if not path.is_file() or (sibling.size is not None and path.stat().st_size != sibling.size):
-                raise RuntimeError(f"Incomplete source file: {sibling.rfilename}")
-            if sibling.lfs is not None and sha256(path) != sibling.lfs.sha256:
-                raise RuntimeError(f"Source file altered: {sibling.rfilename}")
-    elif not _source_complete(source):
-        raise NoAccess(spec["repo"], source)
-    from .model import convert_checkpoint
-    # A conversion cannot resume: start from an empty directory each time.
-    shutil.rmtree(staging, ignore_errors=True)
-    staging.mkdir(parents=True)
-    progress({"event": "progress", "phase": "convert", "bytes": 0, "total": 1})
-    convert_checkpoint(source, staging, bits=spec["bits"],
-                       on_shard=lambda done, count: progress({"event": "progress", "phase": "convert", "bytes": done, "total": count}))
+        validate_prepared_model(staging, entry)
+        return
+    files = [sibling for sibling in info.siblings
+             if any(fnmatch.fnmatch(sibling.rfilename, pattern) for pattern in MODEL_PATTERNS)]
+    total = sum(sibling.size or 0 for sibling in files)
+    with reporting(staging, total, progress):
+        hub.snapshot_download(spec["repo"], revision=spec["revision"], local_dir=staging,
+                              allow_patterns=MODEL_PATTERNS, max_workers=8)
+    shutil.rmtree(staging / ".cache", ignore_errors=True)
+    progress({"event": "progress", "phase": "verify"})
+    for sibling in files:
+        path = staging / sibling.rfilename
+        if not path.is_file() or (sibling.size is not None and path.stat().st_size != sibling.size):
+            raise RuntimeError(f"Incomplete model file: {sibling.rfilename}")
+        if sibling.lfs is not None and sha256(path) != sibling.lfs.sha256:
+            raise RuntimeError(f"Model file altered: {sibling.rfilename}")
     validate_prepared_model(staging, entry)
 
 
 def download(entry: dict, base: Path, progress: Progress, *, hub=None, python: str | None = None) -> Path:
-    """Fetch a published model, or fetch and convert a checkpoint; resumes partial downloads."""
-    if fetch_spec(entry) is None:
+    """Fetch a published model, checked then installed atomically; resumes partial downloads."""
+    if entry["download"] is None:
         raise RuntimeError(f"{entry['display_name']} is not published on Hugging Face yet.")
     if hub is None:
         import huggingface_hub as hub
@@ -446,17 +412,15 @@ def download(entry: dict, base: Path, progress: Progress, *, hub=None, python: s
         staging.mkdir(parents=True, exist_ok=True)
         if entry["kind"] == "asr":
             _download_asr(entry, staging, progress, hub, python or find_python311())
-        elif entry["convert"]:
-            _convert_llm(entry, staging, base, progress, hub)
         else:
-            _download_llm(entry, staging, progress, hub)
-        record = {"id": entry["id"], **fetch_spec(entry), "converted": bool(entry.get("convert")),
-                  "downloaded_at": datetime.now(timezone.utc).isoformat()}
+            _download_llm(entry, staging, base, progress, hub)
+        record = {"id": entry["id"], **entry["download"], "downloaded_at": datetime.now(timezone.utc).isoformat()}
         (staging / PROVENANCE).write_text(json.dumps(record, indent=2) + "\n")
         os.replace(staging, target)
-        # The converted model is self-contained: free the space of its source.
-        if entry.get("convert"):
-            shutil.rmtree(source_path(entry, base), ignore_errors=True)
+        # The installed model is a checked copy: free the space of the user's files.
+        source = source_path(entry, base)
+        if source and source.is_dir() and not source.is_symlink():
+            shutil.rmtree(source, ignore_errors=True)
     progress({"event": "done", "id": entry["id"]})
     return target
 

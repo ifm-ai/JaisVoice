@@ -46,9 +46,9 @@ Requires an Apple Silicon Mac with macOS 26 and at least 16 GB of memory. On fir
 | Role | Model |
 | --- | --- |
 | Speech recognition | [MBZUAI-Paris/JAIS-ASR-MLX](https://huggingface.co/MBZUAI-Paris/JAIS-ASR-MLX) |
-| Cleanup and agent (one model for both) | [IFM/Jais-3-3.7B](https://huggingface.co/IFM/Jais-3-3.7B) (default) · [IFM/Jais-3-0.9B](https://huggingface.co/IFM/Jais-3-0.9B) · [IFM/Jais-3-7B](https://huggingface.co/IFM/Jais-3-7B) |
+| Cleanup and agent (one model for both) | [IFM/Jais-3-3.7B-MLX-8bit](https://huggingface.co/IFM/Jais-3-3.7B-MLX-8bit) (default) · [IFM/Jais-3-0.9B-MLX-bf16](https://huggingface.co/IFM/Jais-3-0.9B-MLX-bf16) · [IFM/Jais-3-7B-MLX-8bit](https://huggingface.co/IFM/Jais-3-7B-MLX-8bit) |
 
-These repositories currently require access on Hugging Face. The app downloads the speech model itself; MLX builds of the language models are not published yet, so they are converted on your Mac for now. See [docs/models.md](docs/models.md).
+These repositories currently require access on Hugging Face. The app downloads the speech model and the MLX builds of the language models itself. See [docs/models.md](docs/models.md).
 
 ## Usage
 

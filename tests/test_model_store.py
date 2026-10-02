@@ -1,4 +1,5 @@
 """Model catalog storage, downloads and launchers with tiny real files; no network or Metal."""
+import fnmatch
 import json
 import os
 from pathlib import Path
@@ -58,15 +59,25 @@ def store(tmp_path, monkeypatch):
     return model_store.load_catalog(), base, tmp_path
 
 
+class RepositoryNotFoundError(Exception):
+    """Named like huggingface_hub's error for a private repository."""
+
+
 class FakeHub:
-    """Stands in for huggingface_hub; copies prepared files like a snapshot."""
-    def __init__(self, source, interrupt_after=None):
-        self.source, self.interrupt_after, self.calls = Path(source), interrupt_after, []
+    """Stands in for huggingface_hub; copies prepared files like a snapshot, with LFS hashes."""
+    def __init__(self, source, interrupt_after=None, error=None, wrong_hash=None):
+        self.source, self.interrupt_after, self.error, self.calls = Path(source), interrupt_after, error, []
         hub = self
         class HfApi:
             def model_info(self, repo, revision=None, files_metadata=False):
-                files = [path for path in hub.source.rglob("*") if path.is_file()]
-                return type("Info", (), {"siblings": [type("Sibling", (), {"size": path.stat().st_size})() for path in files]})()
+                if hub.error:
+                    raise hub.error
+                siblings = []
+                for path in sorted(p for p in hub.source.rglob("*") if p.is_file()):
+                    digest = "0" * 64 if path.name == wrong_hash else model_store.sha256(path)
+                    lfs = type("Lfs", (), {"sha256": digest})() if path.suffix == ".safetensors" else None
+                    siblings.append(type("Sibling", (), {"rfilename": str(path.relative_to(hub.source)), "size": path.stat().st_size, "lfs": lfs})())
+                return type("Info", (), {"siblings": siblings})()
         self.HfApi = HfApi
 
     def hf_hub_download(self, repo, filename, revision=None, local_dir=None):
@@ -80,7 +91,7 @@ class FakeHub:
         (Path(local_dir) / ".cache/huggingface").mkdir(parents=True, exist_ok=True)
         for index, path in enumerate(sorted(path for path in self.source.rglob("*") if path.is_file())):
             relative = path.relative_to(self.source)
-            if allow_patterns is not None and str(relative) not in allow_patterns:
+            if allow_patterns is not None and not any(fnmatch.fnmatch(str(relative), pattern) for pattern in allow_patterns):
                 continue
             if self.interrupt_after is not None and index >= self.interrupt_after:
                 self.interrupt_after = None
@@ -117,11 +128,13 @@ def test_states_follow_disk_and_publication(store):
 def test_llm_download_is_validated_then_atomically_installed(store):
     catalog, base, tmp = store
     write_model(tmp / "repo", quantized=True)
+    (tmp / "repo/k2_horizon.py").write_text("raise SystemExit('never fetched')")
     events = []
     hub = FakeHub(tmp / "repo")
     target = model_store.download(model_store.find(catalog, "k2-3.7b"), base, events.append, hub=hub)
     assert target == base / "model-4B" and (target / "config.json").is_file()
-    assert hub.calls == [("org/model-4b", REVISION, None)]
+    assert hub.calls == [("org/model-4b", REVISION, model_store.MODEL_PATTERNS)]
+    assert not (target / "k2_horizon.py").exists()
     assert not (base / ".model-4B.download").exists() and not (target / ".cache").exists()
     assert json.loads((target / model_store.PROVENANCE).read_text())["revision"] == REVISION
     assert events[-1] == {"event": "done", "id": "k2-3.7b"}
@@ -348,106 +361,49 @@ def test_bundled_asr_python_is_copied_out_of_the_app(tmp_path, monkeypatch):
     assert Path(model_store.find_python311()) == python
 
 
-class RepositoryNotFoundError(Exception):
-    """Named like huggingface_hub's error for a private repository."""
+def test_altered_model_file_is_never_installed(store):
+    catalog, base, tmp = store
+    write_model(tmp / "repo")
+    hub = FakeHub(tmp / "repo", wrong_hash="model-00001-of-00001.safetensors")
+    with pytest.raises(RuntimeError, match="altered"):
+        model_store.download(model_store.find(catalog, "k2-3.7b"), base, lambda event: None, hub=hub)
+    assert not (base / "model-4B").exists()
 
 
-class ConvertHub:
-    """A Hugging Face repository holding an original checkpoint, with LFS hashes."""
-    def __init__(self, source, error=None, wrong_hash=None):
-        self.source, self.error, self.calls = Path(source), error, []
-        hub = self
-        class HfApi:
-            def model_info(self, repo, revision=None, files_metadata=False):
-                if hub.error:
-                    raise hub.error
-                siblings = []
-                for path in sorted(p for p in hub.source.rglob("*") if p.is_file()):
-                    digest = "0" * 64 if path.name == wrong_hash else model_store.sha256(path)
-                    lfs = type("Lfs", (), {"sha256": digest})() if path.suffix == ".safetensors" else None
-                    siblings.append(type("Sibling", (), {"rfilename": path.name, "size": path.stat().st_size, "lfs": lfs})())
-                return type("Info", (), {"siblings": siblings})()
-        self.HfApi = HfApi
-
-    def snapshot_download(self, repo, revision=None, local_dir=None, allow_patterns=None, max_workers=None):
-        import fnmatch
-        self.calls.append((repo, revision, allow_patterns))
-        for path in self.source.iterdir():
-            if any(fnmatch.fnmatch(path.name, pattern) for pattern in allow_patterns):
-                shutil.copyfile(path, Path(local_dir) / path.name)
-
-
-@pytest.fixture
-def convertible(tmp_path, monkeypatch):
-    """A catalog with one model converted from its original checkpoint; conversion copies files."""
-    catalog = tmp_path / "catalog.json"
-    catalog.write_text(json.dumps({"format": "jais-voice-models-v1", "models": [
-        {"id": "jais-3-0.9b", "kind": "llm", "size": "0.9B", "display_name": "Jais 3 · 0.9B", "directory": "Jais-0.9B-bf16",
-         "convert": {"repo": "org/Jais-3-0.9B", "revision": REVISION, "bits": None}}]}))
-    monkeypatch.setenv("HORIZON_MODEL_CATALOG", str(catalog))
-    conversions = []
-    def convert_checkpoint(source, target, bits=None, on_shard=None):
-        conversions.append((Path(source), bits))
-        for path in Path(source).iterdir():
-            shutil.copyfile(path, Path(target) / path.name)
-        on_shard(1, 1)
-    monkeypatch.setitem(sys.modules, "k2_runtime.model", type(sys)("k2_runtime.model"))
-    sys.modules["k2_runtime.model"].convert_checkpoint = convert_checkpoint
-    entry = model_store.load_catalog()[0]
-    write_model(tmp_path / "repo")
-    (tmp_path / "repo/modeling_k2_horizon.py").write_text("raise SystemExit('never fetched')")
-    return entry, tmp_path / "runtime/models", tmp_path, conversions
-
-
-def test_catalog_converted_model_is_downloadable(convertible):
-    entry, base, tmp, _ = convertible
-    assert entry["convert"] == {"repo": "org/Jais-3-0.9B", "revision": REVISION, "bits": None}
-    assert model_store.state(entry, base)["downloadable"] is True
-    assert model_store.source_path(entry, base) == base / "sources/Jais-3-0.9B"
-
-
-def test_no_access_without_local_copy_asks_the_user(convertible):
-    entry, base, tmp, conversions = convertible
-    hub = ConvertHub(tmp / "repo", error=RepositoryNotFoundError("401"))
+def test_no_access_without_local_copy_asks_the_user(store):
+    catalog, base, tmp = store
+    entry = model_store.find(catalog, "k2-3.7b")
+    assert model_store.source_path(entry, base) == base / "sources/model-4b"
+    hub = FakeHub(tmp / "repo", error=RepositoryNotFoundError("401"))
     with pytest.raises(model_store.NoAccess) as raised:
         model_store.download(entry, base, lambda event: None, hub=hub)
-    assert raised.value.repo == "org/Jais-3-0.9B" and raised.value.folder == base / "sources/Jais-3-0.9B"
-    assert "hf auth login" in str(raised.value) and not conversions and not (base / "Jais-0.9B-bf16").exists()
+    assert raised.value.repo == "org/model-4b" and raised.value.folder == base / "sources/model-4b"
+    assert "hf auth login" in str(raised.value) and not (base / "model-4B").exists()
 
 
-def test_files_the_user_downloaded_are_converted_without_access(convertible):
-    entry, base, tmp, conversions = convertible
-    shutil.copytree(tmp / "repo", base / "sources/Jais-3-0.9B")
-    events = []
-    target = model_store.download(entry, base, events.append, hub=ConvertHub(tmp / "repo", error=RepositoryNotFoundError("401")))
-    assert (target / "config.json").is_file() and conversions == [(base / "sources/Jais-3-0.9B", None)]
-    assert json.loads((target / model_store.PROVENANCE).read_text())["converted"] is True
-    assert not (base / "sources/Jais-3-0.9B").exists()
-    assert {"event": "progress", "phase": "convert", "bytes": 1, "total": 1} in events
+def test_files_the_user_downloaded_are_validated_and_installed_without_access(store):
+    catalog, base, tmp = store
+    write_model(base / "sources/model-4b", quantized=True)
+    target = model_store.download(model_store.find(catalog, "k2-3.7b"), base, lambda event: None,
+                                  hub=FakeHub(tmp / "repo", error=RepositoryNotFoundError("401")))
+    assert (target / "config.json").is_file() and not (base / "sources/model-4b").exists()
 
 
-def test_accessible_checkpoint_is_downloaded_verified_and_converted(convertible):
-    entry, base, tmp, conversions = convertible
-    hub = ConvertHub(tmp / "repo")
-    target = model_store.download(entry, base, lambda event: None, hub=hub)
-    assert hub.calls == [("org/Jais-3-0.9B", REVISION, model_store.SOURCE_PATTERNS)]
-    assert (target / "config.json").is_file() and not (target / "modeling_k2_horizon.py").exists()
-    assert len(conversions) == 1 and not (base / "sources/Jais-3-0.9B").exists()
+def test_invalid_files_the_user_downloaded_are_kept_and_not_installed(store):
+    catalog, base, tmp = store
+    write_model(base / "sources/model-4b")
+    (base / "sources/model-4b/chat_template.jinja").write_text(" ")
+    with pytest.raises(ValueError, match="Empty template"):
+        model_store.download(model_store.find(catalog, "k2-3.7b"), base, lambda event: None,
+                             hub=FakeHub(tmp / "repo", error=RepositoryNotFoundError("401")))
+    assert not (base / "model-4B").exists() and (base / "sources/model-4b/config.json").is_file()
 
 
-def test_altered_source_is_not_converted(convertible):
-    entry, base, tmp, conversions = convertible
-    hub = ConvertHub(tmp / "repo", wrong_hash="model-00001-of-00001.safetensors")
-    with pytest.raises(RuntimeError, match="altered"):
-        model_store.download(entry, base, lambda event: None, hub=hub)
-    assert not conversions and not (base / "Jais-0.9B-bf16").exists()
-
-
-def test_cli_reports_missing_access_for_the_app(convertible, monkeypatch, capsys):
-    entry, base, tmp, _ = convertible
+def test_cli_reports_missing_access_for_the_app(store, monkeypatch, capsys):
+    _, base, tmp = store
     def no_access(*args, **kwargs):
-        raise model_store.NoAccess("org/Jais-3-0.9B", base / "sources/Jais-3-0.9B")
+        raise model_store.NoAccess("org/model-4b", base / "sources/model-4b")
     monkeypatch.setattr(model_store, "download", no_access)
-    assert models_cli.main(["--runtime-dir", str(tmp / "runtime"), "download", "jais-3-0.9b"]) == 1
+    assert models_cli.main(["--runtime-dir", str(tmp / "runtime"), "download", "k2-3.7b"]) == 1
     record = json.loads(capsys.readouterr().out)
-    assert record["code"] == "no_access" and record["repo"] == "org/Jais-3-0.9B" and record["folder"].endswith("sources/Jais-3-0.9B")
+    assert record["code"] == "no_access" and record["repo"] == "org/model-4b" and record["folder"].endswith("sources/model-4b")
