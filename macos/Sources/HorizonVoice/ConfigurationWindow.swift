@@ -104,7 +104,7 @@ struct ConfigurationView: View {
         return HStack(spacing: 9) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.isASR ? model.display_name : key).font(.system(size: 12, weight: .semibold))
-                Text(modelDetail(model)).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                Text(progress.flatMap(transferDetail) ?? modelDetail(model)).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
             }
             if let progress {
                 // Redrawn every second so a download that stops receiving data shows it.
@@ -155,6 +155,13 @@ struct ConfigurationView: View {
         let size = model.download_bytes.map { " · " + ModelStore.formatBytes($0) } ?? ""
         let partial = model.partialBytes > 0 ? " · " + L("can resume") : ""
         return name + size + partial
+    }
+
+    /// "2.4 GB / 5.4 GB · 35 MB/s" while bytes are downloading.
+    private func transferDetail(_ progress: DownloadProgress) -> String? {
+        guard progress.phase == "download", progress.total > 0 else { return nil }
+        let detail = ModelStore.formatBytes(min(progress.bytes, progress.total)) + " / " + ModelStore.formatBytes(progress.total)
+        return progress.speed.map { detail + " · " + ModelStore.formatBytes(Int64($0)) + "/s" } ?? detail
     }
 
     private func downloadLabel(_ progress: DownloadProgress) -> String {

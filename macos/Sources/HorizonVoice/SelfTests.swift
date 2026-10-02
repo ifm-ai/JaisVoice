@@ -140,6 +140,12 @@ import AVFoundation
             try check(stalled.isActive(at: started.addingTimeInterval(5)) && !stalled.isActive(at: started.addingTimeInterval(20))
                       && DownloadProgress(phase: "verify", lastActivity: started).isActive(at: started.addingTimeInterval(60)),
                       "a download without new bytes for 15 s is shown as waiting, never verification")
+            var measured = DownloadProgress(total: 100_000_000)
+            measured.update(bytes: 40_000_000, at: started)
+            measured.update(bytes: 50_000_000, at: started.addingTimeInterval(1))
+            try check(measured.speed == nil, "bytes already on disk and short windows give no speed")
+            measured.update(bytes: 60_000_000, at: started.addingTimeInterval(2))
+            try check(abs((measured.speed ?? 0) - 10_000_000) < 1 && measured.bytes == 60_000_000, "download speed over 2 seconds")
             defaults.removeObject(forKey: AppPreferences.modelSizeKey)
             defaults.set("0.9B", forKey: AppPreferences.agentModelKey)
             defaults.set("3.7B", forKey: AppPreferences.cleanerModelKey)
