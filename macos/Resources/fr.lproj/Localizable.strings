@@ -11,7 +11,6 @@
 "Allow…" = "Autoriser…";
 "System Settings…" = "Réglages Système…";
 "Type a request without a microphone…" = "Saisir une demande sans microphone…";
-"Your voice assistant settings" = "Réglages de votre assistant vocal";
 "CLEANUP" = "NETTOYAGE";
 "RESPONSE AND TOOLS" = "RÉPONSE ET OUTILS";
 "Choices saved · applied to your next request" = "Choix conservés · appliqués à la prochaine demande";
@@ -281,3 +280,8 @@
 "No access to {0} on Hugging Face. Request access on huggingface.co/{0} and sign in with `hf auth login`, or download the repository files yourself into {1}, then click Download again." = "Pas d’accès à {0} sur Hugging Face. Demandez l’accès sur huggingface.co/{0} et connectez-vous avec `hf auth login`, ou téléchargez vous-même les fichiers du dépôt dans {1}, puis cliquez à nouveau sur Télécharger.";
 "Downloading…" = "Téléchargement…";
 "No data received for a while" = "Aucune donnée reçue depuis un moment";
+"General" = "Général";
+"Assistant" = "Assistant";
+"Models" = "Modèles";
+"Needs attention" = "À vérifier";
+"Type a request" = "Saisir une demande";
