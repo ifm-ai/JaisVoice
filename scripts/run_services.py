@@ -153,7 +153,11 @@ def main():
 
 if __name__ == "__main__":
     try:
-        sys.exit(main())
+        code = main()
     except Exception as error:
         print(str(error), file=sys.stderr, flush=True)
-        sys.exit(1)
+        code = 1
+    # Exit without interpreter finalization: the owner-pipe thread may still be
+    # blocked reading stdin, which makes a normal exit abort with a fatal error.
+    sys.stdout.flush(); sys.stderr.flush()
+    os._exit(code)
