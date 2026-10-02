@@ -137,14 +137,18 @@ struct ResultBubble: View {
                     if !state.actions.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
                             sectionLabel("ACTIONS", tag: state.actions.contains(where: { $0.name == "shell_execute" }) ? L("MACOS AND WEB") : L("BROWSER"))
-                            ForEach(state.actions) { action in actionRow(action) }
+                            ForEach(Array(state.actions.enumerated()), id: \.element.id) { index, action in
+                                let note = state.interimText(before: index)
+                                if !note.isEmpty { naturalText(note, size: 13).opacity(0.8) }
+                                actionRow(action)
+                            }
                         }
                     }
                     if let request = state.pendingApproval { approvalCard(request) }
-                    if !state.response.isEmpty {
+                    if !state.finalResponse.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             sectionLabel(L(state.awaitingClarification ? "CLARIFICATION NEEDED" : "RESPONSE"), tag: state.modelLabel)
-                            naturalText(state.response, size: 14)
+                            naturalText(state.finalResponse, size: 14)
                             if state.awaitingClarification {
                                 Label(L("Hold the dictation keys, answer, then release."), systemImage: "mic.fill")
                                     .font(.system(size: 12, weight: .medium)).foregroundStyle(accent)
@@ -179,7 +183,7 @@ struct ResultBubble: View {
                 Button {
                     onInteract()
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(state.response.isEmpty ? (state.cleaned.isEmpty ? state.raw : state.cleaned) : state.response, forType: .string)
+                    NSPasteboard.general.setString(state.finalResponse.isEmpty ? (state.cleaned.isEmpty ? state.raw : state.cleaned) : state.finalResponse, forType: .string)
                 } label: { Label(L("Copy"), systemImage: "doc.on.doc").font(.system(size: 11, weight: .medium)) }
                     .buttonStyle(.plain).disabled(state.response.isEmpty && state.cleaned.isEmpty && state.raw.isEmpty)
                 Spacer()

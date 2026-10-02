@@ -49,6 +49,8 @@ struct ToolAction: Identifiable {
     var result: String = ""
     var finished = false
     var errorCode: String?
+    /// Length of the response when the action started: the model's text before it belongs above it.
+    var textOffset = 0
     var label: String {
         switch name {
         case "shell_execute": return L("macOS command")
@@ -139,6 +141,16 @@ struct ConversationExchange: Identifiable {
     var onBegin: (() -> Void)?
 
     var awaitingClarification: Bool { stage == "awaiting_clarification" }
+    /// The text the model wrote between the previous action and this one.
+    func interimText(before index: Int) -> String {
+        let end = min(actions[index].textOffset, response.count)
+        let start = index == 0 ? 0 : min(actions[index - 1].textOffset, end)
+        return String(response.dropFirst(start).prefix(end - start)).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    /// The answer written after the last action; the whole response when no action ran.
+    var finalResponse: String {
+        String(response.dropFirst(min(actions.last?.textOffset ?? 0, response.count))).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
     var hasResult: Bool { turnID != nil }
     var isBusy: Bool { turnID != nil && !finished }
     var stageLabel: String {
@@ -188,7 +200,7 @@ struct ConversationExchange: Identifiable {
     @discardableResult func begin(recording: Bool = false, continuingConversation: Bool = false) -> String {
         if continuingConversation {
             if let previous = turnID, !cleaned.isEmpty || !response.isEmpty {
-                history.append(ConversationExchange(id: previous, prompt: cleaned, response: response, error: error))
+                history.append(ConversationExchange(id: previous, prompt: cleaned, response: finalResponse, error: error))
             }
         } else {
             conversationID = UUID().uuidString
@@ -217,7 +229,7 @@ struct ConversationExchange: Identifiable {
         case "response_delta": response += event.text ?? ""
         case "tool_start":
             guard let id = event.tool_id, !actions.contains(where: { $0.id == id }) else { return }
-            actions.append(ToolAction(id: id, name: event.tool_name ?? "", arguments: event.arguments?.pretty ?? ""))
+            actions.append(ToolAction(id: id, name: event.tool_name ?? "", arguments: event.arguments?.pretty ?? "", textOffset: response.count))
         case "tool_end":
             if let index = actions.firstIndex(where: { $0.id == event.tool_id }) {
                 actions[index].finished = true; actions[index].result = event.result ?? event.text ?? ""
@@ -225,6 +237,7 @@ struct ConversationExchange: Identifiable {
             }
         case "clarification_request":
             response = event.text ?? ""
+            for index in actions.indices { actions[index].textOffset = 0 }
             stage = "awaiting_clarification"; finished = true; onFinish?()
         case "complete":
             if let text = event.text, !text.isEmpty { response = text }

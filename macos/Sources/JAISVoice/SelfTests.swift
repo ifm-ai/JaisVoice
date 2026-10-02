@@ -126,6 +126,14 @@ import AVFoundation
             conversation.accept(WireEvent(type: "tool_start", turn_id: toolTurn, tool_id: "tool", tool_name: "browser_navigate"))
             conversation.accept(WireEvent(type: "tool_end", turn_id: toolTurn, tool_id: "tool", result: "Page inaccessible", error_code: "tool_error"))
             try check(conversation.actions.first?.errorCode == "tool_error" && conversation.actions.first?.finished == true, "a failed tool stays marked as failed")
+            let stepsTurn = conversation.begin()
+            conversation.accept(WireEvent(type: "response_delta", turn_id: stepsTurn, text: "Searching. "))
+            conversation.accept(WireEvent(type: "tool_start", turn_id: stepsTurn, tool_id: "search", tool_name: "browser_navigate"))
+            conversation.accept(WireEvent(type: "response_delta", turn_id: stepsTurn, text: "Opening the site."))
+            conversation.accept(WireEvent(type: "tool_start", turn_id: stepsTurn, tool_id: "site", tool_name: "browser_navigate"))
+            conversation.accept(WireEvent(type: "response_delta", turn_id: stepsTurn, text: "Done: example.org"))
+            try check(conversation.interimText(before: 0) == "Searching." && conversation.interimText(before: 1) == "Opening the site."
+                      && conversation.finalResponse == "Done: example.org", "text between actions is shown above the next action, not in the answer")
 
             // Diagnostics
             try check(ServiceDiagnostics.exitMessage(code: 1, output: "Starting\nInvalid model catalog.\n").contains("Invalid model catalog."), "the supervisor error is readable")

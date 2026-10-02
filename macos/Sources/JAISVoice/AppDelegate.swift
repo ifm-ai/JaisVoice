@@ -670,12 +670,16 @@ import UniformTypeIdentifiers
         latestHealth = Self.exampleHealth
         updateModelState()
         let id = state.begin()
+        let note = "أبحث عن الموقع الرسمي لمتحف اللوفر.\n\n"
+        let answer = "وجدتُ الموقع الرسمي لمتحف اللوفر، وأفتح الصفحة الآن.\n\n[Louvre Museum](https://www.louvre.fr)"
         let events = [
             WireEvent(type: "transcript", turn_id: id, text: "ابحث عن متحف اللوفر في أبوظبي… لا، في باريس. افتح الموقع الرسمي."),
             WireEvent(type: "correction", turn_id: id, text: "ابحث عن متحف اللوفر في باريس. افتح الموقع الرسمي."),
+            WireEvent(type: "response_delta", turn_id: id, text: note),
             WireEvent(type: "tool_start", turn_id: id, tool_id: "preview-only", tool_name: "browser_navigate", arguments: .object(["url": .string("https://www.louvre.fr")])),
             WireEvent(type: "tool_end", turn_id: id, tool_id: "preview-only", result: L("Visual example, no browsing performed.")),
-            WireEvent(type: "complete", turn_id: id, text: "وجدتُ الموقع الرسمي لمتحف اللوفر، وأفتح الصفحة الآن.\n\n[Louvre Museum](https://www.louvre.fr)")
+            WireEvent(type: "response_delta", turn_id: id, text: answer),
+            WireEvent(type: "complete", turn_id: id, text: note + answer)
         ]
         for event in events { state.accept(event) }
         state.showOriginal = true
@@ -708,7 +712,8 @@ import UniformTypeIdentifiers
         guard smokeStarted, !smokeReported else { return }
         smokeReported = true
         let result: [String: Any] = ["stage": state.stage, "transcript": state.raw, "correction": state.cleaned, "response": state.response,
-                                     "error": state.error ?? "", "tool_count": state.actions.count, "asr_used": smokeText == nil]
+                                     "error": state.error ?? "", "tool_count": state.actions.count, "asr_used": smokeText == nil,
+                                     "tools": state.actions.map { $0.name + " " + $0.arguments.replacingOccurrences(of: "\n", with: " ") }]
         if let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys, .withoutEscapingSlashes]), let text = String(data: data, encoding: .utf8) {
             print("JAIS_SMOKE_RESULT=\(text)"); fflush(stdout)
         }
