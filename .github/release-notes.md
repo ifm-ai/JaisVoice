@@ -13,4 +13,4 @@ The app does not include any model. On first launch it offers to download the JA
 ## Known limitations
 
 - The cleanup model can rewrite some English requests into an unrelated text (for example a date); French and Arabic are the tested languages.
-- Actions on the Mac (shell, Notes, airplane mode) ask for approval by default; see **Actions on this Mac** in the settings.
+- Actions on the Mac (shell, Notes) ask for approval by default; see **Actions on this Mac** in the settings.

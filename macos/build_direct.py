@@ -28,10 +28,10 @@ def main():
     build = ROOT / ".build" / "direct"
     build.mkdir(parents=True, exist_ok=True)
     command = [arguments.swiftc, "-sdk", str(sdk), "-target", "arm64-apple-macosx26.0", "-swift-version", "5",
-               "-module-cache-path", str(build / "ModuleCache"), "-module-name", "HorizonVoice", "-O", "-o", str(build / "HorizonVoice")]
-    command += [str(path) for path in sorted((ROOT / "Sources" / "HorizonVoice").glob("*.swift"))]
+               "-module-cache-path", str(build / "ModuleCache"), "-module-name", "JAISVoice", "-O", "-o", str(build / "JAISVoice")]
+    command += [str(path) for path in sorted((ROOT / "Sources" / "JAISVoice").glob("*.swift"))]
     subprocess.run(command, check=True)
-    print(json.dumps({"binary": str(build / "HorizonVoice")}, indent=2))
+    print(json.dumps({"binary": str(build / "JAISVoice")}, indent=2))
 
 
 if __name__ == "__main__":

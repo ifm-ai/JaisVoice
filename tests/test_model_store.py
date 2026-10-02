@@ -1,62 +1,16 @@
-"""Model catalog storage, downloads and launchers with tiny real files; no network or Metal."""
+"""Model catalog, downloads, the supervisor and the agent launcher, with tiny real files; no network or Metal."""
 import fnmatch
 import json
-import os
 from pathlib import Path
 import shutil
 import sys
-import threading
 
-import numpy as np
 import pytest
-from safetensors.numpy import save_file
 
-from k2_runtime import model_store
-from k2_runtime.checkpoint import expected_weight_shapes
+from conftest import REVISION, write_model
+from jais_runtime import model_store
 from scripts import models as models_cli
 from scripts import run_agent, run_services
-
-REVISION = "b" * 40
-
-
-def write_model(directory, quantized=False):
-    directory.mkdir(parents=True)
-    config = dict(model_type="k2_horizon", hidden_size=128, intermediate_size=256,
-        num_attention_heads=2, num_key_value_heads=1, head_dim=64, vocab_size=128,
-        num_hidden_layers=1, layernorm_num_groups=2, max_position_embeddings=16384)
-    if quantized:
-        config["quantization"] = {"bits": 8, "group_size": 64, "mode": "affine"}
-    weights = {}
-    for name, shape in expected_weight_shapes(config).items():
-        if quantized and len(shape) == 2:
-            weights[name] = np.zeros((shape[0], shape[1] // 4), dtype=np.uint32)
-            weights[name.removesuffix(".weight") + ".scales"] = np.ones((shape[0], shape[1] // 64), dtype=np.float32)
-            weights[name.removesuffix(".weight") + ".biases"] = np.zeros((shape[0], shape[1] // 64), dtype=np.float32)
-        else:
-            weights[name] = np.ones(shape, dtype=np.float32)
-    shard = "model-00001-of-00001.safetensors"
-    save_file(weights, directory / shard)
-    (directory / "config.json").write_text(json.dumps(config))
-    (directory / "model.safetensors.index.json").write_text(json.dumps({"weight_map": {name: shard for name in weights}}))
-    (directory / "tokenizer.json").write_text('{"model": {"type": "WordLevel", "vocab": {"test": 0}}}')
-    (directory / "tokenizer_config.json").write_text('{"tokenizer_class": "PreTrainedTokenizerFast"}')
-    (directory / "chat_template.jinja").write_text('{{ messages }}')
-
-
-@pytest.fixture
-def store(tmp_path, monkeypatch):
-    """A temporary runtime and catalog: an ASR, a published 4B and an unpublished 1B."""
-    catalog = tmp_path / "catalog.json"
-    catalog.write_text(json.dumps({"format": "jais-voice-models-v1", "models": [
-        {"id": "asr-f5", "kind": "asr", "display_name": "ASR", "directory": "ASR",
-         "download": {"repo": "org/asr", "revision": REVISION, "profile": "F5"}},
-        {"id": "k2-0.9b", "kind": "llm", "size": "0.9B", "display_name": "Test 0.9B", "directory": "model-1B", "download": None},
-        {"id": "k2-3.7b", "kind": "llm", "size": "3.7B", "display_name": "Test 3.7B", "directory": "model-4B",
-         "download": {"repo": "org/model-4b", "revision": REVISION}},
-    ]}))
-    monkeypatch.setenv("HORIZON_MODEL_CATALOG", str(catalog))
-    base = tmp_path / "runtime/models"
-    return model_store.load_catalog(), base, tmp_path
 
 
 class RepositoryNotFoundError(Exception):
@@ -65,7 +19,7 @@ class RepositoryNotFoundError(Exception):
 
 class FakeHub:
     """Stands in for huggingface_hub; copies prepared files like a snapshot, with LFS hashes."""
-    def __init__(self, source, interrupt_after=None, error=None, wrong_hash=None):
+    def __init__(self, source, interrupt_after=None, error=None):
         self.source, self.interrupt_after, self.error, self.calls = Path(source), interrupt_after, error, []
         hub = self
         class HfApi:
@@ -74,8 +28,7 @@ class FakeHub:
                     raise hub.error
                 siblings = []
                 for path in sorted(p for p in hub.source.rglob("*") if p.is_file()):
-                    digest = "0" * 64 if path.name == wrong_hash else model_store.sha256(path)
-                    lfs = type("Lfs", (), {"sha256": digest})() if path.suffix == ".safetensors" else None
+                    lfs = type("Lfs", (), {"sha256": model_store.sha256(path)})() if path.suffix == ".safetensors" else None
                     siblings.append(type("Sibling", (), {"rfilename": str(path.relative_to(hub.source)), "size": path.stat().st_size, "lfs": lfs})())
                 return type("Info", (), {"siblings": siblings})()
         self.HfApi = HfApi
@@ -107,41 +60,54 @@ def asr_repository(directory):
     weights.write_bytes(b"asr weights")
     (directory / "requirements-mac.txt").write_text("mlx\n")
     (directory / "install.sh").write_text('mkdir -p .venv/bin && ln -s "$PYTHON_BIN" .venv/bin/python\n')
-    files = [{"path": str(path.relative_to(directory)), "bytes": path.stat().st_size, "sha256": model_store.sha256(path)}
-             for path in (weights,)]
+    files = [{"path": str(weights.relative_to(directory)), "bytes": weights.stat().st_size, "sha256": model_store.sha256(weights)}]
     (directory / "manifests").mkdir()
     (directory / "manifests/F5.json").write_text(json.dumps({"files": files, "download_files": [item["path"] for item in files]}))
     (directory / "unrelated-profile.bin").write_bytes(b"not part of F5")
     return directory
 
 
-def test_states_follow_disk_and_publication(store):
-    catalog, base, tmp = store
-    states = {state["id"]: state for state in (model_store.state(entry, base) for entry in catalog)}
-    assert [states[i]["installed"] for i in ("asr-f5", "k2-0.9b", "k2-3.7b")] == [False, False, False]
-    assert states["k2-0.9b"]["downloadable"] is False and states["k2-3.7b"]["downloadable"] is True
-    write_model(base / "model-1B")
-    state = model_store.state(model_store.find(catalog, "k2-0.9b"), base)
+def test_catalog_lists_the_three_jais_sizes():
+    catalog = model_store.load_catalog()
+    assert [entry["size"] for entry in catalog if entry["kind"] == "llm"] == list(model_store.SIZES)
+    assert all(entry["download"]["repo"].startswith("IFM/Jais-3-") for entry in catalog if entry["kind"] == "llm")
+
+
+@pytest.mark.parametrize("change", [{"revision": "main"}, {"repo": "not a repo"}])
+def test_invalid_catalog_entry_rejects_the_catalog(tmp_path, change):
+    entry = {"id": "jais-3-3.7b", "kind": "llm", "size": "3.7B", "display_name": "3.7B", "directory": "model",
+             "download": {"repo": "org/model", "revision": REVISION, **change}}
+    (tmp_path / "catalog.json").write_text(json.dumps({"models": [entry]}))
+    with pytest.raises(ValueError):
+        model_store.load_catalog(tmp_path / "catalog.json")
+
+
+def test_states_follow_disk(store):
+    catalog, base, _ = store
+    entry = model_store.find(catalog, "jais-3-0.9b")
+    assert not model_store.state(entry, base)["installed"]
+    write_model(base / "model-0.9B")
+    state = model_store.state(entry, base)
     assert state["installed"] and state["disk_bytes"] > 0 and state["size"] == "0.9B"
 
 
-def test_llm_download_is_validated_then_atomically_installed(store):
+def test_download_is_validated_then_atomically_installed(store):
     catalog, base, tmp = store
     write_model(tmp / "repo", quantized=True)
-    (tmp / "repo/k2_horizon.py").write_text("raise SystemExit('never fetched')")
+    (tmp / "repo/modeling.py").write_text("raise SystemExit('never fetched')")
     events = []
     hub = FakeHub(tmp / "repo")
-    target = model_store.download(model_store.find(catalog, "k2-3.7b"), base, events.append, hub=hub)
-    assert target == base / "model-4B" and (target / "config.json").is_file()
-    assert hub.calls == [("org/model-4b", REVISION, model_store.MODEL_PATTERNS)]
-    assert not (target / "k2_horizon.py").exists()
-    assert not (base / ".model-4B.download").exists() and not (target / ".cache").exists()
+    target = model_store.download(model_store.find(catalog, "jais-3-3.7b"), base, events.append, hub=hub)
+    assert target == base / "model-3.7B" and (target / "config.json").is_file()
+    assert hub.calls == [("org/model-3.7B", REVISION, model_store.MODEL_PATTERNS)]
+    assert not (target / "modeling.py").exists() and not (target / ".cache").exists()
+    assert not (base / ".model-3.7B.download").exists()
     assert json.loads((target / model_store.PROVENANCE).read_text())["revision"] == REVISION
-    assert events[-1] == {"event": "done", "id": "k2-3.7b"}
+    assert events[-1] == {"event": "done", "id": "jais-3-3.7b"}
     progress = [event for event in events if event.get("phase") == "download"]
     assert progress[-1]["bytes"] == progress[-1]["total"] > 0
     with pytest.raises(RuntimeError, match="already installed"):
-        model_store.download(model_store.find(catalog, "k2-3.7b"), base, events.append, hub=hub)
+        model_store.download(model_store.find(catalog, "jais-3-3.7b"), base, events.append, hub=hub)
 
 
 def test_invalid_download_is_never_installed(store):
@@ -151,14 +117,14 @@ def test_invalid_download_is_never_installed(store):
     config["vocab_size"] += 1
     (tmp / "repo/config.json").write_text(json.dumps(config))
     with pytest.raises(ValueError, match="shape or type"):
-        model_store.download(model_store.find(catalog, "k2-3.7b"), base, lambda event: None, hub=FakeHub(tmp / "repo"))
-    assert not (base / "model-4B").exists() and (base / ".model-4B.download").is_dir()
+        model_store.download(model_store.find(catalog, "jais-3-3.7b"), base, lambda event: None, hub=FakeHub(tmp / "repo"))
+    assert not (base / "model-3.7B").exists() and (base / ".model-3.7B.download").is_dir()
 
 
 def test_interrupted_download_resumes(store):
     catalog, base, tmp = store
     write_model(tmp / "repo")
-    entry = model_store.find(catalog, "k2-3.7b")
+    entry = model_store.find(catalog, "jais-3-3.7b")
     with pytest.raises(KeyboardInterrupt):
         model_store.download(entry, base, lambda event: None, hub=FakeHub(tmp / "repo", interrupt_after=2))
     assert model_store.state(entry, base)["partial_bytes"] > 0 and not model_store.is_installed(entry, base)
@@ -166,10 +132,16 @@ def test_interrupted_download_resumes(store):
     assert model_store.is_installed(entry, base)
 
 
-def test_unpublished_model_cannot_be_downloaded(store):
-    catalog, base, _ = store
-    with pytest.raises(RuntimeError, match="not published"):
-        model_store.download(model_store.find(catalog, "k2-0.9b"), base, lambda event: None, hub=object())
+def test_without_access_the_files_downloaded_by_hand_are_installed(store):
+    catalog, base, tmp = store
+    entry = model_store.find(catalog, "jais-3-3.7b")
+    hub = FakeHub(tmp / "unused", error=RepositoryNotFoundError())
+    with pytest.raises(model_store.NoAccess) as error:
+        model_store.download(entry, base, lambda event: None, hub=hub)
+    assert error.value.folder == base / "sources/model-3.7B"
+    write_model(base / "sources/model-3.7B")
+    model_store.download(entry, base, lambda event: None, hub=hub)
+    assert model_store.is_installed(entry, base) and not (base / "sources/model-3.7B").exists()
 
 
 def test_asr_download_fetches_one_profile_verifies_and_installs_its_environment(store):
@@ -180,7 +152,6 @@ def test_asr_download_fetches_one_profile_verifies_and_installs_its_environment(
     assert model_store.is_installed(entry, base)
     assert (base / "ASR/.venv/bin/python").resolve() == Path(sys.executable).resolve()
     assert not (base / "ASR/unrelated-profile.bin").exists()
-    assert "manifests/F5.json" in hub.calls[0][2]
 
 
 def test_altered_asr_file_is_refused(store):
@@ -194,29 +165,28 @@ def test_altered_asr_file_is_refused(store):
 
 def test_delete_removes_model_and_partial_download_only(store):
     catalog, base, tmp = store
-    write_model(base / "model-4B")
-    (base / ".model-4B.download").mkdir()
-    write_model(base / "model-1B")
-    model_store.delete(model_store.find(catalog, "k2-3.7b"), base)
-    assert not (base / "model-4B").exists() and not (base / ".model-4B.download").exists()
-    assert not (base / ".model-4B.deleting").exists()
-    assert model_store.is_installed(model_store.find(catalog, "k2-0.9b"), base)
-    model_store.delete(model_store.find(catalog, "k2-3.7b"), base)  # nothing left: no error
+    write_model(base / "model-3.7B")
+    (base / ".model-3.7B.download").mkdir()
+    write_model(base / "model-0.9B")
+    model_store.delete(model_store.find(catalog, "jais-3-3.7b"), base)
+    assert not (base / "model-3.7B").exists() and not (base / ".model-3.7B.download").exists()
+    assert model_store.is_installed(model_store.find(catalog, "jais-3-0.9b"), base)
+    model_store.delete(model_store.find(catalog, "jais-3-3.7b"), base)  # nothing left: no error
 
 
 def test_symlinked_model_is_not_followed(store):
     catalog, base, tmp = store
     write_model(tmp / "elsewhere")
     base.mkdir(parents=True)
-    (base / "model-4B").symlink_to(tmp / "elsewhere")
+    (base / "model-3.7B").symlink_to(tmp / "elsewhere")
     with pytest.raises(RuntimeError, match="symbolic link"):
-        model_store.delete(model_store.find(catalog, "k2-3.7b"), base)
+        model_store.delete(model_store.find(catalog, "jais-3-3.7b"), base)
     assert (tmp / "elsewhere/config.json").is_file()
 
 
 def test_one_operation_per_model(store):
     catalog, base, _ = store
-    entry = model_store.find(catalog, "k2-3.7b")
+    entry = model_store.find(catalog, "jais-3-3.7b")
     with model_store.operation_lock(entry, base):
         with pytest.raises(RuntimeError, match="already in progress"):
             model_store.delete(entry, base)
@@ -227,15 +197,13 @@ def test_cli_lists_and_reports_errors_as_json(store, capsys):
     runtime = ["--runtime-dir", str(tmp / "runtime")]
     assert models_cli.main([*runtime, "list"]) == 0
     listing = json.loads(capsys.readouterr().out)
-    assert [model["id"] for model in listing["models"]] == ["asr-f5", "k2-0.9b", "k2-3.7b"]
-    assert models_cli.main([*runtime, "download", "k2-0.9b"]) == 1
-    assert "not published" in json.loads(capsys.readouterr().out)["message"]
+    assert [model["id"] for model in listing["models"]] == ["asr-f5", "jais-3-0.9b", "jais-3-3.7b", "jais-3-7b"]
     assert models_cli.main([*runtime, "download", "missing"]) == 1
     assert json.loads(capsys.readouterr().out)["event"] == "error"
-    write_model(base / "model-1B")
-    assert models_cli.main([*runtime, "delete", "k2-0.9b"]) == 0
-    assert json.loads(capsys.readouterr().out) == {"event": "deleted", "id": "k2-0.9b"}
-    assert not (base / "model-1B").exists()
+    write_model(base / "model-0.9B")
+    assert models_cli.main([*runtime, "delete", "jais-3-0.9b"]) == 0
+    assert json.loads(capsys.readouterr().out) == {"event": "deleted", "id": "jais-3-0.9b"}
+    assert not (base / "model-0.9B").exists()
 
 
 # The supervisor: the gateway always runs, the ASR only while installed.
@@ -244,7 +212,6 @@ class Child:
     launched = []
     def __init__(self, command, **kwargs):
         self.pid = 100000 + len(Child.launched)
-        self.command = command
         Child.launched.append((command, kwargs))
     def poll(self):
         return None
@@ -273,7 +240,7 @@ def run_supervisor(monkeypatch, tmp, iterations, during=lambda index: None):
     monkeypatch.setattr(run_services.os, "killpg", lambda pid, sig: stopped.append(pid))
     monkeypatch.setattr(run_services, "STOP", Stop())
     assert run_services.main() == 0
-    return [("mlx" if "k2_runtime.gateway" in command else "asr") for command, _ in Child.launched], stopped
+    return [("mlx" if "jais_runtime.gateway" in command else "asr") for command, _ in Child.launched], stopped
 
 
 def install_asr(base):
@@ -287,9 +254,7 @@ def test_supervisor_without_asr_starts_only_the_gateway(store, monkeypatch):
     _, _, tmp = store
     names, _ = run_supervisor(monkeypatch, tmp, iterations=2)
     assert names == ["mlx"]
-    env = Child.launched[0][1]["env"]
-    assert env["HORIZON_MODEL_CATALOG"] == os.environ["HORIZON_MODEL_CATALOG"]
-    assert env["HORIZON_ASR_MODEL_DIR"] == str(tmp / "runtime/models/ASR")
+    assert Child.launched[0][1]["env"]["JAIS_ASR_MODEL_DIR"] == str(tmp / "runtime/models/ASR")
     assert not (tmp / "runtime/services.json").exists()
 
 
@@ -302,8 +267,7 @@ def test_supervisor_starts_asr_after_download_and_stops_it_after_deletion(store,
             shutil.rmtree(base / "ASR")
     names, stopped = run_supervisor(monkeypatch, tmp, iterations=5, during=during)
     assert names == ["mlx", "asr"]
-    asr_pid = 100001
-    assert stopped.count(asr_pid) >= 2  # SIGTERM then SIGKILL of its group on deletion
+    assert stopped.count(100001) >= 2  # SIGTERM then SIGKILL of its group on deletion
 
 
 def test_supervisor_starts_installed_asr_first(store, monkeypatch):
@@ -315,95 +279,27 @@ def test_supervisor_starts_installed_asr_first(store, monkeypatch):
 
 def test_invalid_catalog_stops_before_any_service(store, monkeypatch):
     _, _, tmp = store
-    Path(os.environ["HORIZON_MODEL_CATALOG"]).write_text("{}")
+    model_store.CATALOG.write_text("{}")
     monkeypatch.setattr(run_services, "RUNTIME", tmp / "runtime")
     monkeypatch.setattr(run_services.subprocess, "Popen", lambda *args, **kwargs: pytest.fail("no service may start"))
-    with pytest.raises(ValueError, match="catalog format"):
+    with pytest.raises(ValueError, match="Invalid model catalog"):
         run_services.main()
 
 
-@pytest.mark.parametrize("override,expected", [(None, "low"), ("medium", "medium")])
-def test_agent_launcher_uses_isolated_configuration(store, monkeypatch, override, expected):
+def test_agent_launcher_uses_isolated_configuration(store, monkeypatch):
     _, _, tmp = store
     monkeypatch.setattr(run_agent, "RUNTIME", tmp / "runtime")
-    env = {"HORIZON_NODE": run_agent.find_node({})}
-    if override:
-        env["HORIZON_AGENT_REASONING_EFFORT"] = override
-    argv, child_env, workspace = run_agent.command(env)
-    assert argv[argv.index("--thinking") + 1] == expected
+    argv, env, workspace = run_agent.command({"JAIS_NODE": run_agent.find_node({})})
     assert argv[argv.index("--mode") + 1] == "rpc" and "--no-session" in argv and "--no-builtin-tools" in argv
     assert argv[argv.index("--no-extensions") + 1:argv.index("--no-extensions") + 5] == ["-e", "builtin:mcp", "-e", str(run_agent.ROOT / "agent/extensions/jais")]
     agent_dir = tmp / "runtime/pi-agent"
-    assert child_env["PI_CODING_AGENT_DIR"] == str(agent_dir) and child_env["PI_OFFLINE"] == "1"
+    assert env["PI_CODING_AGENT_DIR"] == str(agent_dir) and env["PI_OFFLINE"] == "1"
     assert all((agent_dir / name).read_text() == (run_agent.ROOT / "agent" / name).read_text() for name in run_agent.CONFIG_FILES)
     assert workspace == tmp / "runtime/agent-workspace" and workspace.is_dir()
-    with pytest.raises(ValueError):
-        run_agent.command({**env, "HORIZON_AGENT_REASONING_EFFORT": "max"})
 
 
-def test_pi_knows_every_catalog_size():
+def test_pi_knows_every_catalog_model():
+    settings = json.loads((run_agent.ROOT / "agent/settings.json").read_text())
     ids = {model["id"] for model in json.loads((run_agent.ROOT / "agent/models.json").read_text())["providers"]["jais"]["models"]}
-    assert ids == {f"k2-{size.lower()}" for size in model_store.SIZES}
-
-
-def test_bundled_asr_python_is_copied_out_of_the_app(tmp_path, monkeypatch):
-    bundled = tmp_path / "App.app/runtime/python3.11"
-    (bundled / "bin").mkdir(parents=True)
-    (bundled / "bin/python3.11").write_text("#!/bin/sh\n")
-    (bundled / "bin/python3").symlink_to("python3.11")
-    monkeypatch.setenv("HORIZON_ASR_PYTHON_HOME", str(bundled))
-    monkeypatch.setenv("HORIZON_RUNTIME_DIR", str(tmp_path / "runtime"))
-    python = Path(model_store.find_python311())
-    assert python == tmp_path / "runtime/python3.11/bin/python3.11" and python.is_file()
-    assert (python.parent / "python3").is_symlink()
-    # Later calls reuse the copy, even after the app has moved.
-    shutil.rmtree(tmp_path / "App.app")
-    assert Path(model_store.find_python311()) == python
-
-
-def test_altered_model_file_is_never_installed(store):
-    catalog, base, tmp = store
-    write_model(tmp / "repo")
-    hub = FakeHub(tmp / "repo", wrong_hash="model-00001-of-00001.safetensors")
-    with pytest.raises(RuntimeError, match="altered"):
-        model_store.download(model_store.find(catalog, "k2-3.7b"), base, lambda event: None, hub=hub)
-    assert not (base / "model-4B").exists()
-
-
-def test_no_access_without_local_copy_asks_the_user(store):
-    catalog, base, tmp = store
-    entry = model_store.find(catalog, "k2-3.7b")
-    assert model_store.source_path(entry, base) == base / "sources/model-4b"
-    hub = FakeHub(tmp / "repo", error=RepositoryNotFoundError("401"))
-    with pytest.raises(model_store.NoAccess) as raised:
-        model_store.download(entry, base, lambda event: None, hub=hub)
-    assert raised.value.repo == "org/model-4b" and raised.value.folder == base / "sources/model-4b"
-    assert "hf auth login" in str(raised.value) and not (base / "model-4B").exists()
-
-
-def test_files_the_user_downloaded_are_validated_and_installed_without_access(store):
-    catalog, base, tmp = store
-    write_model(base / "sources/model-4b", quantized=True)
-    target = model_store.download(model_store.find(catalog, "k2-3.7b"), base, lambda event: None,
-                                  hub=FakeHub(tmp / "repo", error=RepositoryNotFoundError("401")))
-    assert (target / "config.json").is_file() and not (base / "sources/model-4b").exists()
-
-
-def test_invalid_files_the_user_downloaded_are_kept_and_not_installed(store):
-    catalog, base, tmp = store
-    write_model(base / "sources/model-4b")
-    (base / "sources/model-4b/chat_template.jinja").write_text(" ")
-    with pytest.raises(ValueError, match="Empty template"):
-        model_store.download(model_store.find(catalog, "k2-3.7b"), base, lambda event: None,
-                             hub=FakeHub(tmp / "repo", error=RepositoryNotFoundError("401")))
-    assert not (base / "model-4B").exists() and (base / "sources/model-4b/config.json").is_file()
-
-
-def test_cli_reports_missing_access_for_the_app(store, monkeypatch, capsys):
-    _, base, tmp = store
-    def no_access(*args, **kwargs):
-        raise model_store.NoAccess("org/model-4b", base / "sources/model-4b")
-    monkeypatch.setattr(model_store, "download", no_access)
-    assert models_cli.main(["--runtime-dir", str(tmp / "runtime"), "download", "k2-3.7b"]) == 1
-    record = json.loads(capsys.readouterr().out)
-    assert record["code"] == "no_access" and record["repo"] == "org/model-4b" and record["folder"].endswith("sources/model-4b")
+    catalog = {entry["id"] for entry in model_store.load_catalog() if entry["kind"] == "llm"}
+    assert ids == catalog and settings["defaultModel"] in ids

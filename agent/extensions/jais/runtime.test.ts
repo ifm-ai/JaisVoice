@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { approvalMessage, commandProblem, compactContext, inlineSnapshots, noteCommand, runShell, shellQuote, type Message } from "./runtime.ts";
+import { ARABIC_REMINDER, approvalMessage, commandProblem, compactContext, inlineSnapshots, noteCommand, runShell, shellQuote, type Message } from "./runtime.ts";
 
 const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 
@@ -58,7 +58,7 @@ test("note text stays in argv and is HTML-escaped", () => {
   const command = noteCommand("Courses", "pain & <lait>\n'œufs'");
   assert.ok(command.startsWith("/usr/bin/osascript - 'Courses' "));
   assert.ok(command.includes("<div>pain &amp; &lt;lait&gt;<br>&#x27;œufs&#x27;</div>"));
-  assert.ok(command.endsWith("end run\nHORIZON_NOTES_APPLESCRIPT"));
+  assert.ok(command.endsWith("end run\nNOTES_APPLESCRIPT"));
   assert.throws(() => noteCommand("", "x"), /title/);
   assert.throws(() => noteCommand("t", "x".repeat(4001)), /4000/);
   assert.equal(execFileSync("/bin/sh", ["-c", "printf %s " + shellQuote("a'b $HOME")]).toString(), "a'b $HOME");
@@ -95,6 +95,23 @@ test("context keeps recent dialogue and shortens stale tool output in a copy", (
   assert.ok(results.at(-1)! > 10000 && results.at(-1)! < 10200);
   assert.ok(compacted.filter((message) => message.role === "assistant").every((message) => message.content[0].text.length <= 1601));
   assert.equal(messages[2].content[0].text.length, 20000);
+});
+
+test("Arabic requests and their tool results get a reply-language reminder in the model's context only", () => {
+  const messages: Message[] = [
+    { role: "user", content: "ابحث عن متحف المستقبل في دبي" },
+    { role: "toolResult", content: [{ type: "text", text: "Museum of the Future - official site" }] },
+    { role: "user", content: [{ type: "text", text: "افتح الموقع الرسمي لمتحف Louvre" }] },
+    { role: "user", content: "Cherche le musée du Louvre" },
+    { role: "toolResult", content: [{ type: "text", text: "Louvre" }] },
+  ];
+  const compacted = compactContext(messages);
+  assert.equal(compacted[0].content, "ابحث عن متحف المستقبل في دبي" + ARABIC_REMINDER);
+  assert.equal(compacted[1].content[0].text, "Museum of the Future - official site" + ARABIC_REMINDER);
+  assert.equal(compacted[2].content[0].text, "افتح الموقع الرسمي لمتحف Louvre" + ARABIC_REMINDER);
+  assert.equal(compacted[3].content, "Cherche le musée du Louvre");
+  assert.equal(compacted[4].content[0].text, "Louvre");
+  assert.equal(messages[0].content, "ابحث عن متحف المستقبل في دبي");
 });
 
 test("approval message carries the reason and the exact action", () => {

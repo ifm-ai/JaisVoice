@@ -42,13 +42,13 @@ jobs:
           uv pip install --python .venv/bin/python --cache-dir .runtime/build-cache/uv -r requirements.in -c requirements.lock
 
       - name: Python tests
-        run: PYTHONPATH=.:backend .venv/bin/python -m pytest backend/tests tests -q -o asyncio_mode=auto
+        run: .venv/bin/python -m pytest -q
 
       - name: Pi extension tests
         run: node --test agent/
 
       - name: Build app and disk image
-        run: .venv/bin/python scripts/build_app.py --direct --dmg --build-number "${{ github.run_number }}"
+        run: .venv/bin/python scripts/build_app.py --dmg --build-number "${{ github.run_number }}"
 
       - name: Native self-test
         run: '"outputs/JAIS Voice.app/Contents/MacOS/JAISVoice" --self-test'

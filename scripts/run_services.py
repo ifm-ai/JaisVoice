@@ -19,9 +19,9 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from k2_runtime import model_store
+from jais_runtime import model_store
 
-RUNTIME = Path(os.environ.get("HORIZON_RUNTIME_DIR", ROOT / ".runtime"))
+RUNTIME = Path(os.environ.get("JAIS_RUNTIME_DIR", ROOT / ".runtime"))
 STOP = threading.Event()
 
 
@@ -75,7 +75,7 @@ def stop_processes(processes, grace=8):
 def main():
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGINT, shutdown)
-    if os.environ.get("HORIZON_APP_OWNS_SERVICES") == "1":
+    if os.environ.get("JAIS_APP_OWNS_SERVICES") == "1":
         threading.Thread(target=watch_owner, daemon=True).start()
     RUNTIME.mkdir(parents=True, exist_ok=True)
     logs = RUNTIME / "logs"
@@ -92,16 +92,12 @@ def main():
         return 0
     env = os.environ.copy()
     # An invalid catalog stops startup before any service runs.
-    catalog_file = model_store.catalog_path(env)
-    catalog = model_store.load_catalog(catalog_file)
-    print(f"Model catalog: {catalog_file}", flush=True)
     base = model_store.models_dir(RUNTIME)
-    asr = next((entry for entry in catalog if entry["kind"] == "asr"), None)
+    asr = next((entry for entry in model_store.load_catalog() if entry["kind"] == "asr"), None)
     env.update({
-        "HORIZON_MODEL_CATALOG": str(catalog_file),
-        "PYTHONPATH": os.pathsep.join([str(ROOT), str(ROOT / "backend")]),
-        "HORIZON_PROJECT_ROOT": str(ROOT),
-        "HORIZON_RUNTIME_DIR": str(RUNTIME),
+        "PYTHONPATH": str(ROOT),
+        "JAIS_PROJECT_ROOT": str(ROOT),
+        "JAIS_RUNTIME_DIR": str(RUNTIME),
         "HF_HOME": str(RUNTIME / "huggingface"),
         "TOKENIZERS_PARALLELISM": "false",
         "PYTHONUNBUFFERED": "1",
@@ -111,15 +107,13 @@ def main():
     python = sys.executable
     asr_root = model_store.model_path(asr, base) if asr else None
     if asr_root:
-        env["HORIZON_ASR_MODEL_DIR"] = str(asr_root)
-    asr_command = [str(asr_root / ".venv/bin/python"), str(ROOT / "backend/horizon_voice/local_asr.py")] if asr_root else None
+        env["JAIS_ASR_MODEL_DIR"] = str(asr_root)
+    asr_command = [str(asr_root / ".venv/bin/python"), str(ROOT / "jais_runtime/asr_service.py")] if asr_root else None
     asr_installed = lambda: asr is not None and model_store.is_installed(asr, base)
     for port in (8788, 8790):
         with socket.socket() as probe:
             if probe.connect_ex(("127.0.0.1", port)) == 0:
                 raise RuntimeError(f"Local port {port} is already in use; no existing process was stopped.")
-    signal.signal(signal.SIGTERM, shutdown)
-    signal.signal(signal.SIGINT, shutdown)
     processes = []
     streams = []
 
@@ -135,7 +129,7 @@ def main():
         if asr_installed() and not STOP.is_set():
             start("asr", asr_command)
         if not STOP.is_set():
-            start("mlx", [python, "-m", "k2_runtime.gateway", "--host", "127.0.0.1", "--port", "8788"])
+            start("mlx", [python, "-m", "jais_runtime.gateway"])
         while not STOP.wait(0.5):
             running = {name: child for name, child in processes}
             if "asr" in running and not asr_installed():

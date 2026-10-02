@@ -1,11 +1,11 @@
 {
   "defaultProvider": "jais",
-  "defaultModel": "k2-3.7b",
+  "defaultModel": "jais-3-3.7b",
   "defaultThinkingLevel": "low",
   "defaultTools": [],
   "defaultProjectTrust": "never",
   "quietStartup": true,
   "cacheWarming": "off",
   "retry": {"enabled": false},
-  "compaction": {"enabled": true, "reserveTokens": 2560, "keepRecentTokens": 6000}
+  "compaction": {"enabled": false}
 }

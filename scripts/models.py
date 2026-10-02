@@ -5,8 +5,7 @@
     models.py download <id>     # progress records, then {"event": "done"} or {"event": "error"}
     models.py delete <id>
 
-Downloads use the default Hugging Face login when one exists; published
-repositories need none. Interrupting a download keeps it resumable.
+Downloads use the default Hugging Face login. Interrupting a download keeps it resumable.
 """
 import argparse
 import json
@@ -19,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # Progress is reported as JSON records; the library's terminal bars are noise here.
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 sys.path.insert(0, str(ROOT))
-from k2_runtime import model_store
+from jais_runtime import model_store
 
 
 def emit(record: dict) -> None:
@@ -40,8 +39,7 @@ def main(argv=None) -> int:
     try:
         catalog = model_store.load_catalog()
         if args.command == "list":
-            emit({"event": "catalog", "catalog": str(model_store.catalog_path()),
-                  "models": [model_store.state(entry, base) for entry in catalog]})
+            emit({"event": "catalog", "models": [model_store.state(entry, base) for entry in catalog]})
         elif args.command == "download":
             model_store.download(model_store.find(catalog, args.id), base, emit)
         else:
