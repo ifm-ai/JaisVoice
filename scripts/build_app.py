@@ -134,6 +134,10 @@ def main():
     parser.add_argument("--dev", action="store_true", help="Launchers run this checkout instead of an embedded runtime")
     parser.add_argument("--dmg", action="store_true", help="Also write a drag-to-install disk image")
     parser.add_argument("--build-number", help="CFBundleVersion of this build (CI run number)")
+    # macOS ties the Accessibility and Screen Recording permissions to the signature:
+    # an ad hoc one changes with every build, so each update asks for them again.
+    parser.add_argument("--sign", default=os.environ.get("JAIS_CODESIGN_IDENTITY", "-"),
+                        help="Code signing identity (default: ad hoc, or JAIS_CODESIGN_IDENTITY)")
     args = parser.parse_args()
     run(sys.executable, ROOT / "macos/build_direct.py", cwd=ROOT)
     binary = ROOT / "macos/.build/direct/JAISVoice"
@@ -173,7 +177,7 @@ def main():
     # Model services are supervised together; the agent is a pipe child of the app.
     write_launchers(resources, args.dev)
     entitlements = ROOT / "macos/Entitlements.plist"
-    signature = ["/usr/bin/codesign", "--force", "--sign", "-"]
+    signature = ["/usr/bin/codesign", "--force", "--sign", args.sign]
     if entitlements.exists():
         signature += ["--entitlements", str(entitlements)]
     run(*signature, staging)

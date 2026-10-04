@@ -133,6 +133,7 @@ import UniformTypeIdentifiers
 
     func applicationDidBecomeActive(_ notification: Notification) {
         preferences.refreshMicrophoneStatus()
+        preferences.refreshAppControlStatus()
         updateMenu()
     }
 

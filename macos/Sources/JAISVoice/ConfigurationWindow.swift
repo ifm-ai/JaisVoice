@@ -144,6 +144,7 @@ struct ConfigurationView: View {
         Group {
             voiceCard
             actionsCard
+            appControl
             privacy
         }
     }
@@ -399,6 +400,38 @@ struct ConfigurationView: View {
         }.cardBackground()
     }
 
+    /// The macOS permissions behind the assistant's access to other apps.
+    private var appControl: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            permissionRow(L("Control of your apps"), symbol: "macwindow.on.rectangle", allowed: preferences.accessibilityTrusted,
+                          detail: preferences.accessibilityTrusted ? L("Allowed · the assistant can read and use your apps' windows")
+                                                                   : L("Accessibility permission, to read and use your apps' windows"),
+                          action: preferences.requestAccessibility)
+            rowDivider
+            permissionRow(L("Text on screen"), symbol: "text.viewfinder", allowed: preferences.screenRecordingAllowed,
+                          detail: preferences.screenRecordingAllowed ? L("Allowed · text drawn in a window can be read")
+                                                                     : L("Optional: reads text drawn in windows that do not describe themselves"),
+                          action: preferences.requestScreenRecording)
+        }.cardBackground()
+    }
+
+    private func permissionRow(_ title: String, symbol: String, allowed: Bool, detail: String, action: @escaping () -> Void) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol).foregroundStyle(allowed ? JAISBrand.green : .secondary)
+                .font(.system(size: 13)).frame(width: 20)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.system(size: 12, weight: .medium))
+                Text(detail).font(.system(size: 10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 6)
+            if allowed {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(JAISBrand.green).accessibilityLabel(L("Allowed"))
+            } else {
+                Button(L("Allow…"), action: action).controlSize(.small)
+            }
+        }.padding(12)
+    }
+
     private var privacy: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "network").font(.system(size: 12)).padding(.top, 1)
@@ -504,6 +537,7 @@ private extension View {
 
     func show() {
         preferences.refreshMicrophoneStatus()
+        preferences.refreshAppControlStatus()
         // Open where something keeps the assistant from working; otherwise keep the last tab.
         if !preferences.microphoneAuthorized {
             navigation.tab = .general

@@ -2,19 +2,36 @@ import Foundation
 
 /// One action the agent asks to run on this Mac, as the Pi extension describes it:
 /// the confirm title is the tool label, the message a JSON {reason, details}.
+/// Requests about other apps add `kind` (app_read, app_control, web_after_desktop,
+/// overview) and `app`, so the question is worded in the interface language.
 struct ActionRequest: Equatable {
     let tool: String
     let reason: String
     let details: String
+    var kind: String?
+    var app: String?
 
-    init(tool: String, reason: String, details: String) {
-        self.tool = tool; self.reason = reason; self.details = details
+    init(tool: String, reason: String, details: String, kind: String? = nil, app: String? = nil) {
+        self.tool = tool; self.reason = reason; self.details = details; self.kind = kind; self.app = app
     }
 
     init(title: String, message: String) {
         let fields = (try? JSONSerialization.jsonObject(with: Data(message.utf8))) as? [String: Any]
         self.init(tool: title, reason: fields?["reason"] as? String ?? "",
-                  details: fields?["details"] as? String ?? message)
+                  details: fields?["details"] as? String ?? message,
+                  kind: fields?["kind"] as? String, app: fields?["app"] as? String)
+    }
+
+    /// Listing the open windows is not shown for approval; only "never" refuses it.
+    var isOverview: Bool { kind == "overview" }
+
+    var question: String {
+        switch kind {
+        case "app_read": return L("Let JAIS Voice read the windows of {0} until this request ends?", app ?? "")
+        case "app_control": return L("Let JAIS Voice control {0} until this request ends? It can click, type, and use its menus and keys.", app ?? "")
+        case "web_after_desktop": return L("JAIS Voice read your apps during this request. Open this page?")
+        default: return reason
+        }
     }
 }
 

@@ -184,7 +184,8 @@ struct PipelineFailure: Error {
         }
     }
 
-    /// The extension asks before each action on this Mac (shell, Notes).
+    /// The extension asks before each action on this Mac (shell, Notes) and
+    /// before reading or controlling each app, once per request.
     /// Pi waits for the answer; other dialogs are declined, notifications ignored.
     private func answer(_ record: JSONValue) {
         guard let id = record["id"]?.string, let method = record["method"]?.string else { return }
@@ -202,6 +203,7 @@ struct PipelineFailure: Error {
             switch permission {
             case .never: allowed = false
             case .always: allowed = true
+            case .ask where request.isOverview: allowed = self.run != nil
             case .ask: allowed = self.run != nil ? await self.approveAction?(request) ?? false : false
             }
             self.agent.send(["type": .string("extension_ui_response"), "id": .string(id), "confirmed": .bool(allowed)])
@@ -358,7 +360,8 @@ struct PipelineFailure: Error {
             guard let id = record["toolCallId"]?.string, let tool = record["toolName"]?.string, tool != "ask_clarifying_question" else { return }
             let text = record["result"]?["content"]?.array?.compactMap { $0["text"]?.string }.joined(separator: "\n") ?? ""
             let name = Self.displayName(tool)
-            let code = record["isError"]?.bool == true ? (name.hasPrefix("browser_") ? "browser_action_failed" : "shell_failed") : nil
+            let code = record["isError"]?.bool == true
+                ? (name.hasPrefix("browser_") ? "browser_action_failed" : (name.hasPrefix("desktop_") ? "desktop_action_failed" : "shell_failed")) : nil
             emit("tool_end", Fields(errorCode: code, started: toolStarts.removeValue(forKey: id), toolID: id, toolName: name, result: String(text.prefix(2500))))
         case "agent_settled":
             if let question, !question.isEmpty {

@@ -40,7 +40,7 @@ export const BROWSER_TOOLS = [
   "browser_type", "browser_press_key", "browser_select_option", "browser_wait_for",
   "browser_tabs", "browser_fill_form", "browser_find",
 ];
-export const DESKTOP_TOOLS = ["shell_execute", "macos_create_note"];
+export const MAC_TOOLS = ["shell_execute", "macos_create_note"];
 export const SHELL_ENV = {
   PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
   LANG: "en_US.UTF-8",

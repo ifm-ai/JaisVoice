@@ -1,3 +1,5 @@
+import AppKit
+import ApplicationServices
 import AVFoundation
 import Combine
 import Foundation
@@ -17,7 +19,7 @@ struct ASRLanguageChoice: Identifiable, Equatable {
     ] }
 }
 
-/// Whether the agent may run actions on this Mac (shell, Notes).
+/// Whether the agent may run actions on this Mac (shell, Notes) and read or use other apps.
 enum ActionPermission: String, CaseIterable {
     case never, ask, always
 
@@ -31,9 +33,9 @@ enum ActionPermission: String, CaseIterable {
 
     var detail: String {
         switch self {
-        case .never: return L("The assistant can neither run commands nor change your apps. Web browsing remains available.")
-        case .ask: return L("Each command is shown before it runs. You allow or refuse it.")
-        case .always: return L("Warning: commands chosen by the assistant run without confirmation, with your permissions. A model can make mistakes or follow instructions hidden in a web page, and a command can delete or send your files. Only enable this mode if you watch what the assistant does.")
+        case .never: return L("The assistant can neither run commands nor use your apps. Web browsing remains available.")
+        case .ask: return L("Each command, and each app the assistant wants to read or control, is shown first. You allow or refuse it.")
+        case .always: return L("Warning: the assistant runs commands and uses your apps without confirmation, with your permissions. A model can make mistakes or follow instructions hidden in a web page or a window, and can delete or send your files and messages. Only enable this mode if you watch what the assistant does.")
         }
     }
 
@@ -76,6 +78,9 @@ enum MicrophoneAuthorization: Equatable {
     @Published private(set) var modelSize: String
     @Published private(set) var actionPermission: ActionPermission
     @Published var microphoneStatus: MicrophoneAuthorization = .notDetermined
+    /// macOS permissions to read and use other apps, and to read text drawn in their windows.
+    @Published var accessibilityTrusted = false
+    @Published var screenRecordingAllowed = false
     @Published var microphoneRequestPending = false
     @Published var shortcutError: String?
 
@@ -91,6 +96,7 @@ enum MicrophoneAuthorization: Equatable {
         modelSize = Self.normalizedModel(defaults.string(forKey: Self.modelSizeKey))
         actionPermission = defaults.string(forKey: Self.actionPermissionKey).flatMap(ActionPermission.init(rawValue:)) ?? .ask
         refreshMicrophoneStatus()
+        refreshAppControlStatus()
     }
 
     static func normalizedShortcutChoice(_ index: Int) -> Int {
@@ -143,5 +149,25 @@ enum MicrophoneAuthorization: Equatable {
         case .notDetermined: microphoneStatus = .notDetermined
         @unknown default: microphoneStatus = .restricted
         }
+    }
+
+    func refreshAppControlStatus() {
+        accessibilityTrusted = AXIsProcessTrusted()
+        screenRecordingAllowed = CGPreflightScreenCaptureAccess()
+    }
+
+    /// The system prompt appears the first time; afterwards, the matching Privacy pane opens.
+    func requestAccessibility() {
+        if !AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary) {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+        }
+        refreshAppControlStatus()
+    }
+
+    func requestScreenRecording() {
+        if !CGRequestScreenCaptureAccess() {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+        }
+        refreshAppControlStatus()
     }
 }

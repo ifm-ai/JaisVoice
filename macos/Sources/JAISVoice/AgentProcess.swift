@@ -59,7 +59,12 @@ private final class RecordReader: @unchecked Sendable {
         }
         let task = Process()
         task.executableURL = executable
-        task.environment = environment
+        var childEnvironment = environment
+        // The extension starts this binary with --desktop-helper to read and use other apps.
+        if childEnvironment["JAIS_DESKTOP_HELPER"] == nil, let binary = Bundle.main.executablePath {
+            childEnvironment["JAIS_DESKTOP_HELPER"] = binary
+        }
+        task.environment = childEnvironment
         let stdin = Pipe(), stdout = Pipe()
         let log = try ServiceLaunchLog(url: ServiceLauncher.logsDirectory.appendingPathComponent("agent.log"))
         task.standardInput = stdin; task.standardOutput = stdout; task.standardError = log.handle
