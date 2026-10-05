@@ -7,7 +7,7 @@
  * is not a sandbox; macOS privacy permissions still apply.
  */
 import { spawn } from "node:child_process";
-import { closeSync, constants, mkdirSync, openSync, readSync, realpathSync } from "node:fs";
+import { closeSync, constants, existsSync, mkdirSync, openSync, readSync, realpathSync } from "node:fs";
 import { constants as osConstants, homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +16,12 @@ export const ROOT = process.env.JAIS_PROJECT_ROOT || resolve(dirname(fileURLToPa
 export const RUNTIME = process.env.JAIS_RUNTIME_DIR || join(ROOT, ".runtime");
 export const NODE = process.env.JAIS_NODE || process.execPath;
 export const PLAYWRIGHT_CLI = process.env.JAIS_PLAYWRIGHT_CLI || join(ROOT, "node_modules/@playwright/mcp/cli.js");
+export const PLAYWRIGHT_INSTALLER = join(ROOT, "node_modules/playwright/cli.js");
+export const BROWSERS = process.env.PLAYWRIGHT_BROWSERS_PATH || join(RUNTIME, "browsers");
+/** The browser is Google Chrome when this Mac has it; otherwise Playwright's Chromium, downloaded once. */
+export const CHROME = ["/Applications", join(homedir(), "Applications")]
+  .map((folder) => join(folder, "Google Chrome.app/Contents/MacOS/Google Chrome"))
+  .find((path) => existsSync(path));
 /** Where the agent's helpers run; Pi itself runs from the home folder, for the file tools. */
 export const WORKSPACE = process.env.JAIS_AGENT_WORKSPACE || process.cwd();
 export const BROWSER_OUTPUT = join(RUNTIME, "browser-output", String(process.pid));
@@ -41,6 +47,25 @@ export const BROWSER_TOOLS = [
   "browser_navigate", "browser_snapshot", "browser_click", "browser_type", "browser_press_key", "browser_wait_for", "browser_tabs",
 ];
 export const MAC_TOOLS = ["shell_execute", "macos_create_note"];
+
+/** The Playwright MCP arguments that choose the browser. */
+export function browserArgs(chrome: string | undefined): string[] {
+  return chrome ? ["--browser", "chrome", "--executable-path", chrome] : ["--browser", "chromium"];
+}
+
+/** Fetch Playwright's Chromium once (the installer skips a complete copy); a failed attempt is retried on the next call. */
+export function chromiumDownloader(installer: string, browsers = BROWSERS): () => Promise<void> {
+  let pending: Promise<void> | undefined;
+  return () => pending ??= new Promise<void>((resolve, reject) => {
+    // Pi talks RPC over stdout: the installer must not write there.
+    const child = spawn(NODE, [installer, "install", "chromium", "--no-shell"],
+      { env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: browsers }, stdio: ["ignore", "ignore", "pipe"] });
+    let errors = "";
+    child.stderr.on("data", (chunk) => { errors = (errors + chunk).slice(-1000); });
+    child.on("error", reject);
+    child.on("close", (code) => code === 0 ? resolve() : reject(new Error(errors.trim() || `The installer exited with code ${code}.`)));
+  }).catch((error) => { pending = undefined; throw error; });
+}
 export const SHELL_ENV = {
   PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
   LANG: "en_US.UTF-8",

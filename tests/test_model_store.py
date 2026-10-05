@@ -154,6 +154,24 @@ def test_asr_download_fetches_one_profile_verifies_and_installs_its_environment(
     assert not (base / "ASR/unrelated-profile.bin").exists()
 
 
+def test_asr_environment_is_built_on_a_copy_of_the_app_python(store, monkeypatch):
+    _, _, tmp = store
+    name = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    monkeypatch.delenv("JAIS_ASR_PYTHON_HOME", raising=False)
+    assert model_store.asr_python() == str(Path(sys.base_prefix) / "bin" / name)
+    bundled = tmp / "bundle/runtime/python"
+    (bundled / "bin").mkdir(parents=True)
+    (bundled / "bin" / name).write_text("interpreter")
+    (bundled / "lib" / name / "site-packages/mlx_lm").mkdir(parents=True)
+    (bundled / "lib" / name / "venv").mkdir()
+    monkeypatch.setenv("JAIS_ASR_PYTHON_HOME", str(bundled))
+    monkeypatch.setenv("JAIS_RUNTIME_DIR", str(tmp / "runtime"))
+    python = Path(model_store.asr_python())
+    assert python == tmp / "runtime" / name / "bin" / name and python.read_text() == "interpreter"
+    # The app's own packages stay out of the ASR environment's base.
+    assert (python.parents[1] / "lib" / name / "venv").is_dir() and not (python.parents[1] / "lib" / name / "site-packages").exists()
+
+
 def test_altered_asr_file_is_refused(store):
     catalog, base, tmp = store
     repository = asr_repository(tmp / "asr-repo")

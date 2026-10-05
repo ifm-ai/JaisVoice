@@ -47,7 +47,7 @@ def command(env: dict) -> tuple[list[str], dict, Path]:
         "JAIS_NODE": node,
         "JAIS_PLAYWRIGHT_CLI": str(ROOT / "node_modules/@playwright/mcp/cli.js"),
         "JAIS_AGENT_WORKSPACE": str(workspace),
-        # The packaged app ships Chromium read-only in its bundle.
+        # Without Google Chrome, the agent downloads Chromium there when it starts.
         "PLAYWRIGHT_BROWSERS_PATH": env.get("PLAYWRIGHT_BROWSERS_PATH") or str(RUNTIME / "browsers"),
         # rg and fd for Pi's grep and find tools come first.
         "PATH": os.pathsep.join([env.get("JAIS_TOOLS_BIN") or str(RUNTIME / "bin"), str(Path(node).parent), "/usr/bin", "/bin", "/usr/sbin", "/sbin"]),

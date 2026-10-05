@@ -8,9 +8,9 @@ import { StringEnum, Type } from "@earendil-works/pi-ai";
 import { defineTool, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { join } from "node:path";
 import {
-  APPROVAL_SECONDS, approvalMessage, BROWSER_OUTPUT, BROWSER_PREFIX, BROWSER_TOOLS, MAC_TOOLS, MAX_ACTIONS, NODE, PLAYWRIGHT_CLI,
-  RUNTIME, SHELL_SECONDS, WORKSPACE, bounded, bytes, commandProblem, compactContext, inlineSnapshots,
-  noteCommand, REFUSED, runShell, type Message,
+  APPROVAL_SECONDS, approvalMessage, BROWSER_OUTPUT, BROWSER_PREFIX, BROWSER_TOOLS, BROWSERS, browserArgs, CHROME, chromiumDownloader,
+  MAC_TOOLS, MAX_ACTIONS, NODE, PLAYWRIGHT_CLI, PLAYWRIGHT_INSTALLER, RUNTIME, SHELL_SECONDS, WORKSPACE, bounded, bytes, commandProblem,
+  compactContext, inlineSnapshots, noteCommand, REFUSED, runShell, type Message,
 } from "./runtime.ts";
 import {
   appAccessMessage, appRefused, DESKTOP_HELPER, DESKTOP_TOOLS, DesktopGrants, DesktopHelper, hostsIn, NAVIGATION_REFUSED,
@@ -44,11 +44,14 @@ export default function (pi: ExtensionAPI) {
   const helper = new DesktopHelper(DESKTOP_HELPER);
   process.once("exit", () => helper.stop());
 
+  const ensureChromium = chromiumDownloader(PLAYWRIGHT_INSTALLER);
+  // Without Chrome, Chromium is fetched in the background so it is usually there by the first page.
+  if (!CHROME) ensureChromium().catch(() => {});
   pi.registerMcpServer("browser", {
     command: NODE,
-    args: [PLAYWRIGHT_CLI, "--browser", "chromium", "--isolated", "--image-responses", "omit",
+    args: [PLAYWRIGHT_CLI, ...browserArgs(CHROME), "--isolated", "--image-responses", "omit",
       "--codegen", "none", "--output-dir", BROWSER_OUTPUT],
-    env: { PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH || join(RUNTIME, "browsers") },
+    env: { PLAYWRIGHT_BROWSERS_PATH: BROWSERS },
     cwd: WORKSPACE,
     timeout: 60,
     exposure: "hidden",
@@ -315,6 +318,14 @@ export default function (pi: ExtensionAPI) {
       if (!navigationAllowed(url, requestHosts)
           && !await ctx.ui.confirm("Web page", navigationMessage(url), { timeout: APPROVAL_SECONDS * 1000 })) {
         return { block: true, reason: NAVIGATION_REFUSED };
+      }
+    }
+    if (event.toolName.startsWith(BROWSER_PREFIX) && !CHROME) {
+      try {
+        await ensureChromium();
+      } catch (error) {
+        return { block: true, reason: `The browser could not be downloaded (${(error as Error).message}). `
+          + "Tell the user that the first use of the browser needs an internet connection." };
       }
     }
   });

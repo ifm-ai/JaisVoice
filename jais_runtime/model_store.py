@@ -23,6 +23,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import threading
 from typing import Callable
 
@@ -263,24 +264,22 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def find_python311() -> str:
+def asr_python() -> str:
+    """The interpreter the ASR environment is built on: the one running the services."""
+    name = f"python{sys.version_info.major}.{sys.version_info.minor}"
     bundled = os.environ.get("JAIS_ASR_PYTHON_HOME")
-    if bundled:
-        # The ASR environment points at its interpreter: copy the app's one into
-        # the runtime directory so moving or updating the app does not break it.
-        home = runtime_dir() / "python3.11"
-        if not (home / "bin/python3.11").is_file():
-            staging = runtime_dir() / ".python3.11.copy"
-            shutil.rmtree(staging, ignore_errors=True)
-            shutil.copytree(bundled, staging, symlinks=True)
-            shutil.rmtree(home, ignore_errors=True)
-            os.replace(staging, home)
-        return str(home / "bin/python3.11")
-    for candidate in (shutil.which("python3.11"), str(Path.home() / ".local/bin/python3.11"),
-                      "/opt/homebrew/bin/python3.11", "/usr/local/bin/python3.11"):
-        if candidate and Path(candidate).is_file():
-            return candidate
-    raise RuntimeError("Python 3.11 is required for the ASR and was not found (install it, for example with Homebrew).")
+    if not bundled:
+        return str(Path(sys.base_prefix) / "bin" / name)
+    # The ASR environment points at its interpreter: copy the app's one, without
+    # the app's packages, so moving or updating the app does not break it.
+    home = runtime_dir() / name
+    if not (home / "bin" / name).is_file():
+        staging = runtime_dir() / f".{name}.copy"
+        shutil.rmtree(staging, ignore_errors=True)
+        shutil.copytree(bundled, staging, symlinks=True, ignore=shutil.ignore_patterns("site-packages"))
+        shutil.rmtree(home, ignore_errors=True)
+        os.replace(staging, home)
+    return str(home / "bin" / name)
 
 
 def _download_asr(entry: dict, staging: Path, progress: Progress, hub, python: str) -> None:
@@ -298,7 +297,7 @@ def _download_asr(entry: dict, staging: Path, progress: Progress, hub, python: s
         path = staging / item["path"]
         if not path.is_file() or path.stat().st_size != item["bytes"] or sha256(path) != item["sha256"]:
             raise RuntimeError(f"Incomplete or altered ASR file: {item['path']}")
-    # The published installer builds the model's own Python 3.11 environment.
+    # The published installer builds the model's own environment on the app's Python.
     progress({"event": "progress", "phase": "install"})
     shutil.rmtree(staging / ".venv", ignore_errors=True)
     subprocess.run(["/bin/bash", str(staging / "install.sh")], cwd=staging, check=True,
@@ -361,7 +360,7 @@ def download(entry: dict, base: Path, progress: Progress, *, hub=None, python: s
             raise RuntimeError(f"{entry['display_name']} is already installed.")
         staging.mkdir(parents=True, exist_ok=True)
         if entry["kind"] == "asr":
-            _download_asr(entry, staging, progress, hub, python or find_python311())
+            _download_asr(entry, staging, progress, hub, python or asr_python())
         else:
             _download_llm(entry, staging, base, progress, hub)
         record = {"id": entry["id"], **entry["download"], "downloaded_at": datetime.now(timezone.utc).isoformat()}

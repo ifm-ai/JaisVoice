@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { ARABIC_REMINDER, approvalMessage, commandProblem, compactContext, inlineSnapshots, noteCommand, runShell, shellQuote, type Message } from "./runtime.ts";
+import {
+  ARABIC_REMINDER, approvalMessage, browserArgs, chromiumDownloader, commandProblem, compactContext, inlineSnapshots, noteCommand, runShell,
+  shellQuote, type Message,
+} from "./runtime.ts";
 
 const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 
@@ -117,4 +120,25 @@ test("Arabic requests and their tool results get a reply-language reminder in th
 test("approval message carries the reason and the exact action", () => {
   const message = approvalMessage("Ouvrir Safari", "open -a 'Safari'");
   assert.deepEqual(JSON.parse(message), { reason: "Ouvrir Safari", details: "open -a 'Safari'" });
+});
+
+test("Chrome is used when installed, Chromium otherwise", () => {
+  const chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+  assert.deepEqual(browserArgs(chrome), ["--browser", "chrome", "--executable-path", chrome]);
+  assert.deepEqual(browserArgs(undefined), ["--browser", "chromium"]);
+});
+
+test("Chromium is downloaded once, and again after a failure", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "jais-chromium-"));
+  const installer = join(dir, "cli.js");
+  // Fails on the first run, then records each successful run and its arguments.
+  writeFileSync(installer, `const fs = require("node:fs");
+const runs = ${JSON.stringify(join(dir, "runs"))};
+if (!fs.existsSync(runs)) { fs.writeFileSync(runs, ""); console.error("offline"); process.exit(1); }
+fs.appendFileSync(runs, process.argv.slice(2).join(" ") + " " + process.env.PLAYWRIGHT_BROWSERS_PATH + "\\n");`);
+  const ensure = chromiumDownloader(installer, join(dir, "browsers"));
+  await assert.rejects(ensure(), /offline/);
+  await Promise.all([ensure(), ensure()]);
+  await ensure();
+  assert.equal(readFileSync(join(dir, "runs"), "utf8"), `install chromium --no-shell ${join(dir, "browsers")}\n`);
 });
