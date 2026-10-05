@@ -29,7 +29,7 @@
 
 - **Local speech recognition** with JAIS-ASR, including Arabic dialects.
 - **Self-correction cleanup**: “to Ahmed… I mean Sara” becomes “to Sara” before anything runs.
-- **An agent that acts**: it answers, browses the web in a dedicated Chromium, creates notes, runs macOS commands, reads and writes your files, and uses your apps' windows (reading them, clicking, typing, choosing menu items).
+- **An agent that acts**: it answers, browses the web in its own browser window (Google Chrome with a separate, empty profile; on a Mac without Chrome, JAIS Voice downloads Chromium once), creates notes, runs macOS commands, reads and writes your files, and uses your apps' windows (reading them, clicking, typing, choosing menu items).
 - **You stay in control**: every action on your Mac is shown for approval by default (never, ask, or always).
 - **No cloud**: speech, models and agent run on your Mac with MLX; only the web pages you ask for are fetched.
 

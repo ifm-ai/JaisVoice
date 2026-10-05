@@ -2,16 +2,16 @@
 """Build and assemble the native app.
 
 By default the bundle is self-contained, so it can be shared: it embeds Python
-3.12 with the service dependencies, Python 3.11 for the ASR environment, Node.js,
-Pi with its extension, and Chromium. User data (models, logs, Pi state) lives in
-~/Library/Application Support/JAIS Voice, never in the signed bundle.
+3.12 with the service dependencies (the ASR environment is built on it too),
+Node.js, and Pi with its extension. The browser is the Mac's Google Chrome, or a
+Chromium the agent downloads. User data (models, logs, Pi state, Chromium) lives
+in ~/Library/Application Support/JAIS Voice, never in the signed bundle.
 
 --dev keeps the previous behaviour: small launchers that run this checkout's
 .venv, scripts and .runtime directory, for quick iteration.
 """
 import argparse
 import datetime
-import json
 import os
 from pathlib import Path
 import plistlib
@@ -29,11 +29,31 @@ APP_SOURCES = ("agent", "jais_runtime", "models", "scripts", "package.json", "pa
 UPDATE_FEED = "https://api.github.com/repos/MBZUAI-IFM/JaisVoice/releases/latest"
 LAUNCHERS = (("launch-services", "run_services.py"), ("launch-agent", "run_agent.py"), ("launch-models", "models.py"))
 IGNORED = shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store", "*.test.ts")
+# What nothing in the app runs: Tk and IDLE, the shared library for embedding
+# (the interpreter is static), test suites, and pip (the ASR environment gets its own).
+PYTHON_UNUSED = (
+    "share", "lib/libpython3.12.dylib", "lib/libtcl*", "lib/tcl9*", "lib/tk9*", "lib/itcl*", "lib/thread*",
+    "lib/python3.12/idlelib", "lib/python3.12/tkinter", "lib/python3.12/turtle*", "lib/python3.12/lib2to3",
+    "lib/python3.12/pydoc_data", "lib/python3.12/lib-dynload/_tkinter*", "lib/python3.12/site-packages/pip",
+    "lib/python3.12/site-packages/pip-*", "lib/python3.12/site-packages/**/tests",
+)
+# Source maps and type declarations only serve development.
+NODE_UNUSED = ("**/*.map", "**/*.d.ts", "**/*.d.mts", "**/*.d.cts")
 
 
 def run(*args, **kwargs):
     print("+", " ".join(map(str, args)), flush=True)
     subprocess.run(list(map(str, args)), check=True, **kwargs)
+
+
+def prune(root: Path, patterns) -> None:
+    for pattern in patterns:
+        # Listed first: a match may sit inside another one removed before it.
+        for path in list(root.glob(pattern)):
+            if path.is_symlink() or path.is_file():
+                path.unlink()
+            elif path.is_dir():
+                shutil.rmtree(path)
 
 
 def managed_python(version: str) -> Path:
@@ -71,11 +91,21 @@ def embed_python(resources: Path) -> Path:
     lines = (ROOT / "requirements.in").read_text().splitlines()
     requirements.write_text("\n".join(line for line in lines if not line.startswith("pytest")) + "\n")
     run("uv", "pip", "install", "--python", python, "--cache-dir", CACHE / "uv", "-r", requirements, "-c", ROOT / "requirements.lock")
+    prune(home, PYTHON_UNUSED)
+    # Package scripts point at the build machine; only the interpreter is run.
+    for script in (home / "bin").iterdir():
+        if script.name not in ("python", "python3", "python3.12"):
+            script.unlink()
     return python
 
 
-def embed_python311(resources: Path) -> None:
-    shutil.copytree(managed_python("3.11"), resources / "runtime/python3.11", symlinks=True, ignore=IGNORED)
+def embed_node(resources: Path, node: Path, identity: str) -> None:
+    target = resources / "runtime/node/bin/node"
+    target.parent.mkdir(parents=True)
+    shutil.copy2(node, target)
+    # Debug symbols are a quarter of the binary; stripping voids Node's signature, so sign it again.
+    run("/usr/bin/strip", "-x", target)
+    run("/usr/bin/codesign", "--force", "--sign", identity, target)
 
 
 def embed_app(resources: Path, node: Path) -> Path:
@@ -96,17 +126,8 @@ def embed_app(resources: Path, node: Path) -> Path:
     for platform in app.glob("node_modules/**/@esbuild/*"):
         if platform.is_dir() and platform.name != "darwin-arm64":
             shutil.rmtree(platform)
+    prune(app / "node_modules", NODE_UNUSED)
     return app
-
-
-def embed_chromium(resources: Path, app: Path, node: Path) -> None:
-    """Copy the Chromium revision this Playwright expects; the cache avoids re-downloading it."""
-    browsers = CACHE / "browsers"
-    env = dict(os.environ, PLAYWRIGHT_BROWSERS_PATH=str(browsers))
-    run(node, app / "node_modules/playwright/cli.js", "install", "chromium", "--no-shell", env=env)
-    manifest = json.loads((app / "node_modules/playwright-core/browsers.json").read_text())
-    revision = next(browser["revision"] for browser in manifest["browsers"] if browser["name"] == "chromium")
-    shutil.copytree(browsers / f"chromium-{revision}", resources / f"runtime/browsers/chromium-{revision}", symlinks=True)
 
 
 def write_launchers(resources: Path, dev: bool) -> None:
@@ -119,8 +140,7 @@ def write_launchers(resources: Path, dev: bool) -> None:
 : "${{JAIS_RUNTIME_DIR:=$HOME/Library/Application Support/JAIS Voice}}"
 export JAIS_RUNTIME_DIR
 export JAIS_NODE="$HERE/runtime/node/bin/node"
-export JAIS_ASR_PYTHON_HOME="$HERE/runtime/python3.11"
-export PLAYWRIGHT_BROWSERS_PATH="$HERE/runtime/browsers"
+export JAIS_ASR_PYTHON_HOME="$HERE/runtime/python"
 export JAIS_TOOLS_BIN="$HERE/runtime/bin"
 export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
 exec "$HERE/runtime/python/bin/python3.12" "$HERE/app/scripts/{script}" "$@"
@@ -167,11 +187,8 @@ def main():
         shutil.copytree(resource_dir, resources, dirs_exist_ok=True)
     if not args.dev:
         python = embed_python(resources)
-        embed_python311(resources)
-        (resources / "runtime/node/bin").mkdir(parents=True)
-        shutil.copy2(node, resources / "runtime/node/bin/node")
+        embed_node(resources, node, args.sign)
         bundled_app = embed_app(resources, node)
-        embed_chromium(resources, bundled_app, node)
         from agent_tools import install
         install(resources / "runtime/bin", CACHE / "agent-tools")
         # Bytecode is written now: at run time the signed bundle must stay unchanged.

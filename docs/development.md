@@ -47,8 +47,8 @@ python3.12 scripts/setup.py
 
 The build writes to `outputs/`:
 
-- `JAIS Voice.app` (about 1.6 GB): a self-contained app embedding Python 3.12 with the service dependencies, Python 3.11 for the ASR environment, Node.js, Pi and Chromium. Its data lives in `~/Library/Application Support/JAIS Voice/` (or `JAIS_RUNTIME_DIR`). Downloads are cached in `.runtime/build-cache/`.
-- `JAIS-Voice-<version>.dmg` (about 530 MB, with `--dmg`): a drag-to-install disk image laid out by Finder through AppleScript, so the first local run asks to allow controlling Finder.
+- `JAIS Voice.app` (about 670 MB): a self-contained app embedding Python 3.12 with the service dependencies (the ASR environment is built on a copy of it), Node.js and Pi. The browser is the Mac's Google Chrome, or a Chromium the agent downloads into the data folder. Its data lives in `~/Library/Application Support/JAIS Voice/` (or `JAIS_RUNTIME_DIR`). Downloads are cached in `.runtime/build-cache/`.
+- `JAIS-Voice-<version>.dmg` (about 185 MB, with `--dmg`): a drag-to-install disk image laid out by Finder through AppleScript, so the first local run asks to allow controlling Finder.
 
 `--dev` builds a small app whose launchers run this checkout (`.venv`, `scripts/`, `.runtime/`) for quick iteration. Apps are signed ad hoc unless `--sign` names an identity, with no notarization.
 

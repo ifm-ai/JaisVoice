@@ -191,7 +191,6 @@
 "{0} will be freed on this Mac." = "{0} seront libérés sur ce Mac.";
 "Hugging Face repository unreachable. Check the catalog link or sign in with `hf auth login`." = "Dépôt Hugging Face inaccessible. Vérifiez le lien du catalogue ou connectez-vous avec `hf auth login`.";
 "An operation is already in progress for this model." = "Une opération est déjà en cours pour ce modèle.";
-"Python 3.11 is required for the ASR and was not found (install it, for example with Homebrew)." = "Python 3.11 est requis pour l’ASR et n’a pas été trouvé (installez-le, par exemple avec Homebrew).";
 "Actions on this Mac" = "Actions sur le Mac";
 "Never allow" = "Ne jamais autoriser";
 "Ask every time" = "Demander à chaque fois";

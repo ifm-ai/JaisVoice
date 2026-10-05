@@ -1,3 +1,8 @@
+## What's new in 1.1.0
+
+- Smaller app bundle with one Python runtime and no bundled Chromium. When Google Chrome is unavailable, Chromium is downloaded on first use.
+- Shorter assistant system prompt focused on its role, available capabilities and essential safeguards, with more freedom to choose its approach.
+
 ## Install
 
 1. Download the `.dmg` below and open it.

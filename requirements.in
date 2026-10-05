@@ -1,10 +1,7 @@
-mcp==1.30.0
 jsonschema==4.26.0
 fastapi==0.141.1
 uvicorn==0.53.0
 httpx==0.28.1
-python-multipart==0.0.32
-mlx-vlm==0.7.1
 mlx-lm==0.31.3
 huggingface-hub==1.31.0
 safetensors==0.8.0
