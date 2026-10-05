@@ -1,7 +1,8 @@
 /**
  * JAIS Voice tools for Pi: macOS shell, Notes, the apps' windows, clarification
- * and the Playwright browser, with a per-request action budget. Actions on the
- * Mac wait for JAIS Voice to approve them (extension UI confirm over RPC).
+ * and the Playwright browser, beside Pi's own file tools, with a per-request
+ * action budget. Actions on the Mac, and reading or writing files, wait for
+ * JAIS Voice to approve them (extension UI confirm over RPC).
  */
 import { StringEnum, Type } from "@earendil-works/pi-ai";
 import { defineTool, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -15,17 +16,30 @@ import {
   appAccessMessage, appRefused, DESKTOP_HELPER, DESKTOP_TOOLS, DesktopGrants, DesktopHelper, hostsIn, NAVIGATION_REFUSED,
   navigationAllowed, navigationMessage, OVERVIEW_MESSAGE, tierProblem, type Access, type DesktopApp,
 } from "./desktop.ts";
+import {
+  FILE_TOOLS, FILES_READ_MESSAGE, FILES_REFUSED, fileWriteMessage, isInside, READ_TOOLS, readProblem, resolveToolPath, skillFor,
+  skillInstructions, toolPath, WRITE_REFUSED, writeProblem,
+} from "./files.ts";
+
+/** The agent's own skills, read without asking; and what the agent may never write. */
+const AGENT_DIR = process.env.PI_CODING_AGENT_DIR || join(RUNTIME, "pi-agent");
+const SKILLS = resolveToolPath(join(AGENT_DIR, "skills"), "/");
+const OWN_PATHS = [RUNTIME, AGENT_DIR, process.env.JAIS_PROJECT_ROOT ?? ""];
 
 const text = (value: string) => ({ content: [{ type: "text" as const, text: value }], details: undefined });
 
 export default function (pi: ExtensionAPI) {
   let actions = 0;
   let clarified = false;
-  /** Set once an app's window was read in this request: the web may then only receive what the user allows. */
+  /** Set once a window or file was read in this request: the web may then only receive what the user allows. */
   let desktopRead = false;
   let requestHosts: string[] = [];
   /** Small models repeat a failing action: a third identical call among the last eight is stopped. */
   let recentCalls: string[] = [];
+  /** Reading files is approved once per request. */
+  let filesAllowed = false;
+  /** Skills the model has in this request: read by itself, or joined to its first use of their tools. */
+  let skillsShown = new Set<string>();
   const grants = new DesktopGrants();
   const helper = new DesktopHelper(DESKTOP_HELPER);
   process.once("exit", () => helper.stop());
@@ -181,20 +195,6 @@ export default function (pi: ExtensionAPI) {
   }));
 
   pi.registerTool(defineTool({
-    name: "desktop_find",
-    label: "Find in window",
-    description: "Find the elements of an app's window whose name, value or text contains some words, with their refs. "
-      + "Use it when a snapshot is truncated or the window is long.",
-    parameters: Type.Object({
-      app: appName,
-      text: Type.String({ description: "Words to look for, case and accents ignored." }),
-      window: windowName,
-    }, { additionalProperties: false }),
-    executionMode: "sequential",
-    execute: (_id, params, signal, _update, ctx) => onApp(ctx, params.app, "read", "find", { text: params.text, window: params.window }, signal),
-  }));
-
-  pi.registerTool(defineTool({
     name: "desktop_click",
     label: "Click",
     description: "Click an element of an app by its ref: a button, checkbox, row, tab, link or menu. Returns the app's window afterwards.",
@@ -213,8 +213,7 @@ export default function (pi: ExtensionAPI) {
     label: "Type text",
     description: "Type text into a text field or text area of an app, by its ref. replace mode replaces the field's content, "
       + "append mode adds at the end; a text area that already has text needs one of them. Set submit to press Return afterwards. "
-      + "With a window ref, the text is typed "
-      + "as keys in that window (for example \"128*47=\" in a calculator). Never for passwords.",
+      + "For apps without text fields (a calculator), use desktop_press_key. Never for passwords.",
     parameters: Type.Object({
       app: appName, ref,
       text: Type.String({ description: "The exact text to type, in the user's wording (maximum 4000 UTF-8 bytes)." }),
@@ -270,13 +269,13 @@ export default function (pi: ExtensionAPI) {
   pi.on("before_agent_start", (event) => {
     actions = 0; clarified = false;
     desktopRead = false; requestHosts = hostsIn(event.prompt ?? "");
-    recentCalls = [];
+    recentCalls = []; filesAllowed = false; skillsShown = new Set();
     grants.reset();
   });
 
   pi.on("tool_call", async (event, ctx) => {
     const name = event.toolName.startsWith(BROWSER_PREFIX) ? event.toolName.slice(BROWSER_PREFIX.length) : event.toolName;
-    if (!BROWSER_TOOLS.includes(name) && !MAC_TOOLS.includes(name) && !DESKTOP_TOOLS.includes(name)) return;
+    if (![BROWSER_TOOLS, MAC_TOOLS, DESKTOP_TOOLS, FILE_TOOLS].some((tools) => tools.includes(name))) return;
     if (clarified) return { block: true, reason: "A clarifying question is pending; wait for the user's answer.", terminate: true };
     if (actions >= MAX_ACTIONS) {
       return { block: true, reason: `The ${MAX_ACTIONS}-action limit has been reached. Summarize what you found and explain what remains.` };
@@ -290,7 +289,27 @@ export default function (pi: ExtensionAPI) {
     actions += 1;
     // Snapshots must stay inline so the model can use their element references.
     if (name === "browser_snapshot") delete (event.input as Record<string, unknown>).filename;
-    // A page could carry what was read in the user's windows: ask before sending it anywhere new.
+    if (FILE_TOOLS.includes(name)) {
+      const input = event.input as Record<string, unknown>;
+      const path = toolPath(input, process.cwd());
+      const confirm = (title: string, message: string) => ctx.ui.confirm(title, message, { timeout: APPROVAL_SECONDS * 1000 });
+      if (READ_TOOLS.includes(name)) {
+        const problem = readProblem(path);
+        if (problem) return { block: true, reason: problem };
+        if (isInside(path, SKILLS)) {
+          skillsShown.add(path.slice(SKILLS.length + 1).split("/")[0]);
+        } else {
+          if (!filesAllowed && !await confirm("File access", FILES_READ_MESSAGE)) return { block: true, reason: FILES_REFUSED };
+          filesAllowed = true;
+          desktopRead = true;
+        }
+      } else {
+        const problem = writeProblem(path, OWN_PATHS);
+        if (problem) return { block: true, reason: problem + " Do not try another way." };
+        if (!await confirm(name === "write" ? "Write file" : "Edit file", fileWriteMessage(name, path, input))) return { block: true, reason: WRITE_REFUSED };
+      }
+    }
+    // A page could carry what was read in the user's windows or files: ask before sending it anywhere new.
     if (name === "browser_navigate" && desktopRead) {
       const url = String((event.input as Record<string, unknown>).url ?? "");
       if (!navigationAllowed(url, requestHosts)
@@ -301,18 +320,28 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("tool_result", (event) => {
-    if (!event.toolName.startsWith(BROWSER_PREFIX)) return;
-    const name = event.toolName.slice(BROWSER_PREFIX.length);
+    const browser = event.toolName.startsWith(BROWSER_PREFIX);
+    const name = browser ? event.toolName.slice(BROWSER_PREFIX.length) : event.toolName;
+    // A small model rarely reads a skill by itself: the first result of an area's tools brings it.
+    // Reading a skill file is not file work.
+    const ownSkill = name === "read" && isInside(toolPath(event.input, process.cwd()), SKILLS);
+    const skill = ownSkill ? undefined : skillFor(name);
+    const guide = skill && !skillsShown.has(skill) ? skillInstructions(SKILLS, skill) : "";
+    if (skill) skillsShown.add(skill);
     let changed = false;
-    const content = event.content.map((part) => {
-      if (part.type !== "text") return part;
+    let content = event.content.map((part) => {
+      if (part.type !== "text" || !browser) return part;
       let value = inlineSnapshots(part.text, BROWSER_OUTPUT, [WORKSPACE, process.cwd()]);
-      if (!event.isError && !["browser_snapshot", "browser_find"].includes(name) && !value.includes("### Snapshot")) {
+      if (!event.isError && name !== "browser_snapshot" && !value.includes("### Snapshot")) {
         value += "\n[This action returned no page snapshot. Call browser_snapshot before using element references.]";
       }
       changed ||= value !== part.text;
       return { ...part, text: value };
     });
+    if (guide) {
+      content = [...content, { type: "text" as const, text: `\n### Skill ${skill}: follow it for this task\n${guide}` }];
+      changed = true;
+    }
     if (changed) return { content };
   });
 

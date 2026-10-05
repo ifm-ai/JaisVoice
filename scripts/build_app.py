@@ -121,6 +121,7 @@ export JAIS_RUNTIME_DIR
 export JAIS_NODE="$HERE/runtime/node/bin/node"
 export JAIS_ASR_PYTHON_HOME="$HERE/runtime/python3.11"
 export PLAYWRIGHT_BROWSERS_PATH="$HERE/runtime/browsers"
+export JAIS_TOOLS_BIN="$HERE/runtime/bin"
 export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
 exec "$HERE/runtime/python/bin/python3.12" "$HERE/app/scripts/{script}" "$@"
 '''
@@ -171,6 +172,8 @@ def main():
         shutil.copy2(node, resources / "runtime/node/bin/node")
         bundled_app = embed_app(resources, node)
         embed_chromium(resources, bundled_app, node)
+        from agent_tools import install
+        install(resources / "runtime/bin", CACHE / "agent-tools")
         # Bytecode is written now: at run time the signed bundle must stay unchanged.
         run(python, "-m", "compileall", "-q", "-j", "0", "--invalidation-mode", "unchecked-hash",
             resources / "runtime/python/lib/python3.12", bundled_app)

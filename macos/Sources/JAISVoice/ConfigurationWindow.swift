@@ -370,7 +370,16 @@ struct ConfigurationView: View {
                     ForEach(ASRLanguageChoice.choices) { language in
                         Text(language.label).tag(language.code)
                     }
-                }.labelsHidden().frame(width: 154).disabled(state.isBusy)
+                }.labelsHidden().frame(width: 190).disabled(state.isBusy)
+            }
+            rowDivider
+            settingRow(L("Reasoning")) {
+                Picker(L("Reasoning"), selection: Binding(get: { preferences.reasoningEffort }, set: { preferences.setReasoningEffort($0) })) {
+                    ForEach(ReasoningEffort.allCases, id: \.self) { effort in
+                        Text(effort.label).tag(effort)
+                    }
+                }.labelsHidden().frame(width: 190).disabled(state.isBusy)
+                    .help(L("How long the model thinks before it answers or acts. Higher is more careful, but slower."))
             }
         }.cardBackground()
     }

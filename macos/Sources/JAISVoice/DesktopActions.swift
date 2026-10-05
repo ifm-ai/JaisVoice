@@ -27,10 +27,12 @@ enum DesktopKeys {
     /// "cmd+shift+n", "return", "down down return": at most ten combinations.
     /// `lookup` gives a character's key code and whether it needs Shift.
     static func parse(_ text: String, lookup: (Character) -> (CGKeyCode, Bool)?) throws -> [Combo] {
-        // A run of plain characters ("15") is one key per character.
+        // A run of digits and symbols ("128*47=") is one key per character. Words are not:
+        // typed as single letters, they would trigger an app's one-key shortcuts.
         let combos = text.split(whereSeparator: { $0 == " " || $0 == "," }).flatMap { token -> [String] in
             let word = String(token)
-            return word.count > 1 && !word.contains("+") && named[word.lowercased()] == nil ? word.map(String.init) : [word]
+            let run = word.count > 1 && !word.contains("+") && !word.contains(where: \.isLetter)
+            return run ? word.map(String.init) : [word]
         }
         guard !combos.isEmpty, combos.count <= 30 else { throw VoiceError.message("Give one to thirty keys, such as \"cmd+n\", \"return\" or \"down down return\".") }
         return try combos.map { combo in
@@ -83,20 +85,6 @@ enum DesktopKeys {
             event.flags = combo.flags
             event.postToPid(pid)
             usleep(8_000)
-        }
-    }
-
-    /// Types text key by key, as on the keyboard: for apps that read keys, not text (Calculator).
-    static func typeAsKeys(_ text: String, to pid: pid_t) {
-        for character in text {
-            if character == "\n" || character == "\r" {
-                post(Combo(code: 36, flags: [], label: "return"), to: pid)
-            } else if let (code, shift) = layoutKey(character) {
-                post(Combo(code: code, flags: shift ? .maskShift : [], label: String(character)), to: pid)
-            } else {
-                type(String(character), to: pid)
-            }
-            usleep(15_000)
         }
     }
 
@@ -270,16 +258,8 @@ enum DesktopKeys {
         guard !info.isSecure else { throw VoiceError.message("The assistant never fills password fields. Ask the user to type it.") }
         let pid = ref.pid
         guard textRoles.contains(info.role) || element.isSettable(kAXValueAttribute) || element.isSettable(kAXSelectedTextAttribute) else {
-            // A window ref types on the keyboard into that window (a calculator); other elements are refused.
-            guard info.role == "AXWindow", !text.isEmpty, text.count <= 500 else {
-                throw VoiceError.message("The \(fieldName) is not a text field. Pick a text field from the snapshot, "
-                    + "or give the window ref (w…) to type the text as keys in the app.")
-            }
-            // Keys go to the app's process even when it cannot come to the front.
-            bringToFront(pid, window: element)
-            DesktopKeys.typeAsKeys(text, to: pid)
-            if submit { DesktopKeys.post(DesktopKeys.Combo(code: 36, flags: [], label: "return"), to: pid) }
-            return "The \(fieldName) is not a text field, so the text was typed as keys in \(app.name)." + (submit ? " Pressed Return." : "")
+            throw VoiceError.message("The \(fieldName) is not a text field. Pick a text field from the snapshot; "
+                + "for an app without one (a calculator), press keys with desktop_press_key, for example \"128*47=\".")
         }
         guard info.enabled else { throw VoiceError.message("The \(fieldName) is disabled right now.") }
         if mode == nil, info.role == "AXTextArea", !text.isEmpty, !(info.valueText ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

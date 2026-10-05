@@ -11,7 +11,7 @@ import { createInterface } from "node:readline";
 
 export const DESKTOP_HELPER = process.env.JAIS_DESKTOP_HELPER || "";
 export const DESKTOP_TOOLS = [
-  "desktop_list_windows", "desktop_open_app", "desktop_snapshot", "desktop_find", "desktop_click",
+  "desktop_list_windows", "desktop_open_app", "desktop_snapshot", "desktop_click",
   "desktop_type", "desktop_press_key", "desktop_menu", "desktop_scroll",
 ];
 

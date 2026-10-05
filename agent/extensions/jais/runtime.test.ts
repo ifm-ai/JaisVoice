@@ -84,17 +84,17 @@ test("context keeps recent dialogue and shortens stale tool output in a copy", (
   const messages: Message[] = [];
   for (let turn = 0; turn < 10; turn++) {
     messages.push({ role: "user", content: `question ${turn}` });
-    messages.push({ role: "assistant", content: [{ type: "text", text: "a".repeat(2000) }] });
-    messages.push({ role: "toolResult", content: [{ type: "text", text: "p".repeat(20000) }] });
+    messages.push({ role: "assistant", content: [{ type: "text", text: "a".repeat(4000) }] });
+    messages.push({ role: "toolResult", content: [{ type: "text", text: "p".repeat(30000) }] });
   }
   const compacted = compactContext(messages);
   assert.equal(compacted.filter((message) => message.role === "user").length, 8);
   assert.equal(compacted[0].content, "question 2");
   const results = compacted.filter((message) => message.role === "toolResult").map((message) => message.content[0].text.length);
-  assert.ok(results.slice(0, -1).every((length) => length < 800));
-  assert.ok(results.at(-1)! > 10000 && results.at(-1)! < 10200);
-  assert.ok(compacted.filter((message) => message.role === "assistant").every((message) => message.content[0].text.length <= 1601));
-  assert.equal(messages[2].content[0].text.length, 20000);
+  assert.ok(results.slice(0, -1).every((length) => length < 1300));
+  assert.ok(results.at(-1)! > 20000 && results.at(-1)! < 20200);
+  assert.ok(compacted.filter((message) => message.role === "assistant").every((message) => message.content[0].text.length <= 3001));
+  assert.equal(messages[2].content[0].text.length, 30000);
 });
 
 test("Arabic requests and their tool results get a reply-language reminder in the model's context only", () => {

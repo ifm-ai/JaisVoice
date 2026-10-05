@@ -374,7 +374,7 @@ import UniformTypeIdentifiers
     }
 
     private var turnOptions: LocalPipeline.TurnOptions {
-        .init(conversationID: state.conversationID, modelSize: preferences.modelSize)
+        .init(conversationID: state.conversationID, modelSize: preferences.modelSize, reasoningEffort: preferences.reasoningEffort.rawValue)
     }
 
     private func press() {

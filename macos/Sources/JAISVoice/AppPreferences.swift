@@ -19,6 +19,20 @@ struct ASRLanguageChoice: Identifiable, Equatable {
     ] }
 }
 
+/// How long the model thinks before it answers or acts: the chat template's
+/// reasoning_effort. The model cards recommend high; low answers fastest.
+enum ReasoningEffort: String, CaseIterable {
+    case low, medium, high
+
+    var label: String {
+        switch self {
+        case .low: return L("Low · fastest")
+        case .medium: return L("Medium")
+        case .high: return L("High · most careful")
+        }
+    }
+}
+
 /// Whether the agent may run actions on this Mac (shell, Notes) and read or use other apps.
 enum ActionPermission: String, CaseIterable {
     case never, ask, always
@@ -69,6 +83,7 @@ enum MicrophoneAuthorization: Equatable {
     static let asrLanguageKey = "asrLanguage"
     static let modelSizeKey = "sharedModelSize"
     static let actionPermissionKey = "actionPermission"
+    static let reasoningEffortKey = "reasoningEffort"
     @Published private(set) var interfaceLanguage: InterfaceLanguage
     private let defaults: UserDefaults
 
@@ -77,6 +92,7 @@ enum MicrophoneAuthorization: Equatable {
     /// The Jais 3 size shared by transcript cleanup and the agent.
     @Published private(set) var modelSize: String
     @Published private(set) var actionPermission: ActionPermission
+    @Published private(set) var reasoningEffort: ReasoningEffort
     @Published var microphoneStatus: MicrophoneAuthorization = .notDetermined
     /// macOS permissions to read and use other apps, and to read text drawn in their windows.
     @Published var accessibilityTrusted = false
@@ -95,6 +111,7 @@ enum MicrophoneAuthorization: Equatable {
         asrLanguage = Self.normalizedASRLanguage(defaults.string(forKey: Self.asrLanguageKey))
         modelSize = Self.normalizedModel(defaults.string(forKey: Self.modelSizeKey))
         actionPermission = defaults.string(forKey: Self.actionPermissionKey).flatMap(ActionPermission.init(rawValue:)) ?? .ask
+        reasoningEffort = defaults.string(forKey: Self.reasoningEffortKey).flatMap(ReasoningEffort.init(rawValue:)) ?? .low
         refreshMicrophoneStatus()
         refreshAppControlStatus()
     }
@@ -123,6 +140,11 @@ enum MicrophoneAuthorization: Equatable {
     func setActionPermission(_ permission: ActionPermission) {
         actionPermission = permission
         defaults.set(permission.rawValue, forKey: Self.actionPermissionKey)
+    }
+
+    func setReasoningEffort(_ effort: ReasoningEffort) {
+        reasoningEffort = effort
+        defaults.set(effort.rawValue, forKey: Self.reasoningEffortKey)
     }
 
     func setModelSize(_ value: String) {

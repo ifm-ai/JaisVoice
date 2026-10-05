@@ -16,7 +16,8 @@ export const ROOT = process.env.JAIS_PROJECT_ROOT || resolve(dirname(fileURLToPa
 export const RUNTIME = process.env.JAIS_RUNTIME_DIR || join(ROOT, ".runtime");
 export const NODE = process.env.JAIS_NODE || process.execPath;
 export const PLAYWRIGHT_CLI = process.env.JAIS_PLAYWRIGHT_CLI || join(ROOT, "node_modules/@playwright/mcp/cli.js");
-export const WORKSPACE = process.cwd();
+/** Where the agent's helpers run; Pi itself runs from the home folder, for the file tools. */
+export const WORKSPACE = process.env.JAIS_AGENT_WORKSPACE || process.cwd();
 export const BROWSER_OUTPUT = join(RUNTIME, "browser-output", String(process.pid));
 
 export const MAX_ACTIONS = 50;
@@ -35,10 +36,9 @@ export const REFUSED = "The user did not allow this action in JAIS Voice, so it 
 export function approvalMessage(reason: string, details: string): string {
   return JSON.stringify({ reason, details });
 }
+/** The Playwright tools the model sees; the others repeat these (fill_form, find) or are rarely needed. */
 export const BROWSER_TOOLS = [
-  "browser_navigate", "browser_navigate_back", "browser_snapshot", "browser_click",
-  "browser_type", "browser_press_key", "browser_select_option", "browser_wait_for",
-  "browser_tabs", "browser_fill_form", "browser_find",
+  "browser_navigate", "browser_snapshot", "browser_click", "browser_type", "browser_press_key", "browser_wait_for", "browser_tabs",
 ];
 export const MAC_TOOLS = ["shell_execute", "macos_create_note"];
 export const SHELL_ENV = {
@@ -178,29 +178,32 @@ export function inlineSnapshots(text: string, outputDir: string, bases: string[]
 
 export type Message = { role: string; content?: any; [key: string]: any };
 
+/** Characters kept in the model's context (32k tokens, with up to 16k for the answer). */
+export const CONTEXT_LIMITS = { latestResult: 20000, earlierResults: 12000, earlierResult: 1200, assistantText: 3000, userTurns: 8 };
+
 /**
  * Keep the current task and recent dialogue, and shorten stale page snapshots
- * in a copy of the context. The gateway remains the authority for the exact
- * token budget; this keeps browsing loops from filling the 16k window.
+ * and files in a copy of the context. The gateway remains the authority for the
+ * exact token budget; this keeps browsing loops from filling the window.
  */
 export function compactContext(messages: Message[]): Message[] {
   const users = messages.flatMap((message, index) => message.role === "user" ? [index] : []);
-  const start = users.length >= 8 ? users[users.length - 8] : 0;
+  const start = users.length >= CONTEXT_LIMITS.userTurns ? users[users.length - CONTEXT_LIMITS.userTurns] : 0;
   const kept = messages.slice(start).map((message) => structuredClone(message));
   const results = kept.filter((message) => message.role === "toolResult");
-  const priorBudget = Math.min(650, Math.floor(6000 / Math.max(1, results.length - 1)));
+  const priorBudget = Math.min(CONTEXT_LIMITS.earlierResult, Math.floor(CONTEXT_LIMITS.earlierResults / Math.max(1, results.length - 1)));
   results.forEach((message, index) => {
-    const limit = index === results.length - 1 ? 10000 : priorBudget;
+    const limit = index === results.length - 1 ? CONTEXT_LIMITS.latestResult : priorBudget;
     for (const part of message.content ?? []) {
       if (part.type === "text" && part.text.length > limit) {
-        part.text = part.text.slice(0, limit) + "\n[Earlier page content abbreviated; use browser tools for current page state.]";
+        part.text = part.text.slice(0, limit) + "\n[Earlier content abbreviated; call the tool again for the current state.]";
       }
     }
   });
   for (const message of kept) {
     if (message.role !== "assistant" || !Array.isArray(message.content)) continue;
     for (const part of message.content) {
-      if (part.type === "text" && part.text.length > 1600) part.text = part.text.slice(0, 1600) + "…";
+      if (part.type === "text" && part.text.length > CONTEXT_LIMITS.assistantText) part.text = part.text.slice(0, CONTEXT_LIMITS.assistantText) + "…";
     }
   }
   // Remind after each Arabic request and each tool result answering it: the

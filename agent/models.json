@@ -20,8 +20,8 @@
           "input": [
             "text"
           ],
-          "contextWindow": 16384,
-          "maxTokens": 2048,
+          "contextWindow": 32768,
+          "maxTokens": 16384,
           "cost": {
             "input": 0,
             "output": 0,
@@ -36,8 +36,8 @@
           "input": [
             "text"
           ],
-          "contextWindow": 16384,
-          "maxTokens": 2048,
+          "contextWindow": 32768,
+          "maxTokens": 16384,
           "cost": {
             "input": 0,
             "output": 0,
@@ -52,8 +52,8 @@
           "input": [
             "text"
           ],
-          "contextWindow": 16384,
-          "maxTokens": 2048,
+          "contextWindow": 32768,
+          "maxTokens": 16384,
           "cost": {
             "input": 0,
             "output": 0,

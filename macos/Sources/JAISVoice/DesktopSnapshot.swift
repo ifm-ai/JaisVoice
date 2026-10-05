@@ -168,11 +168,6 @@ enum DesktopText {
 struct SnapshotItem {
     var depth: Int
     var line: String
-    /// Normalized words of the element, for desktop_find.
-    var words: String
-    var ref: String?
-    /// The nearest ancestor with a ref, for text found by desktop_find.
-    var owner: String?
 }
 
 /// Walks one window's accessibility tree into compact lines with refs.
@@ -267,8 +262,8 @@ struct SnapshotItem {
         return truncated
     }
 
-    private func append(_ depth: Int, _ line: String, words: String, ref: String?, owner: String?) {
-        items.append(SnapshotItem(depth: depth, line: line, words: DesktopApps.normalized(words), ref: ref, owner: owner))
+    private func append(_ depth: Int, _ line: String) {
+        items.append(SnapshotItem(depth: depth, line: line))
         chars += depth * 2 + line.count + 1
     }
 
@@ -323,7 +318,7 @@ struct SnapshotItem {
         return line
     }
 
-    func walk(_ element: AXUIElement, depth: Int = 0, parentLabel: String = "", owner: String? = nil) {
+    func walk(_ element: AXUIElement, depth: Int = 0, parentLabel: String = "") {
         guard !exhausted, seen.insert(AXKey(element: element)).inserted else { return }
         visited += 1
         let info = AXInfo(element)
@@ -337,11 +332,11 @@ struct SnapshotItem {
         if info.role == "AXStaticText" {
             let text = info.valueText ?? label
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, DesktopText.clip(text, 300) != DesktopText.clip(parentLabel, 300) else { return }
-            append(depth, "- text: " + DesktopText.clip(text, 300), words: text, ref: nil, owner: owner)
+            append(depth, "- text: " + DesktopText.clip(text, 300))
             return
         }
         guard let kind = Self.kind(info), !(Self.transparentWhenUnlabeled.contains(info.role) && label.isEmpty && info.subrole != "AXLandmarkNavigation") else {
-            walkChildren(element, depth: depth, parentLabel: parentLabel, owner: owner)
+            walkChildren(element, depth: depth, parentLabel: parentLabel)
             return
         }
         var ref: String?
@@ -353,37 +348,35 @@ struct SnapshotItem {
             if info.role == "AXImage" && label.isEmpty && texts.isEmpty && ref == nil { return }
             let summary = texts.joined(separator: " · ")
             append(depth, line(kind: kind, info: info, label: info.role == "AXRow" ? label : (label.isEmpty ? summary : label), ref: ref,
-                               summary: info.role == "AXRow" ? summary : nil),
-                   words: label + " " + summary, ref: ref, owner: owner)
+                               summary: info.role == "AXRow" ? summary : nil))
             for (control, controlInfo) in controls.prefix(6) where !exhausted {
                 let controlRef = refs.name(for: control, pid: pid)
                 let controlKind = Self.kind(controlInfo) ?? "control"
-                append(depth + 1, line(kind: controlKind, info: controlInfo, label: controlInfo.label, ref: controlRef),
-                       words: controlInfo.label + " " + (controlInfo.valueText ?? ""), ref: controlRef, owner: ref ?? owner)
+                append(depth + 1, line(kind: controlKind, info: controlInfo, label: controlInfo.label, ref: controlRef))
             }
             return
         }
-        append(depth, line(kind: kind, info: info, label: label, ref: ref), words: label + " " + (info.isSecure ? "" : info.valueText ?? ""), ref: ref, owner: owner)
+        append(depth, line(kind: kind, info: info, label: label, ref: ref))
         if Self.leafRoles.contains(info.role) {
             // A pop-up menu opened from a button is its only child worth listing.
             for child in element.elements(kAXChildrenAttribute, limit: 4) where AXInfo(child).role == "AXMenu" {
-                walk(child, depth: depth + 1, parentLabel: label, owner: ref ?? owner)
+                walk(child, depth: depth + 1, parentLabel: label)
             }
             return
         }
-        walkChildren(element, depth: depth + 1, parentLabel: label, owner: ref ?? owner)
+        walkChildren(element, depth: depth + 1, parentLabel: label)
     }
 
-    private func walkChildren(_ element: AXUIElement, depth: Int, parentLabel: String, owner: String?) {
+    private func walkChildren(_ element: AXUIElement, depth: Int, parentLabel: String) {
         let total = element.count(kAXChildrenAttribute)
         guard total > 0 else { return }
         let children = element.elements(kAXChildrenAttribute, limit: Self.maxChildren)
         for child in children {
             guard !exhausted else { return }
-            walk(child, depth: depth, parentLabel: parentLabel, owner: owner)
+            walk(child, depth: depth, parentLabel: parentLabel)
         }
         if total > children.count, !exhausted {
-            append(depth, "- … \(total - children.count) more items (desktop_scroll or desktop_find reach them)", words: "", ref: nil, owner: owner)
+            append(depth, "- … \(total - children.count) more items (desktop_scroll reaches them)")
         }
     }
 
@@ -427,7 +420,7 @@ struct SnapshotItem {
         app.set("AXManualAccessibility", kCFBooleanTrue)
     }
 
-    static func snapshot(app: DesktopApp, windowQuery: String?, refs: DesktopRefs, maxChars: Int = 7000) throws -> (text: String, window: AXUIElement, itemCount: Int) {
+    static func snapshot(app: DesktopApp, windowQuery: String?, refs: DesktopRefs, maxChars: Int = 12000) throws -> (text: String, window: AXUIElement, itemCount: Int) {
         guard let pid = app.pid else { throw VoiceError.message("\(app.name) is not running. Use desktop_open_app first.") }
         let element = application(pid)
         enableWebAccessibility(element)
@@ -456,28 +449,6 @@ struct SnapshotItem {
         }
         walker.walk(window)
         return walker
-    }
-
-    static func find(app: DesktopApp, windowQuery: String?, text: String, refs: DesktopRefs) throws -> String {
-        guard let pid = app.pid else { throw VoiceError.message("\(app.name) is not running. Use desktop_open_app first.") }
-        let wanted = DesktopApps.normalized(text)
-        guard !wanted.isEmpty else { throw VoiceError.message("Give the words to look for.") }
-        let element = application(pid)
-        enableWebAccessibility(element)
-        let window = try self.window(element, pid: pid, query: windowQuery, refs: refs)
-        let walker = AXTreeWalker(pid: pid, refs: refs, maxNodes: 6000, maxChars: nil, seconds: 8)
-        walker.walk(window)
-        let matches = walker.items.filter { $0.words.contains(wanted) }
-        guard !matches.isEmpty else {
-            return "Nothing matching \"\(text)\" in \(app.name)." + (walker.truncated ? " The window is large and was only partly searched." : "")
-        }
-        var lines = matches.prefix(30).map { item -> String in
-            var line = item.line
-            if item.ref == nil, let owner = item.owner { line += " (inside [ref=\(owner)])" }
-            return line
-        }
-        if matches.count > 30 { lines.append("… \(matches.count - 30) more matches.") }
-        return "Matches for \"\(text)\" in \(app.name):\n" + lines.joined(separator: "\n")
     }
 
     /// Apps with windows, front to back, and what JAIS Voice may do with each.

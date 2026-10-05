@@ -34,7 +34,13 @@ logger = logging.getLogger("jais.mlx")
 Size = Literal["0.9B", "3.7B", "7B"]
 EFFORTS = ("low", "medium", "high")
 # Token budgets, including the reserved output.
-CLEANER_CONTEXT, AGENT_CONTEXT = 4096, 16384
+CLEANER_CONTEXT, AGENT_CONTEXT = 4096, 32768
+# The agent's sampling, as the Jais 3 model cards recommend for thinking mode
+# (temperature 0.7 is their Arabic value; 1.0 for English loosens tool calls).
+# Cleanup stays greedy: it must reproduce the transcript, not vary it.
+AGENT_TEMPERATURE, AGENT_TOP_P, AGENT_TOP_K = 0.7, 0.95, 20
+# A request may ask for more output than fits; it gets what the context leaves.
+MIN_OUTPUT_TOKENS = 256
 
 
 def prepare_prompt(tokenizer, messages, tools, effort: str):
@@ -56,6 +62,14 @@ def prepare_prompt(tokenizer, messages, tools, effort: str):
     return tokenizer.encode(rendered, add_special_tokens=False), parser
 
 
+def output_budget(prompt_tokens: int, requested: int, context: int) -> int:
+    """The output tokens a request gets: what it asked for, within what the context leaves."""
+    available = context - prompt_tokens
+    if available < min(requested, MIN_OUTPUT_TOKENS):
+        raise ValueError(f"Context budget exceeded: {prompt_tokens} input tokens leave {available} of {context} for the answer")
+    return min(requested, available)
+
+
 @dataclass
 class Job:
     size: str
@@ -65,6 +79,7 @@ class Job:
     max_tokens: int
     temperature: float
     top_p: float
+    top_k: int
     context: int
 
 
@@ -162,14 +177,13 @@ class Worker:
                 raise ValueError(f"The {job.size} model is not loaded: load it in Settings.")
             _, model, tokenizer = self.model
             tokens, parser = prepare_prompt(tokenizer, job.messages, job.tools, job.effort)
-            if len(tokens) + job.max_tokens > job.context:
-                raise ValueError(f"Context budget exceeded: {len(tokens)} input + {job.max_tokens} output > {job.context}")
+            max_tokens = output_budget(len(tokens), job.max_tokens, job.context)
             emit(("ready", None))
             def progress(done, total):
                 if canceled.is_set():
                     raise InterruptedError("Request cancelled during prompt processing")
-            generator = stream_generate(model, tokenizer, tokens, max_tokens=job.max_tokens,
-                sampler=make_sampler(temp=job.temperature, top_p=job.top_p),
+            generator = stream_generate(model, tokenizer, tokens, max_tokens=max_tokens,
+                sampler=make_sampler(temp=job.temperature, top_p=job.top_p, top_k=job.top_k),
                 prefill_step_size=256, prompt_progress_callback=progress)
             last = None
             try:
@@ -291,9 +305,10 @@ class CompletionRequest(BaseModel):
     model: str
     messages: list[dict] = Field(min_length=1, max_length=256)
     tools: list[dict] | None = None
-    max_tokens: int = Field(default=2048, ge=1, le=4096)
-    temperature: float = Field(default=0.0, ge=0, le=2)
-    top_p: float = Field(default=0.95, gt=0, le=1)
+    max_tokens: int = Field(default=8192, ge=1, le=AGENT_CONTEXT)
+    temperature: float = Field(default=AGENT_TEMPERATURE, ge=0, le=2)
+    top_p: float = Field(default=AGENT_TOP_P, gt=0, le=1)
+    top_k: int = Field(default=AGENT_TOP_K, ge=0, le=1000)
     reasoning_effort: Literal["low", "medium", "high"] = "low"
 
 
@@ -307,7 +322,7 @@ async def completions(body: CompletionRequest, request: Request):
         messages = normalize_messages(body.messages)
     except (ValueError, TypeError, KeyError) as exc:
         raise HTTPException(400, str(exc)) from exc
-    job = Job(size, messages, body.tools or [], body.reasoning_effort, body.max_tokens, body.temperature, body.top_p, AGENT_CONTEXT)
+    job = Job(size, messages, body.tools or [], body.reasoning_effort, body.max_tokens, body.temperature, body.top_p, body.top_k, AGENT_CONTEXT)
     next_event, release = await begin(job, request)
     identifier, created = "chatcmpl-" + uuid.uuid4().hex, int(time.time())
     def chunk(delta, finish=None):
@@ -351,7 +366,7 @@ async def clean(body: CleanRequest, request: Request):
     Incomplete or empty corrections are refused; the raw transcript is never
     forwarded as a fallback.
     """
-    job = Job(body.model_size or worker.loaded_size or "", cleaner_messages(body.text), [], "low", 2048, 0.0, 0.95, CLEANER_CONTEXT)
+    job = Job(body.model_size or worker.loaded_size or "", cleaner_messages(body.text), [], "low", 2048, 0.0, 0.95, 0, CLEANER_CONTEXT)
     started = time.perf_counter()
     incomplete = clean_failure(422, "cleaner_incomplete", "The corrector did not finish cleanup. The request was not executed.")
     try:

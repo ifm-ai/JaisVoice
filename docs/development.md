@@ -7,7 +7,7 @@ WAV audio → JAIS-ASR (local service) → cleanup (/v1/clean, selected LLM) →
 ```
 
 - `macos/`: SwiftUI/AppKit menu bar app. It records audio, orchestrates each turn and shows the bubble and settings. No third-party framework. See [macos/README.md](../macos/README.md).
-- `agent/`: the [Pi](https://github.com/earendil-works/pi) agent harness: system prompt, local models and the `extensions/jais/` extension (macOS shell, Notes, the apps' windows, clarifying question, Playwright browser, 50-action budget, action approval).
+- `agent/`: the [Pi](https://github.com/earendil-works/pi) agent harness: system prompt, local models, skills (`skills/`) and the `extensions/jais/` extension (macOS shell, Notes, the apps' windows, clarifying question, Playwright browser, the rules of Pi's file tools, 50-action budget, action approval).
 - `jais_runtime/`: the Jais 3 architecture under MLX (`model.py`), the model catalog and downloads (`model_store.py`), and the local gateway (`gateway.py`): `/v1/clean` transcript cleanup (`prompts.py`) and streamed Chat Completions for the agent, with native reasoning and tool-call parsing (`protocol.py`).
 - `jais_runtime/asr_service.py`: the local JAIS-ASR service.
 - `scripts/`: setup, build, disk image, service supervisor, agent launcher and model management.
@@ -27,6 +27,14 @@ The extension (`agent/extensions/jais/desktop.ts`) starts the app's own binary w
 Test the helper alone with JSON lines, for example `printf '{"id":1,"method":"list_windows"}\n' | macos/.build/direct/JAISVoice --desktop-helper`. A process started from a terminal uses the terminal's permissions instead of the app's.
 
 macOS remembers these permissions by code signature. Apps are signed ad hoc by default, so every new build asks for them again: pass `--sign "<identity>"` (or set `JAIS_CODESIGN_IDENTITY`) to `scripts/build_app.py` to keep them across builds. In development, `tccutil reset Accessibility ae.ac.mbzuai.jaisvoice` clears a stale entry.
+
+## The agent's tools and skills
+
+Besides its own tools, the agent uses Pi's built-in file tools `read`, `ls`, `find`, `grep`, `write` and `edit` (not `bash`: commands go through `shell_execute` and its approval). Pi runs from the home folder, so paths such as `~/Documents/list.txt` work as the user says them. The extension (`agent/extensions/jais/files.ts`) asks once per request before files are read and before every write; it never reads or writes credential stores (SSH and cloud keys, shell startup files, `.env` files, keychains, browser profiles) and writes only the user's own files: the home folder, outside `~/Library`, hidden files and JAIS Voice's own folders. `grep` and `find` run ripgrep and fd, pinned in `scripts/agent_tools.py` and installed by `setup.py` (into `.runtime/bin`) and `build_app.py` (into the bundle), since the agent runs offline.
+
+Skills live in `agent/skills/<name>/SKILL.md` and are copied into the agent's directory at launch: `web-research`, `mac-apps` and `files`. Pi lists them in the system prompt and the model can read one with `read`; since a small model rarely does, the extension also joins an area's skill to the first result of its tools in a request. Add a skill by adding a folder with a `SKILL.md` (frontmatter `name` and `description`, then the instructions). Skills from `~/.agents/skills` and from projects are excluded (`agent/settings.json`).
+
+The **Reasoning** setting (Settings → Assistant) sets Pi's thinking level, which the gateway passes to the chat template as `reasoning_effort`: `low` (default) answers fastest, `high` is what the model cards recommend and takes several times longer. The agent has a 32k-token context with up to 16k tokens for its answer, and samples as the cards recommend for thinking mode (temperature 0.7, top-p 0.95, top-k 20); cleanup keeps greedy decoding.
 
 ## Setup and build
 

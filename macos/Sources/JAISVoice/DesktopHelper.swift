@@ -118,9 +118,6 @@ import ApplicationServices
                 catch { text += "\n[Text from the screen unavailable: \(error.localizedDescription)]" }
             }
             return ["text": text]
-        case "find":
-            let app = try app(params, need: .read)
-            return ["text": try DesktopReader.find(app: app, windowQuery: string(params, "window"), text: string(params, "text") ?? "", refs: refs)]
         case "click":
             let app = try app(params, need: .control)
             let message = try DesktopActions.click(app: app, ref: string(params, "ref") ?? "", right: string(params, "button") == "right",

@@ -2,8 +2,9 @@ import Foundation
 
 /// One action the agent asks to run on this Mac, as the Pi extension describes it:
 /// the confirm title is the tool label, the message a JSON {reason, details}.
-/// Requests about other apps add `kind` (app_read, app_control, web_after_desktop,
-/// overview) and `app`, so the question is worded in the interface language.
+/// Requests about other apps and files add `kind` (app_read, app_control, overview,
+/// web_after_desktop, files_read, file_write) and `app`, so the question is worded
+/// in the interface language.
 struct ActionRequest: Equatable {
     let tool: String
     let reason: String
@@ -30,6 +31,9 @@ struct ActionRequest: Equatable {
         case "app_read": return L("Let JAIS Voice read the windows of {0} until this request ends?", app ?? "")
         case "app_control": return L("Let JAIS Voice control {0} until this request ends? It can click, type, and use its menus and keys.", app ?? "")
         case "web_after_desktop": return L("JAIS Voice read your apps during this request. Open this page?")
+        case "files_read": return L("Let JAIS Voice read your files until this request ends?")
+        // The extension words it: create, replace or change this file.
+        case "file_write": return L(reason)
         default: return reason
         }
     }

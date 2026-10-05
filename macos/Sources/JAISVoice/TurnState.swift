@@ -57,25 +57,30 @@ struct ToolAction: Identifiable {
         case "browser_navigate": return L("Opening page")
         case "browser_snapshot": return L("Reading page")
         case "browser_click": return L("Clicking on page")
-        case "browser_type", "browser_fill_form": return L("Entering text")
-        case "browser_select_option": return L("Selecting an option")
-        case "browser_navigate_back": return L("Going back")
+        case "browser_type": return L("Entering text")
         case "browser_wait_for": return L("Loading page")
         case "browser_tabs": return L("Switching tabs")
         case "macos_create_note": return L("New note")
         case "desktop_list_windows": return L("Listing windows")
         case "desktop_open_app": return L("Opening app")
         case "desktop_snapshot": return L("Reading window")
-        case "desktop_find": return L("Searching window")
         case "desktop_click": return L("Clicking in app")
         case "desktop_type": return L("Typing in app")
         case "desktop_press_key": return L("Pressing keys")
         case "desktop_menu": return L("Using menu")
         case "desktop_scroll": return L("Scrolling")
+        case "read": return L("Reading file")
+        case "ls": return L("Listing folder")
+        case "find": return L("Finding files")
+        case "grep": return L("Searching in files")
+        case "write": return L("Writing file")
+        case "edit": return L("Editing file")
         default: return name.hasPrefix("browser_") ? L("Browser action") : L("Action on the Mac")
         }
     }
     var onWeb: Bool { name.hasPrefix("browser_") }
+    /// Pi's built-in tools on the user's files.
+    static let fileTools: Set<String> = ["read", "ls", "find", "grep", "write", "edit"]
 }
 
 enum ModelLoadPhase: String, CaseIterable {

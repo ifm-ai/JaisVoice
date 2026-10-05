@@ -135,3 +135,24 @@ def test_queued_cancel_does_not_enter_model_generation():
     worker.generate(None, flag, emitted.append)
     assert emitted == [("end", None)]
     worker.executor.shutdown()
+
+
+def test_agent_sampling_follows_the_model_card_and_cleanup_stays_greedy(client, monkeypatch):
+    http, worker, _ = client
+    jobs = []
+    def fake_generate(job, canceled, emit):
+        jobs.append(job)
+        emit(("ready", None)); emit(("done", {"finish_reason": "stop", "content": "ok", "usage": {}})); emit(("end", None))
+    monkeypatch.setattr(worker, "generate", fake_generate)
+    chat(http)
+    agent = jobs[-1]
+    assert (agent.temperature, agent.top_p, agent.top_k) == (0.7, 0.95, 20)
+    assert agent.context == 32768 and agent.max_tokens == 8192
+
+
+def test_output_budget_shrinks_to_the_context_left():
+    assert gateway.output_budget(1000, 16384, 32768) == 16384
+    assert gateway.output_budget(30000, 16384, 32768) == 2768
+    with pytest.raises(ValueError, match="Context budget exceeded"):
+        gateway.output_budget(32700, 16384, 32768)
+    assert gateway.output_budget(100, 50, 200) == 50
