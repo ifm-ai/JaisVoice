@@ -29,7 +29,7 @@
 
 - **Local speech recognition** with JAIS-ASR, including Arabic dialects.
 - **Self-correction cleanup**: “to Ahmed… I mean Sara” becomes “to Sara” before anything runs.
-- **An agent that acts**: it answers, browses the web in a dedicated Chromium, creates notes and runs macOS commands.
+- **An agent that acts**: it answers, browses the web in a dedicated Chromium, creates notes, runs macOS commands, reads and writes your files, and uses your apps' windows (reading them, clicking, typing, choosing menu items).
 - **You stay in control**: every action on your Mac is shown for approval by default (never, ask, or always).
 - **No cloud**: speech, models and agent run on your Mac with MLX; only the web pages you ask for are fetched.
 
@@ -55,7 +55,8 @@ These repositories currently require access on Hugging Face. The app downloads t
 - Hold **⌥ Space**, speak, release. The answer appears in a small bubble at the bottom of the screen.
 - Hold the shortcut again while the bubble is visible to follow up in the same conversation.
 - Released versions look for updates at launch and once a day; **Check for Updates…** in the menu bar does it on demand. Updating means downloading the new disk image and replacing the app.
-- Open the settings from the menu bar to change the shortcut, the transcription language, the model size, the interface language (English or French) and **Actions on this Mac**.
+- Open the settings from the menu bar to change the shortcut, the transcription language, the model size, the interface language (English or French), how long the model thinks before answering (**Reasoning**: low is fastest, high most careful) and **Actions on this Mac**.
+- To let the assistant read and use your other apps (“reply to this email in Mail”, “what is in my TextEdit window?”), allow **Control of your apps** (the macOS Accessibility permission) in **Settings → Assistant**. With **Ask every time**, the bubble asks before it reads or controls each app, before it reads your files and before every file it writes. Terminals, code editors and web browsers stay read-only; password managers and System Settings are never accessible.
 
 ## Build from source
 

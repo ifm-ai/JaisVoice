@@ -136,7 +136,7 @@ struct ResultBubble: View {
                     }
                     if !state.actions.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
-                            sectionLabel("ACTIONS", tag: state.actions.contains(where: { $0.name == "shell_execute" }) ? L("MACOS AND WEB") : L("BROWSER"))
+                            sectionLabel("ACTIONS", tag: state.actionsTag)
                             ForEach(Array(state.actions.enumerated()), id: \.element.id) { index, action in
                                 let note = state.interimText(before: index)
                                 if !note.isEmpty { naturalText(note, size: 13).opacity(0.8) }
@@ -243,7 +243,7 @@ struct ResultBubble: View {
     private func approvalCard(_ request: ActionRequest) -> some View {
         VStack(alignment: .leading, spacing: 9) {
             sectionLabel(L("APPROVAL"), tag: L(request.tool))
-            if !request.reason.isEmpty { naturalText(request.reason, size: 13) }
+            if !request.question.isEmpty { naturalText(request.question, size: 13) }
             ScrollView {
                 Text(request.details)
                     .font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.75))

@@ -2,10 +2,25 @@
   "defaultProvider": "jais",
   "defaultModel": "jais-3-3.7b",
   "defaultThinkingLevel": "low",
-  "defaultTools": [],
+  "defaultTools": [
+    "read",
+    "write",
+    "edit",
+    "grep",
+    "find",
+    "ls"
+  ],
   "defaultProjectTrust": "never",
   "quietStartup": true,
   "cacheWarming": "off",
-  "retry": {"enabled": false},
-  "compaction": {"enabled": false}
+  "retry": {
+    "enabled": false
+  },
+  "compaction": {
+    "enabled": false
+  },
+  "skills": [
+    "!**/.agents/**"
+  ],
+  "enableSkillCommands": false
 }

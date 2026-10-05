@@ -33,6 +33,7 @@ struct PipelineFailure: Error {
     private var activeTurnID: String?
     private var agentConversation: String?
     private var agentModel: String?
+    private var agentEffort: String?
     private var run: AgentRun?
     var onEvent: ((WireEvent) -> Void)?
     var onDisconnect: ((String) -> Void)?
@@ -52,7 +53,7 @@ struct PipelineFailure: Error {
             guard let self else { return }
             self.dismissApprovals?()
             self.run?.fail(PipelineFailure(code: "agent_unavailable", message: L("The local agent stopped. Check service status in the menu.")))
-            self.agentConversation = nil; self.agentModel = nil
+            self.agentConversation = nil; self.agentModel = nil; self.agentEffort = nil
             self.onDisconnect?(detail)
         }
     }
@@ -107,7 +108,7 @@ struct PipelineFailure: Error {
     func connect() async throws {
         if !agent.isRunning {
             try agent.start()
-            agentConversation = nil; agentModel = nil
+            agentConversation = nil; agentModel = nil; agentEffort = nil
         }
         try await agent.call("get_state")
     }
@@ -128,10 +129,12 @@ struct PipelineFailure: Error {
 
     // MARK: Turns
 
-    /// What a turn needs besides its input: the conversation and the shared model size.
+    /// What a turn needs besides its input: the conversation, the shared model size
+    /// and how long the agent thinks (Pi's thinking level, the template's reasoning_effort).
     struct TurnOptions {
         var conversationID: String
         var modelSize: String
+        var reasoningEffort = ReasoningEffort.low.rawValue
     }
 
     func sendWAV(_ data: Data, turnID: String, language: String?, options: TurnOptions) async throws {
@@ -184,7 +187,8 @@ struct PipelineFailure: Error {
         }
     }
 
-    /// The extension asks before each action on this Mac (shell, Notes).
+    /// The extension asks before each action on this Mac (shell, Notes) and
+    /// before reading or controlling each app, once per request.
     /// Pi waits for the answer; other dialogs are declined, notifications ignored.
     private func answer(_ record: JSONValue) {
         guard let id = record["id"]?.string, let method = record["method"]?.string else { return }
@@ -202,6 +206,7 @@ struct PipelineFailure: Error {
             switch permission {
             case .never: allowed = false
             case .always: allowed = true
+            case .ask where request.isOverview: allowed = self.run != nil
             case .ask: allowed = self.run != nil ? await self.approveAction?(request) ?? false : false
             }
             self.agent.send(["type": .string("extension_ui_response"), "id": .string(id), "confirmed": .bool(allowed)])
@@ -281,7 +286,11 @@ struct PipelineFailure: Error {
         let model = Self.agentModelID(options.modelSize)
         if model != agentModel {
             try await agent.call("set_model", ["provider": .string("jais"), "modelId": .string(model)])
-            agentModel = model
+            agentModel = model; agentEffort = nil
+        }
+        if options.reasoningEffort != agentEffort {
+            try await agent.call("set_thinking_level", ["level": .string(options.reasoningEffort)])
+            agentEffort = options.reasoningEffort
         }
         try Task.checkCancellation()
         let run = AgentRun { [weak self] type, fields in
@@ -358,7 +367,9 @@ struct PipelineFailure: Error {
             guard let id = record["toolCallId"]?.string, let tool = record["toolName"]?.string, tool != "ask_clarifying_question" else { return }
             let text = record["result"]?["content"]?.array?.compactMap { $0["text"]?.string }.joined(separator: "\n") ?? ""
             let name = Self.displayName(tool)
-            let code = record["isError"]?.bool == true ? (name.hasPrefix("browser_") ? "browser_action_failed" : "shell_failed") : nil
+            let code = record["isError"]?.bool == true
+                ? (name.hasPrefix("browser_") ? "browser_action_failed" : (name.hasPrefix("desktop_") ? "desktop_action_failed"
+                    : (ToolAction.fileTools.contains(name) ? "file_action_failed" : "shell_failed"))) : nil
             emit("tool_end", Fields(errorCode: code, started: toolStarts.removeValue(forKey: id), toolID: id, toolName: name, result: String(text.prefix(2500))))
         case "agent_settled":
             if let question, !question.isEmpty {

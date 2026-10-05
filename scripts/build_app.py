@@ -121,6 +121,7 @@ export JAIS_RUNTIME_DIR
 export JAIS_NODE="$HERE/runtime/node/bin/node"
 export JAIS_ASR_PYTHON_HOME="$HERE/runtime/python3.11"
 export PLAYWRIGHT_BROWSERS_PATH="$HERE/runtime/browsers"
+export JAIS_TOOLS_BIN="$HERE/runtime/bin"
 export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
 exec "$HERE/runtime/python/bin/python3.12" "$HERE/app/scripts/{script}" "$@"
 '''
@@ -134,6 +135,10 @@ def main():
     parser.add_argument("--dev", action="store_true", help="Launchers run this checkout instead of an embedded runtime")
     parser.add_argument("--dmg", action="store_true", help="Also write a drag-to-install disk image")
     parser.add_argument("--build-number", help="CFBundleVersion of this build (CI run number)")
+    # macOS ties the Accessibility and Screen Recording permissions to the signature:
+    # an ad hoc one changes with every build, so each update asks for them again.
+    parser.add_argument("--sign", default=os.environ.get("JAIS_CODESIGN_IDENTITY", "-"),
+                        help="Code signing identity (default: ad hoc, or JAIS_CODESIGN_IDENTITY)")
     args = parser.parse_args()
     run(sys.executable, ROOT / "macos/build_direct.py", cwd=ROOT)
     binary = ROOT / "macos/.build/direct/JAISVoice"
@@ -167,13 +172,15 @@ def main():
         shutil.copy2(node, resources / "runtime/node/bin/node")
         bundled_app = embed_app(resources, node)
         embed_chromium(resources, bundled_app, node)
+        from agent_tools import install
+        install(resources / "runtime/bin", CACHE / "agent-tools")
         # Bytecode is written now: at run time the signed bundle must stay unchanged.
         run(python, "-m", "compileall", "-q", "-j", "0", "--invalidation-mode", "unchecked-hash",
             resources / "runtime/python/lib/python3.12", bundled_app)
     # Model services are supervised together; the agent is a pipe child of the app.
     write_launchers(resources, args.dev)
     entitlements = ROOT / "macos/Entitlements.plist"
-    signature = ["/usr/bin/codesign", "--force", "--sign", "-"]
+    signature = ["/usr/bin/codesign", "--force", "--sign", args.sign]
     if entitlements.exists():
         signature += ["--entitlements", str(entitlements)]
     run(*signature, staging)

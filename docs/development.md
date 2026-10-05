@@ -7,7 +7,7 @@ WAV audio → JAIS-ASR (local service) → cleanup (/v1/clean, selected LLM) →
 ```
 
 - `macos/`: SwiftUI/AppKit menu bar app. It records audio, orchestrates each turn and shows the bubble and settings. No third-party framework. See [macos/README.md](../macos/README.md).
-- `agent/`: the [Pi](https://github.com/earendil-works/pi) agent harness: system prompt, local models and the `extensions/jais/` extension (macOS shell, Notes, clarifying question, Playwright browser, 50-action budget, action approval).
+- `agent/`: the [Pi](https://github.com/earendil-works/pi) agent harness: system prompt, local models, skills (`skills/`) and the `extensions/jais/` extension (macOS shell, Notes, the apps' windows, clarifying question, Playwright browser, the rules of Pi's file tools, 50-action budget, action approval).
 - `jais_runtime/`: the Jais 3 architecture under MLX (`model.py`), the model catalog and downloads (`model_store.py`), and the local gateway (`gateway.py`): `/v1/clean` transcript cleanup (`prompts.py`) and streamed Chat Completions for the agent, with native reasoning and tool-call parsing (`protocol.py`).
 - `jais_runtime/asr_service.py`: the local JAIS-ASR service.
 - `scripts/`: setup, build, disk image, service supervisor, agent launcher and model management.
@@ -17,6 +17,24 @@ The app runs Pi in RPC mode as a child process and talks to it in JSONL over std
 ## Actions on the Mac
 
 The agent has `shell_execute` and `macos_create_note` besides the browser. The **Actions on this Mac** setting decides whether they run: *Never allow*, *Ask every time* (default: the bubble shows the exact command with **Refuse** and **Allow**, and refuses after 2 minutes or when the request stops), or *Always allow*. Commands run in `/bin/zsh -f`, in a new process group with a minimal environment, from `~/Library/Caches/ae.ac.mbzuai.jaisvoice/Shell`, for at most 30 seconds. This is **not a sandbox**: an allowed command runs with the user's privileges. macOS privacy permissions still apply.
+
+## The apps' windows
+
+The `desktop_*` tools give the text-only model the user's other apps the way Playwright gives it web pages: `desktop_snapshot` turns a window's accessibility tree into short lines with refs (`- button "Reply" [ref=e12]`), and `desktop_click`, `desktop_type`, `desktop_press_key`, `desktop_menu` and `desktop_scroll` act on those refs and return the window again. `desktop_menu` walks the menu bar by title, in the app's language. When a window exposes almost nothing (canvas apps, games), the snapshot adds the text Vision reads from a capture of that window, with refs clicked by position.
+
+The extension (`agent/extensions/jais/desktop.ts`) starts the app's own binary with `--desktop-helper` (`macos/Sources/JAISVoice/Desktop*.swift`). Being in JAIS Voice's process tree, it uses the app's **Accessibility** permission (required) and **Screen Recording** permission (text from pixels only); **Settings → Assistant** shows both and asks for them. Before the first read and the first control of each app in a request, the bubble asks the user (with *Ask every time*); *Never allow* refuses, *Always allow* accepts. Some apps are read-only (terminals, code editors, browsers: driving them would bypass the shell approval or act with the user's web accounts) and some are never accessible (JAIS Voice itself, password managers, System Settings, system prompts); see `DesktopPolicy`. After the agent reads a window, opening a web page outside DuckDuckGo and the sites named in the request asks again.
+
+Test the helper alone with JSON lines, for example `printf '{"id":1,"method":"list_windows"}\n' | macos/.build/direct/JAISVoice --desktop-helper`. A process started from a terminal uses the terminal's permissions instead of the app's.
+
+macOS remembers these permissions by code signature. Apps are signed ad hoc by default, so every new build asks for them again: pass `--sign "<identity>"` (or set `JAIS_CODESIGN_IDENTITY`) to `scripts/build_app.py` to keep them across builds. In development, `tccutil reset Accessibility ae.ac.mbzuai.jaisvoice` clears a stale entry.
+
+## The agent's tools and skills
+
+Besides its own tools, the agent uses Pi's built-in file tools `read`, `ls`, `find`, `grep`, `write` and `edit` (not `bash`: commands go through `shell_execute` and its approval). Pi runs from the home folder, so paths such as `~/Documents/list.txt` work as the user says them. The extension (`agent/extensions/jais/files.ts`) asks once per request before files are read and before every write; it never reads or writes credential stores (SSH and cloud keys, shell startup files, `.env` files, keychains, browser profiles) and writes only the user's own files: the home folder, outside `~/Library`, hidden files and JAIS Voice's own folders. `grep` and `find` run ripgrep and fd, pinned in `scripts/agent_tools.py` and installed by `setup.py` (into `.runtime/bin`) and `build_app.py` (into the bundle), since the agent runs offline.
+
+Skills live in `agent/skills/<name>/SKILL.md` and are copied into the agent's directory at launch: `web-research`, `mac-apps` and `files`. Pi lists them in the system prompt and the model can read one with `read`; since a small model rarely does, the extension also joins an area's skill to the first result of its tools in a request. Add a skill by adding a folder with a `SKILL.md` (frontmatter `name` and `description`, then the instructions). Skills from `~/.agents/skills` and from projects are excluded (`agent/settings.json`).
+
+The **Reasoning** setting (Settings → Assistant) sets Pi's thinking level, which the gateway passes to the chat template as `reasoning_effort`: `low` (default) answers fastest, `high` is what the model cards recommend and takes several times longer. The agent has a 32k-token context with up to 16k tokens for its answer, and samples as the cards recommend for thinking mode (temperature 0.7, top-p 0.95, top-k 20); cleanup keeps greedy decoding.
 
 ## Setup and build
 
@@ -32,7 +50,7 @@ The build writes to `outputs/`:
 - `JAIS Voice.app` (about 1.6 GB): a self-contained app embedding Python 3.12 with the service dependencies, Python 3.11 for the ASR environment, Node.js, Pi and Chromium. Its data lives in `~/Library/Application Support/JAIS Voice/` (or `JAIS_RUNTIME_DIR`). Downloads are cached in `.runtime/build-cache/`.
 - `JAIS-Voice-<version>.dmg` (about 530 MB, with `--dmg`): a drag-to-install disk image laid out by Finder through AppleScript, so the first local run asks to allow controlling Finder.
 
-`--dev` builds a small app whose launchers run this checkout (`.venv`, `scripts/`, `.runtime/`) for quick iteration. Apps are signed ad hoc only, with no Developer ID or notarization.
+`--dev` builds a small app whose launchers run this checkout (`.venv`, `scripts/`, `.runtime/`) for quick iteration. Apps are signed ad hoc unless `--sign` names an identity, with no notarization.
 
 ## Tests
 

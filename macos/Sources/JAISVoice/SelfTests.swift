@@ -19,15 +19,17 @@ import AVFoundation
             let preferences = AppPreferences(defaults: defaults)
             try check(preferences.interfaceLanguage == .english, "interface defaults to English")
             try check(preferences.shortcutChoice == 0 && preferences.asrLanguageCode == nil, "initial settings: ⌥ Space and automatic language")
-            try check(preferences.modelSize == "3.7B" && preferences.actionPermission == .ask, "defaults: 3.7B, ask before actions")
+            try check(preferences.modelSize == "3.7B" && preferences.actionPermission == .ask && preferences.reasoningEffort == .low,
+                      "defaults: 3.7B, ask before actions, low reasoning")
             preferences.setInterfaceLanguage(.french)
             preferences.setASRLanguage(" FR ")
             preferences.setShortcutChoice(2)
             preferences.setModelSize("7B")
             preferences.setActionPermission(.always)
+            preferences.setReasoningEffort(.high)
             let restored = AppPreferences(defaults: defaults)
             try check(restored.interfaceLanguage == .french && restored.asrLanguageCode == "fr" && restored.shortcutChoice == 2
-                      && restored.modelSize == "7B" && restored.actionPermission == .always,
+                      && restored.modelSize == "7B" && restored.actionPermission == .always && restored.reasoningEffort == .high,
                       "settings persist after reopening")
             preferences.setInterfaceLanguage(.english)
             preferences.setModelSize("invalid")
@@ -50,12 +52,49 @@ import AVFoundation
             let options = LocalPipeline.TurnOptions(conversationID: "c", modelSize: "0.9B")
             let body = LocalPipeline.cleanBody("t", options: options)
             try check(body["model_size"] as? String == "0.9B", "cleanup gets the model size")
+            try check(options.reasoningEffort == "low" && ReasoningEffort.allCases.map(\.rawValue) == ["low", "medium", "high"],
+                      "the agent's reasoning levels are the chat template's")
             try check(LocalPipeline.agentModelID("3.7B") == "jais-3-3.7b", "the agent model ID matches agent/models.json")
             try check(LocalPipeline.asrBody(audio: Data(), language: nil)["language"] == nil
                       && LocalPipeline.asrBody(audio: Data(), language: "fr")["language"] as? String == "fr", "automatic mode omits the language")
             let action = ActionRequest(title: "macOS command", message: #"{"reason":"Open Safari","details":"open -a Safari"}"#)
             try check(action == ActionRequest(tool: "macOS command", reason: "Open Safari", details: "open -a Safari"), "action request parsed from the extension")
             try check(ActionRequest(title: "Command", message: "ls").details == "ls", "a non-JSON message is shown as is")
+            let appControl = ActionRequest(title: "App control", message: #"{"reason":"r","details":"Mail (com.apple.mail)","kind":"app_control","app":"Mail"}"#)
+            try check(appControl.app == "Mail" && appControl.question.contains("Mail") && appControl.question != "r" && !appControl.isOverview,
+                      "an app approval is worded by the app, not by the agent")
+            try check(ActionRequest(title: "App access", message: #"{"reason":"r","details":"","kind":"overview"}"#).isOverview, "listing windows is an overview")
+            let fileWrite = ActionRequest(title: "Write file", message: #"{"reason":"Create this file?","details":"/Users/me/a.txt","kind":"file_write"}"#)
+            try check(fileWrite.question == L("Create this file?") && fileWrite.details == "/Users/me/a.txt"
+                      && ActionRequest(title: "File access", message: #"{"reason":"r","details":"","kind":"files_read"}"#).question != "r",
+                      "file approvals are worded by the app")
+
+            // Apps on this Mac
+            try check(DesktopPolicy.tier(bundleID: "com.apple.mail", regular: true).0 == .control, "an ordinary app can be controlled")
+            try check(DesktopPolicy.tier(bundleID: DesktopPolicy.ownBundleID, regular: true).0 == .blocked, "JAIS Voice never controls itself")
+            try check(DesktopPolicy.tier(bundleID: "com.apple.mail", regular: false).0 == .blocked
+                      && DesktopPolicy.tier(bundleID: nil, regular: true).0 == .blocked, "background components and unidentified apps are not accessible")
+            try check(["com.apple.Passwords", "com.agilebits.onepassword7", "com.apple.systempreferences"].allSatisfy { DesktopPolicy.tier(bundleID: $0, regular: true).0 == .blocked },
+                      "password managers and System Settings are not accessible")
+            try check(["com.apple.Terminal", "com.apple.Safari", "com.google.Chrome.canary", "com.jetbrains.pycharm"].allSatisfy { DesktopPolicy.tier(bundleID: $0, regular: true).0 == .read },
+                      "terminals, editors and browsers are read-only")
+            try check(DesktopApps.normalized(" Aperçu.app ") == "apercu", "app names ignore case, accents and .app")
+            let qwerty: (Character) -> (CGKeyCode, Bool)? = { ["n": (45, false), "a": (0, false), "+": (24, true)][$0] }
+            let combos = try DesktopKeys.parse("cmd+shift+n down down return", lookup: qwerty)
+            try check(combos.count == 4 && combos[0].code == 45 && combos[0].flags == [.maskCommand, .maskShift] && combos[3].code == 36,
+                      "key combinations and named keys")
+            let plus = try DesktopKeys.parse("cmd++", lookup: qwerty)
+            try check(plus.first == DesktopKeys.Combo(code: 24, flags: [.maskCommand, .maskShift], label: "cmd++"), "a key typed with Shift on the layout gets Shift")
+            try check((try? DesktopKeys.parse("cmd+volume", lookup: qwerty)) == nil && (try? DesktopKeys.parse(String(repeating: "a ", count: 31), lookup: qwerty)) == nil,
+                      "unknown keys and long sequences are refused")
+            let digits: (Character) -> (CGKeyCode, Bool)? = { ["1": (18, false), "2": (19, false), "*": (28, true), "=": (24, false)][$0] }
+            let run = try DesktopKeys.parse("12*2= return", lookup: digits)
+            try check(run.map(\.code) == [18, 19, 28, 19, 24, 36] && (try? DesktopKeys.parse("Multiplier", lookup: qwerty)) == nil,
+                      "digits and symbols are one key each; a word is not split into letters")
+            let menu = ["Nouveau", "Nouvelle fenêtre", "Ouvrir…", "Enregistrer sous…"]
+            try check(DesktopActions.match("nouveau", in: menu) == 0 && DesktopActions.match("Ouvrir...", in: menu) == 2
+                      && DesktopActions.match("Nouv", in: menu) == nil && DesktopActions.match("sous", in: menu) == 3, "menu titles match exactly, then uniquely")
+            try check(DesktopText.quoted("say \"hi\"\nnow") == #""say \"hi\" now""#, "element names stay on one quoted line")
 
             // Updates
             let releaseJSON = #"{"tag_name":"v1.2.0-build.15","html_url":"https://github.com/o/r/releases/tag/v1.2.0-build.15","assets":[{"browser_download_url":"https://github.com/o/r/releases/download/v1.2.0-build.15/JAIS-Voice-1.2.0.dmg"}]}"#
@@ -126,6 +165,13 @@ import AVFoundation
             conversation.accept(WireEvent(type: "tool_start", turn_id: toolTurn, tool_id: "tool", tool_name: "browser_navigate"))
             conversation.accept(WireEvent(type: "tool_end", turn_id: toolTurn, tool_id: "tool", result: "Page inaccessible", error_code: "tool_error"))
             try check(conversation.actions.first?.errorCode == "tool_error" && conversation.actions.first?.finished == true, "a failed tool stays marked as failed")
+            try check(conversation.actionsTag == L("BROWSER"), "browser actions are tagged as such")
+            conversation.accept(WireEvent(type: "status", turn_id: toolTurn, stage: "acting"))
+            conversation.accept(WireEvent(type: "tool_start", turn_id: toolTurn, tool_id: "app", tool_name: "desktop_click"))
+            try check(conversation.actions.last?.label == L("Clicking in app") && conversation.actionsTag == L("MACOS AND WEB")
+                      && conversation.stageLabel == L("Working on your Mac…"), "app actions are named and tagged as Mac actions")
+            try check(ToolAction(id: "f", name: "write", arguments: "").label == L("Writing file") && ToolAction(id: "g", name: "grep", arguments: "").label == L("Searching in files"),
+                      "Pi's file tools are named in the bubble")
             let stepsTurn = conversation.begin()
             conversation.accept(WireEvent(type: "response_delta", turn_id: stepsTurn, text: "Searching. "))
             conversation.accept(WireEvent(type: "tool_start", turn_id: stepsTurn, tool_id: "search", tool_name: "browser_navigate"))

@@ -31,6 +31,8 @@ def main():
     env = os.environ.copy()
     env["PLAYWRIGHT_BROWSERS_PATH"] = str(ROOT / ".runtime/browsers")
     run(node, ROOT / "node_modules/playwright/cli.js", "install", "chromium", "--no-shell", env=env)
+    from agent_tools import install
+    install(ROOT / ".runtime/bin", ROOT / ".runtime/build-cache/agent-tools")
     print("Setup complete. Then build the app with scripts/build_app.py.")
 
 
