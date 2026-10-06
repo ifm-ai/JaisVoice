@@ -14,6 +14,6 @@ This folder is the development root of JAIS Voice, moved here on 17 September 20
 - Python tests: `.venv/bin/python -m pytest -q`.
 - Pi extension tests: `node --test agent/`.
 - Native tests: `outputs/JAIS Voice.app/Contents/MacOS/JAISVoice --self-test`.
-- Language: code, comments, documentation and messages are in English. Interface strings are English keys passed to `L(...)`; add the French translation to `macos/Resources/fr.lproj/Localizable.strings` and the key to `en.lproj`.
+- Language: code, comments, documentation and messages are in English. Interface strings are English keys passed to `L(...)`; add the French and Arabic translations to `macos/Resources/fr.lproj` and `ar.lproj` (`Localizable.strings`) and the key to `en.lproj`.
 
 Preserve weights, backups and logs. Do not reintroduce absolute paths to the old Documents/Codex folder.

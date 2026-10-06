@@ -71,4 +71,4 @@ These CI builds also get `JAISUpdateFeedURL`, the GitHub API URL of the latest r
 
 ## Interface language
 
-Interface strings are English keys passed to `L(...)`. `macos/Resources/fr.lproj/Localizable.strings` maps them to French and `en.lproj` lists them for English; English is the default.
+Interface strings are English keys passed to `L(...)`. `macos/Resources/fr.lproj/Localizable.strings` and `ar.lproj` map them to French and Arabic, and `en.lproj` lists them for English; English is the default. The Arabic interface lays its windows, bubbles and menus out right to left; user and model text keeps its own direction.
