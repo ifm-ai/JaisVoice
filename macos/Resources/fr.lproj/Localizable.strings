@@ -163,7 +163,7 @@
 "The local agent could not finish its answer." = "L’agent local n’a pas pu terminer sa réponse.";
 "The local agent is not running." = "L’agent local n’est pas démarré.";
 "No model in the catalog." = "Aucun modèle dans le catalogue.";
-"No language model installed: download one in Settings." = "Aucun modèle de langage installé : téléchargez-en un dans les réglages.";
+"No language model installed: download one in Models" = "Aucun modèle de langage installé : téléchargez-en un dans Modèles";
 "They are downloaded from Hugging Face and stay on this Mac. You can delete them from Settings." = "Ils sont téléchargés depuis Hugging Face et restent sur ce Mac. Vous pourrez les supprimer depuis les réglages.";
 "Installing…" = "Installation…";
 "Jais Voice needs these models to work:" = "Jais Voice a besoin de ces modèles pour fonctionner :";
@@ -172,7 +172,7 @@
 "The download stopped (code {0})." = "Le téléchargement s’est arrêté (code {0}).";
 "Reading the model catalog…" = "Lecture du catalogue des modèles…";
 "The model management tool is missing. Open the Jais Voice.app bundle created by the setup script." = "L’outil de gestion des modèles est absent. Ouvrez le bundle Jais Voice.app créé par le script d’installation.";
-"Transcription model not installed: download it in Settings." = "Modèle de transcription non installé : téléchargez-le dans les réglages.";
+"Transcription model not installed: download it in Models" = "Modèle de transcription non installé : téléchargez-le dans Modèles";
 "Not installed" = "Non installé";
 "Later" = "Plus tard";
 "Preparing…" = "Préparation…";

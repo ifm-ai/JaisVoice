@@ -141,7 +141,7 @@ class Worker:
             raise ValueError(f"The {size} model is not in the catalog.")
         self.errors.pop(size, None)
         if action == "load" and not model_store.is_installed(entry, model_store.models_dir()):
-            raise ValueError(f"{entry['display_name']} is not installed: download it in Settings.")
+            raise ValueError(f"{entry['display_name']} is not installed: download it in Models.")
         if self.model and (self.loaded_size == size) == (action == "unload"):
             with self.lock:
                 self.model = None

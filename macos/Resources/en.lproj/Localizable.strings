@@ -163,7 +163,7 @@
 "The local agent could not finish its answer." = "The local agent could not finish its answer.";
 "The local agent is not running." = "The local agent is not running.";
 "No model in the catalog." = "No model in the catalog.";
-"No language model installed: download one in Settings." = "No language model installed: download one in Settings.";
+"No language model installed: download one in Models" = "No language model installed: download one in Models";
 "They are downloaded from Hugging Face and stay on this Mac. You can delete them from Settings." = "They are downloaded from Hugging Face and stay on this Mac. You can delete them from Settings.";
 "Installing…" = "Installing…";
 "Jais Voice needs these models to work:" = "Jais Voice needs these models to work:";
@@ -172,7 +172,7 @@
 "The download stopped (code {0})." = "The download stopped (code {0}).";
 "Reading the model catalog…" = "Reading the model catalog…";
 "The model management tool is missing. Open the Jais Voice.app bundle created by the setup script." = "The model management tool is missing. Open the Jais Voice.app bundle created by the setup script.";
-"Transcription model not installed: download it in Settings." = "Transcription model not installed: download it in Settings.";
+"Transcription model not installed: download it in Models" = "Transcription model not installed: download it in Models";
 "Not installed" = "Not installed";
 "Later" = "Later";
 "Preparing…" = "Preparing…";

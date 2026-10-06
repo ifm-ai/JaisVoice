@@ -85,8 +85,8 @@ struct DownloadProgress: Equatable {
     /// Why the assistant cannot run yet, if a required model is missing.
     var blockingMessage: String? {
         guard loaded else { return nil }
-        if let asr, !asr.installed { return L("Transcription model not installed: download it in Settings.") }
-        if !languageModels.contains(where: \.installed) { return L("No language model installed: download one in Settings.") }
+        if let asr, !asr.installed { return L("Transcription model not installed: download it in Models") }
+        if !languageModels.contains(where: \.installed) { return L("No language model installed: download one in Models") }
         return nil
     }
 

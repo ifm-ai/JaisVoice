@@ -110,7 +110,7 @@ import AVFoundation
             try check(store.blockingMessage == nil && store.missingDownloads.isEmpty, "nothing is blocked before the catalog is read")
             store.show(models: catalog)
             try check(store.missingDownloads.map(\.id) == ["asr-f5", "jais-3-3.7b"], "at launch, the ASR and the default size are offered")
-            try check(store.blockingMessage == L("Transcription model not installed: download it in Settings."), "blocked without a transcription model")
+            try check(store.blockingMessage == L("Transcription model not installed: download it in Models"), "blocked without a transcription model")
             catalog = try JSONDecoder().decode([CatalogModel].self, from: Data(catalogJSON.replacingOccurrences(of: #""installed":false"#, with: #""installed":true"#).utf8))
             store.show(models: catalog)
             try check(store.missingDownloads.isEmpty && store.blockingMessage == nil, "nothing is offered when the models are present")
