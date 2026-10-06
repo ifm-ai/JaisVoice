@@ -4,7 +4,7 @@ This folder is the development root of Jais Voice, moved here on 17 September 20
 
 - macOS interface: `macos/Sources/JAISVoice/`.
 - Agent: Pi harness in `agent/` (prompt, models, `extensions/jais/` extension), started by `scripts/run_agent.py`.
-- Local ASR: `jais_runtime/asr_service.py`.
+- Local ASR: `jais_runtime/asr_service.py` (model under MLX: `jais_runtime/asr_model.py`).
 - Language model (Jais 3 under MLX, model catalog and downloads, `/v1/clean` cleanup, agent completions): `jais_runtime/`.
 - Models and services: `.runtime/`; model catalog (Hugging Face repositories, sizes): `models/catalog.json`, managed by `scripts/models.py`.
 - Python environment: `.venv/`.

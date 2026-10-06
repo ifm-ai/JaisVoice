@@ -643,7 +643,7 @@ import UniformTypeIdentifiers
         state.ready = true
         state.serviceMessage = "Ready · local models loaded"
         modelStore.show(models: [
-            CatalogModel(id: "asr-f5", kind: "asr", display_name: "Jais-ASR · F5", installed: true, download_bytes: 4_780_192_247, disk_bytes: 5_995_121_326),
+            CatalogModel(id: "jais-asr", kind: "asr", display_name: "Jais-ASR", installed: true, download_bytes: 7_031_282_740, disk_bytes: 7_031_282_740),
             CatalogModel(id: "jais-3-0.9b", kind: "llm", display_name: "Jais 3 · 0.9B", size: "0.9B", installed: true, disk_bytes: 2_161_683_689),
             CatalogModel(id: "jais-3-3.7b", kind: "llm", display_name: "Jais 3 · 3.7B", size: "3.7B", installed: true, disk_bytes: 5_395_429_534),
             CatalogModel(id: "jais-3-7b", kind: "llm", display_name: "Jais 3 · 7B", size: "7B", installed: false, download_bytes: 9_582_764_791)

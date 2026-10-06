@@ -2,7 +2,7 @@
 """Build and assemble the native app.
 
 By default the bundle is self-contained, so it can be shared: it embeds Python
-3.12 with the service dependencies (the ASR environment is built on it too),
+3.12 with the service dependencies (speech recognition included),
 Node.js, and Pi with its extension. The browser is the Mac's Google Chrome, or a
 Chromium the agent downloads. User data (models, logs, Pi state, Chromium) lives
 in ~/Library/Application Support/Jais Voice, never in the signed bundle.
@@ -32,7 +32,7 @@ UPDATE_FEED = "https://api.github.com/repos/{}/releases/latest".format(
 LAUNCHERS = (("launch-services", "run_services.py"), ("launch-agent", "run_agent.py"), ("launch-models", "models.py"))
 IGNORED = shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store", "*.test.ts")
 # What nothing in the app runs: Tk and IDLE, the shared library for embedding
-# (the interpreter is static), test suites, and pip (the ASR environment gets its own).
+# (the interpreter is static), test suites, and pip.
 PYTHON_UNUSED = (
     "share", "lib/libpython3.12.dylib", "lib/libtcl*", "lib/tcl9*", "lib/tk9*", "lib/itcl*", "lib/thread*",
     "lib/python3.12/idlelib", "lib/python3.12/tkinter", "lib/python3.12/turtle*", "lib/python3.12/lib2to3",
@@ -142,7 +142,6 @@ def write_launchers(resources: Path, dev: bool) -> None:
 : "${{JAIS_RUNTIME_DIR:=$HOME/Library/Application Support/Jais Voice}}"
 export JAIS_RUNTIME_DIR
 export JAIS_NODE="$HERE/runtime/node/bin/node"
-export JAIS_ASR_PYTHON_HOME="$HERE/runtime/python"
 export JAIS_TOOLS_BIN="$HERE/runtime/bin"
 export PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
 exec "$HERE/runtime/python/bin/python3.12" "$HERE/app/scripts/{script}" "$@"

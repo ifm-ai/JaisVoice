@@ -4,14 +4,16 @@ Jais Voice uses one speech model and one language model. The same language model
 
 | Role | Repository |
 | --- | --- |
-| Speech recognition | [MBZUAI-Paris/JAIS-ASR-MLX](https://huggingface.co/MBZUAI-Paris/JAIS-ASR-MLX) |
+| Speech recognition | [IFM/Jais-ASR-MLX-8bit](https://huggingface.co/IFM/Jais-ASR-MLX-8bit) |
 | Cleanup and agent (one model for both) | [IFM/Jais-3-3.7B-MLX-8bit](https://huggingface.co/IFM/Jais-3-3.7B-MLX-8bit) (default) · [IFM/Jais-3-0.9B-MLX-bf16](https://huggingface.co/IFM/Jais-3-0.9B-MLX-bf16) · [IFM/Jais-3-7B-MLX-8bit](https://huggingface.co/IFM/Jais-3-7B-MLX-8bit) |
 
 These repositories currently require access on Hugging Face. The app uses your Hugging Face login: run `hf auth login` once, or set `HF_TOKEN`.
 
 ## Speech recognition
 
-On first launch the app offers to download Jais-ASR (profile F5, 4.8 GB). The download is pinned to a commit, resumable, and checked file by file (size and SHA-256) before installation.
+On first launch the app offers to download Jais-ASR, the 8-bit MLX build (7.0 GB: 8-bit decoder, BF16 audio encoder). Like a language model, it is pinned to a commit, downloaded resumably, checked file by file against Hugging Face (size, SHA-256 for weights, git hash for the other files), validated against the architecture, then installed; without access to the repository, the files can be downloaded by hand (see below).
+
+The ASR service runs it with MLX on the app's own Python, without mlx-vlm: `jais_runtime/asr_model.py` holds the audio encoder (Qwen3-Omni) and the projector, and reuses the Jais 3 decoder of `jais_runtime/model.py`. Decoding follows the model card: greedy, at most 256 tokens, repetition penalty 1.05. The repository's processor (`processing_jais_asr.py`, `language.py`, `postprocess.py`) computes the mel features and the prompt, pins the language when the user chose one (the model can still decline audio without speech) and separates the language tag from the transcript; these are the only Python files the app downloads and runs. For the ASR, the folder of files downloaded by hand also needs these three files, `preprocessor_config.json`, `processor_config.json` and `generation_config.json`.
 
 ## Language models
 

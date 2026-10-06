@@ -9,7 +9,7 @@ WAV audio → Jais-ASR (local service) → cleanup (/v1/clean, selected LLM) →
 - `macos/`: SwiftUI/AppKit menu bar app. It records audio, orchestrates each turn and shows the bubble and settings. No third-party framework. See [macos/README.md](../macos/README.md).
 - `agent/`: the [Pi](https://github.com/earendil-works/pi) agent harness: system prompt, local models, skills (`skills/`) and the `extensions/jais/` extension (macOS shell, Notes, the apps' windows, clarifying question, Playwright browser, the rules of Pi's file tools, 50-action budget, action approval).
 - `jais_runtime/`: the Jais 3 architecture under MLX (`model.py`), the model catalog and downloads (`model_store.py`), and the local gateway (`gateway.py`): `/v1/clean` transcript cleanup (`prompts.py`) and streamed Chat Completions for the agent, with native reasoning and tool-call parsing (`protocol.py`).
-- `jais_runtime/asr_service.py`: the local Jais-ASR service.
+- `jais_runtime/asr_service.py`: the local Jais-ASR service; the model under MLX (audio encoder, projector, Jais 3 decoder) is `asr_model.py`.
 - `scripts/`: setup, build, disk image, service supervisor, agent launcher and model management.
 
 The app runs Pi in RPC mode as a child process and talks to it in JSONL over stdin/stdout. The services listen on loopback only: the MLX gateway on `127.0.0.1:8788`, Jais-ASR on `127.0.0.1:8790`. Per-turn events and the approval protocol are documented in [INTERFACES.md](../INTERFACES.md).
@@ -47,7 +47,7 @@ python3.12 scripts/setup.py
 
 The build writes to `outputs/`:
 
-- `Jais Voice.app` (about 670 MB): a self-contained app embedding Python 3.12 with the service dependencies (the ASR environment is built on a copy of it), Node.js and Pi. The browser is the Mac's Google Chrome, or a Chromium the agent downloads into the data folder. Its data lives in `~/Library/Application Support/Jais Voice/` (or `JAIS_RUNTIME_DIR`). Downloads are cached in `.runtime/build-cache/`.
+- `Jais Voice.app` (about 670 MB): a self-contained app embedding Python 3.12 with the service dependencies (the speech service included), Node.js and Pi. The browser is the Mac's Google Chrome, or a Chromium the agent downloads into the data folder. Its data lives in `~/Library/Application Support/Jais Voice/` (or `JAIS_RUNTIME_DIR`). Downloads are cached in `.runtime/build-cache/`.
 - `Jais-Voice-<version>.dmg` (about 185 MB, with `--dmg`): a drag-to-install disk image laid out by Finder through AppleScript, so the first local run asks to allow controlling Finder.
 
 `--dev` builds a small app whose launchers run this checkout (`.venv`, `scripts/`, `.runtime/`) for quick iteration. Apps are signed ad hoc unless `--sign` names an identity, with no notarization.

@@ -449,7 +449,7 @@ struct ConfigurationView: View {
     private var privacy: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "network").font(.system(size: 12)).padding(.top, 1)
-            Text(L("F5 transcription, cleanup and the agent run on this Mac. Tools may access the Internet to handle your requests."))
+            Text(L("Transcription, cleanup and the agent run on this Mac. Tools may access the Internet to handle your requests."))
                 .font(.system(size: 10)).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
         }.foregroundStyle(.secondary).padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)

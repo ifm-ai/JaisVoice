@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from conftest import REVISION, write_model
+from conftest import REVISION, write_asr, write_model
 from jais_runtime import model_store
 from scripts import models as models_cli
 from scripts import run_agent, run_services
@@ -29,7 +29,8 @@ class FakeHub:
                 siblings = []
                 for path in sorted(p for p in hub.source.rglob("*") if p.is_file()):
                     lfs = type("Lfs", (), {"sha256": model_store.sha256(path)})() if path.suffix == ".safetensors" else None
-                    siblings.append(type("Sibling", (), {"rfilename": str(path.relative_to(hub.source)), "size": path.stat().st_size, "lfs": lfs})())
+                    siblings.append(type("Sibling", (), {"rfilename": str(path.relative_to(hub.source)), "size": path.stat().st_size, "lfs": lfs,
+                                                         "blob_id": None if lfs else model_store.git_blob_sha1(path)})())
                 return type("Info", (), {"siblings": siblings})()
         self.HfApi = HfApi
 
@@ -54,23 +55,11 @@ class FakeHub:
             shutil.copyfile(path, target)
 
 
-def asr_repository(directory):
-    weights = directory / "models/tensors/f5.safetensors"
-    weights.parent.mkdir(parents=True)
-    weights.write_bytes(b"asr weights")
-    (directory / "requirements-mac.txt").write_text("mlx\n")
-    (directory / "install.sh").write_text('mkdir -p .venv/bin && ln -s "$PYTHON_BIN" .venv/bin/python\n')
-    files = [{"path": str(weights.relative_to(directory)), "bytes": weights.stat().st_size, "sha256": model_store.sha256(weights)}]
-    (directory / "manifests").mkdir()
-    (directory / "manifests/F5.json").write_text(json.dumps({"files": files, "download_files": [item["path"] for item in files]}))
-    (directory / "unrelated-profile.bin").write_bytes(b"not part of F5")
-    return directory
-
-
-def test_catalog_lists_the_three_jais_sizes():
+def test_catalog_lists_the_three_jais_sizes_and_the_asr():
     catalog = model_store.load_catalog()
     assert [entry["size"] for entry in catalog if entry["kind"] == "llm"] == list(model_store.SIZES)
     assert all(entry["download"]["repo"].startswith("IFM/Jais-3-") for entry in catalog if entry["kind"] == "llm")
+    assert [entry["download"]["repo"] for entry in catalog if entry["kind"] == "asr"] == ["IFM/Jais-ASR-MLX-8bit"]
 
 
 @pytest.mark.parametrize("change", [{"revision": "main"}, {"repo": "not a repo"}])
@@ -144,41 +133,56 @@ def test_without_access_the_files_downloaded_by_hand_are_installed(store):
     assert model_store.is_installed(entry, base) and not (base / "sources/model-3.7B").exists()
 
 
-def test_asr_download_fetches_one_profile_verifies_and_installs_its_environment(store):
+def test_asr_download_fetches_the_build_and_its_processor_then_validates_it(store):
     catalog, base, tmp = store
-    hub = FakeHub(asr_repository(tmp / "asr-repo"))
-    entry = model_store.find(catalog, "asr-f5")
-    model_store.download(entry, base, lambda event: None, hub=hub, python=sys.executable)
+    write_asr(tmp / "asr-repo")
+    (tmp / "asr-repo/modeling_jais_asr.py").write_text("raise SystemExit('never fetched')")
+    hub = FakeHub(tmp / "asr-repo")
+    entry = model_store.find(catalog, "jais-asr")
+    model_store.download(entry, base, lambda event: None, hub=hub)
     assert model_store.is_installed(entry, base)
-    assert (base / "ASR/.venv/bin/python").resolve() == Path(sys.executable).resolve()
-    assert not (base / "ASR/unrelated-profile.bin").exists()
+    assert hub.calls == [("org/asr", REVISION, model_store.MODEL_PATTERNS + list(model_store.ASR_CODE))]
+    assert (base / "ASR/processing_jais_asr.py").is_file() and not (base / "ASR/modeling_jais_asr.py").exists()
 
 
-def test_asr_environment_is_built_on_a_copy_of_the_app_python(store, monkeypatch):
-    _, _, tmp = store
-    name = f"python{sys.version_info.major}.{sys.version_info.minor}"
-    monkeypatch.delenv("JAIS_ASR_PYTHON_HOME", raising=False)
-    assert model_store.asr_python() == str(Path(sys.base_prefix) / "bin" / name)
-    bundled = tmp / "bundle/runtime/python"
-    (bundled / "bin").mkdir(parents=True)
-    (bundled / "bin" / name).write_text("interpreter")
-    (bundled / "lib" / name / "site-packages/mlx_lm").mkdir(parents=True)
-    (bundled / "lib" / name / "venv").mkdir()
-    monkeypatch.setenv("JAIS_ASR_PYTHON_HOME", str(bundled))
-    monkeypatch.setenv("JAIS_RUNTIME_DIR", str(tmp / "runtime"))
-    python = Path(model_store.asr_python())
-    assert python == tmp / "runtime" / name / "bin" / name and python.read_text() == "interpreter"
-    # The app's own packages stay out of the ASR environment's base.
-    assert (python.parents[1] / "lib" / name / "venv").is_dir() and not (python.parents[1] / "lib" / name / "site-packages").exists()
-
-
-def test_altered_asr_file_is_refused(store):
+def test_asr_without_its_encoder_is_refused(store):
     catalog, base, tmp = store
-    repository = asr_repository(tmp / "asr-repo")
-    (repository / "models/tensors/f5.safetensors").write_bytes(b"ASR WEIGHTS")
-    with pytest.raises(RuntimeError, match="altered"):
-        model_store.download(model_store.find(catalog, "asr-f5"), base, lambda event: None, hub=FakeHub(repository), python=sys.executable)
+    write_asr(tmp / "asr-repo")
+    index = json.loads((tmp / "asr-repo/model.safetensors.index.json").read_text())
+    weights = {name: shard for name, shard in index["weight_map"].items() if name.startswith("language_model.")}
+    shard = tmp / "asr-repo" / next(iter(weights.values()))
+    from safetensors.numpy import load_file, save_file
+    save_file({name: value for name, value in load_file(shard).items() if name in weights}, shard)
+    (tmp / "asr-repo/model.safetensors.index.json").write_text(json.dumps({"weight_map": weights}))
+    with pytest.raises(ValueError, match="architecture"):
+        model_store.download(model_store.find(catalog, "jais-asr"), base, lambda event: None, hub=FakeHub(tmp / "asr-repo"))
     assert not (base / "ASR").exists()
+
+
+def test_altered_asr_code_is_refused(store):
+    catalog, base, tmp = store
+    write_asr(tmp / "asr-repo")
+
+    class TamperingHub(FakeHub):
+        def snapshot_download(self, repo, revision=None, local_dir=None, allow_patterns=None, max_workers=None):
+            super().snapshot_download(repo, revision, local_dir, allow_patterns, max_workers)
+            (Path(local_dir) / "language.py").write_text("# altered!!\n")  # same size, other content
+
+    with pytest.raises(RuntimeError, match="altered"):
+        model_store.download(model_store.find(catalog, "jais-asr"), base, lambda event: None, hub=TamperingHub(tmp / "asr-repo"))
+    assert not (base / "ASR").exists()
+
+
+def test_without_access_the_asr_downloaded_by_hand_is_installed(store):
+    catalog, base, tmp = store
+    entry = model_store.find(catalog, "jais-asr")
+    hub = FakeHub(tmp / "unused", error=RepositoryNotFoundError())
+    with pytest.raises(model_store.NoAccess) as error:
+        model_store.download(entry, base, lambda event: None, hub=hub)
+    assert error.value.folder == base / "sources/asr"
+    write_asr(base / "sources/asr")
+    model_store.download(entry, base, lambda event: None, hub=hub)
+    assert model_store.is_installed(entry, base) and not (base / "sources/asr").exists()
 
 
 def test_delete_removes_model_and_partial_download_only(store):
@@ -215,7 +219,7 @@ def test_cli_lists_and_reports_errors_as_json(store, capsys):
     runtime = ["--runtime-dir", str(tmp / "runtime")]
     assert models_cli.main([*runtime, "list"]) == 0
     listing = json.loads(capsys.readouterr().out)
-    assert [model["id"] for model in listing["models"]] == ["asr-f5", "jais-3-0.9b", "jais-3-3.7b", "jais-3-7b"]
+    assert [model["id"] for model in listing["models"]] == ["jais-asr", "jais-3-0.9b", "jais-3-3.7b", "jais-3-7b"]
     assert models_cli.main([*runtime, "download", "missing"]) == 1
     assert json.loads(capsys.readouterr().out)["event"] == "error"
     write_model(base / "model-0.9B")
@@ -262,10 +266,7 @@ def run_supervisor(monkeypatch, tmp, iterations, during=lambda index: None):
 
 
 def install_asr(base):
-    (base / "ASR/.venv/bin").mkdir(parents=True, exist_ok=True)
-    (base / "ASR/.venv/bin/python").write_text("")
-    (base / "ASR/manifests").mkdir(exist_ok=True)
-    (base / "ASR/manifests/F5.json").write_text("{}")
+    write_asr(base / "ASR")
 
 
 def test_supervisor_without_asr_starts_only_the_gateway(store, monkeypatch):

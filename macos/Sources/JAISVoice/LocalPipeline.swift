@@ -88,7 +88,7 @@ struct PipelineFailure: Error {
         let modelsReady = gateway["status"] as? String == "ready", asrReady = asr?["status"] as? String == "ready"
         let failed = gateway["status"] as? String == "error" || asr?["status"] as? String == "error"
         var message = modelsReady ? L("Ready") : (gateway["message"] as? String ?? L("Starting local services…"))
-        if !asrReady { message = asr?["message"] as? String ?? L("Starting local Jais-ASR F5…") }
+        if !asrReady { message = asr?["message"] as? String ?? L("Starting local Jais-ASR…") }
         var models = gateway["models"] as? [String: Any] ?? [:]
         if let asr { models["ASR"] = asr }
         let payload: [String: Any] = ["status": modelsReady && asrReady ? "ready" : (failed ? "error" : "starting"), "message": message, "models": models]
@@ -240,10 +240,10 @@ struct PipelineFailure: Error {
         let status: Int, result: [String: Any]
         do { (status, result) = try await Self.post(Self.asrURL.appendingPathComponent("transcribe"), body, timeout: 180) }
         catch let error as URLError where error.code == .cancelled { throw CancellationError() }
-        catch { throw PipelineFailure(code: "asr_unavailable", message: L("Transcription failed. Check the status of the local Jais-ASR F5 model.")) }
+        catch { throw PipelineFailure(code: "asr_unavailable", message: L("Transcription failed. Check the status of the local Jais-ASR model.")) }
         try Task.checkCancellation()
         if status == 400 { throw PipelineFailure(code: "audio_format", message: L("The file must be a 16-bit PCM WAV, mono, 16 kHz, from 0.1 to 30 seconds.")) }
-        guard status == 200 else { throw PipelineFailure(code: "asr_unavailable", message: L("Transcription failed. Check the status of the local Jais-ASR F5 model.")) }
+        guard status == 200 else { throw PipelineFailure(code: "asr_unavailable", message: L("Transcription failed. Check the status of the local Jais-ASR model.")) }
         if result["refused"] as? Bool == true { throw PipelineFailure(code: "asr_refused", message: L("The local ASR model refused this recording.")) }
         if result["truncated"] as? Bool == true { throw PipelineFailure(code: "asr_truncated", message: L("The transcript is incomplete. Try a shorter recording.")) }
         guard let text = (result["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {

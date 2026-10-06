@@ -1,6 +1,6 @@
 # Jais Voice implementation contract
 
-Native macOS app + Python supervisor (`scripts/run_services.py`) for the local Jais-ASR F5 service (127.0.0.1:8790) and the MLX gateway (127.0.0.1:8788), + the Pi agent in RPC mode, a pipe child of the app (`scripts/run_agent.py`). One Jais 3 model, chosen by size (0.9B, 3.7B or 7B), serves both transcript cleanup and the agent.
+Native macOS app + Python supervisor (`scripts/run_services.py`) for the local Jais-ASR service (127.0.0.1:8790) and the MLX gateway (127.0.0.1:8788), + the Pi agent in RPC mode, a pipe child of the app (`scripts/run_agent.py`). One Jais 3 model, chosen by size (0.9B, 3.7B or 7B), serves both transcript cleanup and the agent.
 
 ## Native app: one turn
 - The app owns the turn. Audio: complete WAV PCM signed 16-bit mono 16000 Hz, at most 30 seconds.

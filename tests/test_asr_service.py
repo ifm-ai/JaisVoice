@@ -29,17 +29,10 @@ def test_valid_audio_and_language_preserved():
     assert frames == b'\0\0' * 3200 and language == 'ar'
 
 
-@pytest.mark.parametrize('row', [
-    {'transcription': {'text':'partial','truncated':True}},
-    {'text':'partial','reached_max_new_tokens':True},
-    {'text':'partial','ended_with_eos':False},
-])
-def test_local_truncation_flags_propagate(row):
-    assert normalize_result(row)['truncated'] is True
-
-
-def test_refusal_survives_result_normalization():
-    assert normalize_result({'transcription':{'text':'','refused':True}})['refused'] is True
+def test_transcription_flags_survive_result_normalization():
+    row = {'text': '', 'language': None, 'refused': True, 'truncated': False, 'tag': '[IFM-NoTranscript]', 'thinking': None}
+    assert normalize_result(row) == {'text': '', 'refused': True, 'truncated': False, 'language': None}
+    assert normalize_result({'text': 'partial', 'language': 'EG', 'refused': False, 'truncated': True})['truncated'] is True
 
 
 def test_worker_http_roundtrip_and_busy_rejection():
