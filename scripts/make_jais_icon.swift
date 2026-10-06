@@ -1,10 +1,10 @@
 import AppKit
 
-// Place the original JAIS mark on a macOS icon tile without altering its artwork.
+// Place the original Jais mark on a macOS icon tile without altering its artwork.
 let resources = URL(fileURLWithPath: CommandLine.arguments[1])
 let iconset = URL(fileURLWithPath: CommandLine.arguments[2])
 try FileManager.default.createDirectory(at: iconset, withIntermediateDirectories: true)
-guard let mark = NSImage(contentsOf: resources.appendingPathComponent("JAISMark.png")) else { fatalError("JAIS mark missing") }
+guard let mark = NSImage(contentsOf: resources.appendingPathComponent("JAISMark.png")) else { fatalError("Jais mark missing") }
 for size in [16, 32, 128, 256, 512] {
     for scale in [1, 2] {
         let pixels = size * scale

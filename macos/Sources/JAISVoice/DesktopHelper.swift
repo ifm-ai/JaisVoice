@@ -5,7 +5,7 @@ import ApplicationServices
 ///
 /// One JSON request per line on stdin, `{"id", "method", "params"}`; one JSON
 /// response per line on stdout, `{"id", "result"}` or `{"id", "error"}`. The
-/// helper runs below the agent, itself a child of JAIS Voice, so macOS applies
+/// helper runs below the agent, itself a child of Jais Voice, so macOS applies
 /// the app's Accessibility and Screen Recording permissions. It exits when its
 /// stdin closes. The extension asks the user before each app is read or driven;
 /// this side enforces what no approval can grant (see `DesktopPolicy`).
@@ -43,8 +43,8 @@ import ApplicationServices
 
     private func requireAccessibility() throws {
         guard AXIsProcessTrusted() else {
-            throw VoiceError.message("JAIS Voice does not have the Accessibility permission, so it cannot see or use other apps. "
-                + "Tell the user to allow it in JAIS Voice Settings > Assistant.")
+            throw VoiceError.message("Jais Voice does not have the Accessibility permission, so it cannot see or use other apps. "
+                + "Tell the user to allow it in Jais Voice Settings > Assistant.")
         }
         guard !Self.screenLocked else {
             throw VoiceError.message("The Mac's screen is locked, so apps cannot be read or used. Tell the user, in the language of their request, to unlock it and ask again.")
@@ -66,8 +66,8 @@ import ApplicationServices
             app = try DesktopApps.resolve(params["app"] as? String ?? "", includeInstalled: false)
         }
         switch (app.tier, need) {
-        case (.blocked, _): throw VoiceError.message("\(app.name) is not accessible to JAIS Voice: \(app.note ?? "").")
-        case (.read, .control): throw VoiceError.message("\(app.name) is read-only for JAIS Voice: \(app.note ?? ""). Do not try another way.")
+        case (.blocked, _): throw VoiceError.message("\(app.name) is not accessible to Jais Voice: \(app.note ?? "").")
+        case (.read, .control): throw VoiceError.message("\(app.name) is read-only for Jais Voice: \(app.note ?? ""). Do not try another way.")
         default: return app
         }
     }
@@ -105,7 +105,7 @@ import ApplicationServices
         case "open_app":
             try requireAccessibility()
             let found = try DesktopApps.resolve(string(params, "app") ?? "", includeInstalled: true)
-            guard found.tier != .blocked else { throw VoiceError.message("\(found.name) is not accessible to JAIS Voice: \(found.note ?? "").") }
+            guard found.tier != .blocked else { throw VoiceError.message("\(found.name) is not accessible to Jais Voice: \(found.note ?? "").") }
             let opened = try await DesktopActions.open(app: found, windowQuery: string(params, "window"), refs: refs)
             return await afterAction("\(opened.name) is open and in front.", app: opened, delay: 0.3)
         case "snapshot":

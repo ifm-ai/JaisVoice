@@ -224,7 +224,7 @@ async def lifespan(app):
     worker.executor.shutdown(wait=False, cancel_futures=True)
 
 
-app = FastAPI(title="JAIS Voice local gateway", lifespan=lifespan)
+app = FastAPI(title="Jais Voice local gateway", lifespan=lifespan)
 
 
 @app.get("/health")

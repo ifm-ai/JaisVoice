@@ -6,7 +6,7 @@ right, over a background with an arrow. Finder lays the window out through
 AppleScript; if Finder cannot be scripted (no Automation permission, headless
 session), the image is still produced with Finder's default layout.
 
-    make_dmg.py "outputs/JAIS Voice.app" outputs/JAIS-Voice-1.0.0.dmg
+    make_dmg.py "outputs/Jais Voice.app" outputs/Jais-Voice-1.0.0.dmg
 """
 import argparse
 from pathlib import Path
@@ -102,7 +102,7 @@ def make_dmg(app: Path, output: Path, volume: str) -> Path:
         (source / ".background").mkdir()
         background = source / ".background/background.png"
         script = BACKGROUND_SCRIPT % {"width": WIDTH, "height": HEIGHT, "arrow_y": APP_POSITION[1],
-                                      "caption": '"Drag JAIS Voice to Applications"'}
+                                      "caption": '"Drag Jais Voice to Applications"'}
         run("/usr/bin/osascript", "-l", "JavaScript", "-e", script, background)
         # A writable image lets Finder store the window layout in .DS_Store.
         writable = temporary / "layout.dmg"

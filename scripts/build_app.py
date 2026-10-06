@@ -5,7 +5,7 @@ By default the bundle is self-contained, so it can be shared: it embeds Python
 3.12 with the service dependencies (the ASR environment is built on it too),
 Node.js, and Pi with its extension. The browser is the Mac's Google Chrome, or a
 Chromium the agent downloads. User data (models, logs, Pi state, Chromium) lives
-in ~/Library/Application Support/JAIS Voice, never in the signed bundle.
+in ~/Library/Application Support/Jais Voice, never in the signed bundle.
 
 --dev keeps the previous behaviour: small launchers that run this checkout's
 .venv, scripts and .runtime directory, for quick iteration.
@@ -137,7 +137,7 @@ def write_launchers(resources: Path, dev: bool) -> None:
         else:
             # Paths are relative to the bundle, which may live anywhere.
             body = f'''HERE="$(cd "$(dirname "$0")" && pwd)"
-: "${{JAIS_RUNTIME_DIR:=$HOME/Library/Application Support/JAIS Voice}}"
+: "${{JAIS_RUNTIME_DIR:=$HOME/Library/Application Support/Jais Voice}}"
 export JAIS_RUNTIME_DIR
 export JAIS_NODE="$HERE/runtime/node/bin/node"
 export JAIS_ASR_PYTHON_HOME="$HERE/runtime/python"
@@ -163,9 +163,9 @@ def main():
     run(sys.executable, ROOT / "macos/build_direct.py", cwd=ROOT)
     binary = ROOT / "macos/.build/direct/JAISVoice"
     node = None if args.dev else portable_node()
-    app = OUTPUTS / "JAIS Voice.app"
+    app = OUTPUTS / "Jais Voice.app"
     # Assemble into a new sibling; keep the previous app as a recoverable backup.
-    staging = OUTPUTS / "JAIS Voice.building.app"
+    staging = OUTPUTS / "Jais Voice.building.app"
     if staging.exists():
         raise SystemExit(f"A prior build remains at {staging}; inspect it before replacing.")
     contents = staging / "Contents"
@@ -205,14 +205,14 @@ def main():
     if app.exists():
         backups = ROOT / ".runtime/app-backups"
         backups.mkdir(parents=True, exist_ok=True)
-        backup = backups / ("JAIS Voice.previous-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f") + ".app")
+        backup = backups / ("Jais Voice.previous-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f") + ".app")
         app.rename(backup)
         print(f"Previous app preserved: {backup}")
     staging.rename(app)
     print(f"Application ready: {app}")
     if args.dmg:
         from make_dmg import make_dmg
-        make_dmg(app, OUTPUTS / f"JAIS-Voice-{info['CFBundleShortVersionString']}.dmg", info["CFBundleDisplayName"])
+        make_dmg(app, OUTPUTS / f"Jais-Voice-{info['CFBundleShortVersionString']}.dmg", info["CFBundleDisplayName"])
 
 
 if __name__ == "__main__":

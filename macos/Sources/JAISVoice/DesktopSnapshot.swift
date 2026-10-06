@@ -451,7 +451,7 @@ struct SnapshotItem {
         return walker
     }
 
-    /// Apps with windows, front to back, and what JAIS Voice may do with each.
+    /// Apps with windows, front to back, and what Jais Voice may do with each.
     static func listWindows(refs: DesktopRefs) -> String {
         let apps = DesktopApps.running()
         var order: [pid_t] = []
@@ -488,7 +488,7 @@ struct SnapshotItem {
         }
         var text = lines.isEmpty ? "No app window is open." : "Open windows, front to back:\n" + lines.joined(separator: "\n")
         if !withoutWindows.isEmpty { text += "\nRunning without windows: " + withoutWindows.joined(separator: ", ") }
-        if !blocked.isEmpty { text += "\nNot accessible to JAIS Voice: " + blocked.joined(separator: ", ") }
+        if !blocked.isEmpty { text += "\nNot accessible to Jais Voice: " + blocked.joined(separator: ", ") }
         return text
     }
 }

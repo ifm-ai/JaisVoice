@@ -514,7 +514,7 @@ enum DesktopKeys {
     static func recognizeText(app: DesktopApp, window: AXUIElement, refs: DesktopRefs) async throws -> String {
         guard let pid = app.pid, let frame = window.frame else { throw VoiceError.message("This window is not on screen.") }
         guard CGPreflightScreenCaptureAccess() else {
-            throw VoiceError.message("Reading text from pixels needs the Screen Recording permission for JAIS Voice (Settings > Assistant).")
+            throw VoiceError.message("Reading text from pixels needs the Screen Recording permission for Jais Voice (Settings > Assistant).")
         }
         let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
         let candidates = content.windows.filter { $0.owningApplication?.processID == pid && $0.windowLayer == 0 && $0.frame.width > 20 }

@@ -70,13 +70,13 @@ test("protected apps are refused before any approval", () => {
   assert.match(tierProblem(passwords, "read")!, /not accessible.*passwords/);
 });
 
-test("app approvals name the app and level for JAIS Voice to word them", () => {
+test("app approvals name the app and level for Jais Voice to word them", () => {
   assert.deepEqual(JSON.parse(appAccessMessage(mail, "control")), {
-    reason: "Let JAIS Voice control Mail until this request ends: click, type, use its menus and keys.",
+    reason: "Let Jais Voice control Mail until this request ends: click, type, use its menus and keys.",
     details: "Mail (com.apple.mail)", kind: "app_control", app: "Mail",
   });
   assert.equal(JSON.parse(appAccessMessage(mail, "read")).kind, "app_read");
-  assert.match(appRefused("Mail", "control"), /did not allow JAIS Voice to control Mail.*Do not retry/);
+  assert.match(appRefused("Mail", "control"), /did not allow Jais Voice to control Mail.*Do not retry/);
 });
 
 test("after reading windows, the browser goes without asking only to DuckDuckGo and sites the user named", () => {

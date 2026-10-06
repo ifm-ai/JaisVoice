@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-<h1 align="center">JAIS Voice</h1>
+<h1 align="center">Jais Voice</h1>
 
 <p align="center">
   A private voice assistant for macOS that runs entirely on your Mac.<br>
@@ -20,23 +20,23 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/bubble.png" alt="A request corrected and answered in the JAIS Voice bubble" width="300">
+  <img src="docs/images/bubble.png" alt="A request corrected and answered in the Jais Voice bubble" width="300">
   &nbsp;&nbsp;
-  <img src="docs/images/approval.png" alt="JAIS Voice asking before running a command" width="300">
+  <img src="docs/images/approval.png" alt="Jais Voice asking before running a command" width="300">
 </p>
 
 ## Features
 
-- **Local speech recognition** with JAIS-ASR, including Arabic dialects.
+- **Local speech recognition** with Jais-ASR, including Arabic dialects.
 - **Self-correction cleanup**: “to Ahmed… I mean Sara” becomes “to Sara” before anything runs.
-- **An agent that acts**: it answers, browses the web in its own browser window (Google Chrome with a separate, empty profile; on a Mac without Chrome, JAIS Voice downloads Chromium once), creates notes, runs macOS commands, reads and writes your files, and uses your apps' windows (reading them, clicking, typing, choosing menu items).
+- **An agent that acts**: it answers, browses the web in its own browser window (Google Chrome with a separate, empty profile; on a Mac without Chrome, Jais Voice downloads Chromium once), creates notes, runs macOS commands, reads and writes your files, and uses your apps' windows (reading them, clicking, typing, choosing menu items).
 - **You stay in control**: every action on your Mac is shown for approval by default (never, ask, or always).
 - **No cloud**: speech, models and agent run on your Mac with MLX; only the web pages you ask for are fetched.
 
 ## Installation
 
-1. Download `JAIS-Voice-<version>.dmg` from the [latest release](https://github.com/MBZUAI-IFM/JaisVoice/releases/latest).
-2. Open it and drag **JAIS Voice** onto **Applications**.
+1. Download `Jais-Voice-<version>.dmg` from the [latest release](https://github.com/MBZUAI-IFM/JaisVoice/releases/latest).
+2. Open it and drag **Jais Voice** onto **Applications**.
 3. The app is not notarized by Apple yet. On first launch, open **System Settings → Privacy & Security** and click **Open Anyway**.
 
 Requires an Apple Silicon Mac with macOS 26 and at least 16 GB of memory. On first launch, the app offers to download the speech model; language models are installed as described below.

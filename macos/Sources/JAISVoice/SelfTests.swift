@@ -71,7 +71,7 @@ import AVFoundation
 
             // Apps on this Mac
             try check(DesktopPolicy.tier(bundleID: "com.apple.mail", regular: true).0 == .control, "an ordinary app can be controlled")
-            try check(DesktopPolicy.tier(bundleID: DesktopPolicy.ownBundleID, regular: true).0 == .blocked, "JAIS Voice never controls itself")
+            try check(DesktopPolicy.tier(bundleID: DesktopPolicy.ownBundleID, regular: true).0 == .blocked, "Jais Voice never controls itself")
             try check(DesktopPolicy.tier(bundleID: "com.apple.mail", regular: false).0 == .blocked
                       && DesktopPolicy.tier(bundleID: nil, regular: true).0 == .blocked, "background components and unidentified apps are not accessible")
             try check(["com.apple.Passwords", "com.agilebits.onepassword7", "com.apple.systempreferences"].allSatisfy { DesktopPolicy.tier(bundleID: $0, regular: true).0 == .blocked },
@@ -97,7 +97,7 @@ import AVFoundation
             try check(DesktopText.quoted("say \"hi\"\nnow") == #""say \"hi\" now""#, "element names stay on one quoted line")
 
             // Updates
-            let releaseJSON = #"{"tag_name":"v1.2.0-build.15","html_url":"https://github.com/o/r/releases/tag/v1.2.0-build.15","assets":[{"browser_download_url":"https://github.com/o/r/releases/download/v1.2.0-build.15/JAIS-Voice-1.2.0.dmg"}]}"#
+            let releaseJSON = #"{"tag_name":"v1.2.0-build.15","html_url":"https://github.com/o/r/releases/tag/v1.2.0-build.15","assets":[{"browser_download_url":"https://github.com/o/r/releases/download/v1.2.0-build.15/Jais-Voice-1.2.0.dmg"}]}"#
             let release = AppRelease.parse(Data(releaseJSON.utf8))
             try check(release?.version == "1.2.0" && release?.build == 15 && release?.downloadURL.pathExtension == "dmg" && release?.label == "1.2.0 (build 15)",
                       "a CI release tag gives the version, build and disk image")

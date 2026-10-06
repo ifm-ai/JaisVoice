@@ -513,7 +513,7 @@ private extension View {
             styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
             backing: .buffered, defer: false
         )
-        window.title = L("Settings · JAIS Voice")
+        window.title = L("Settings · Jais Voice")
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false

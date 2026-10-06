@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""List, download or delete JAIS Voice models (JSON on stdout, one record per line).
+"""List, download or delete Jais Voice models (JSON on stdout, one record per line).
 
     models.py list
     models.py download <id>     # progress records, then {"event": "done"} or {"event": "error"}

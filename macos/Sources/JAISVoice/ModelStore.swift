@@ -93,7 +93,7 @@ struct DownloadProgress: Equatable {
     private static func launcher() throws -> URL {
         if let explicit = ProcessInfo.processInfo.environment["JAIS_MODELS_LAUNCHER"] { return URL(fileURLWithPath: explicit) }
         guard let resource = Bundle.main.url(forResource: "launch-models", withExtension: nil) else {
-            throw VoiceError.message(L("The model management tool is missing. Open the JAIS Voice.app bundle created by the setup script."))
+            throw VoiceError.message(L("The model management tool is missing. Open the Jais Voice.app bundle created by the setup script."))
         }
         return resource
     }

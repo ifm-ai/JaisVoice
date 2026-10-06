@@ -22,7 +22,7 @@ def find_node(env: dict) -> str:
     for candidate in (node, "/opt/homebrew/bin/node", str(Path.home() / ".local/bin/node"), "/usr/local/bin/node"):
         if candidate and Path(candidate).is_file():
             return candidate
-    raise RuntimeError("Node.js not found. Run the JAIS Voice setup again.")
+    raise RuntimeError("Node.js not found. Run the Jais Voice setup again.")
 
 
 def command(env: dict) -> tuple[list[str], dict, Path]:
