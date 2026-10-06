@@ -1,10 +1,21 @@
-import Foundation
+import AppKit
+import SwiftUI
 
 /// UI language is independent of speech recognition and the conversation language.
 /// Keep the existing defaults domain so upgrades preserve user settings.
 enum InterfaceLanguage: String, CaseIterable {
-    case french = "fr", english = "en"
-    var label: String { self == .french ? "Français" : "English" }
+    case english = "en", french = "fr", arabic = "ar"
+    /// Each language is named in itself so it can be found whatever the current interface.
+    var label: String {
+        switch self {
+        case .english: "English"
+        case .french: "Français"
+        case .arabic: "العربية"
+        }
+    }
+    var isRightToLeft: Bool { self == .arabic }
+    var layoutDirection: LayoutDirection { isRightToLeft ? .rightToLeft : .leftToRight }
+    var userInterfaceLayoutDirection: NSUserInterfaceLayoutDirection { isRightToLeft ? .rightToLeft : .leftToRight }
     static let preferenceKey = "interfaceLanguage"
     static func resolved(_ value: String?) -> InterfaceLanguage {
         InterfaceLanguage(rawValue: value ?? "") ?? .english

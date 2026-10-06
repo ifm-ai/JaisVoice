@@ -1,0 +1,3 @@
+"NSMicrophoneUsageDescription" = "يستخدم JAIS Voice الميكروفون أثناء الضغط مطولًا على الاختصار للتحدث.";
+"NSAppleEventsUsageDescription" = "ينفّذ JAIS Voice إجراءات macOS التي تطلبها، مثل إنشاء ملاحظة. يطلب macOS إذنًا منفصلًا للتحكم في كل تطبيق.";
+"NSBluetoothAlwaysUsageDescription" = "بعد موافقتك الصريحة، يمكن لـ JAIS Voice الاطلاع على حالة البلوتوث أو تغييرها لإدارة اتصال جهاز Mac.";

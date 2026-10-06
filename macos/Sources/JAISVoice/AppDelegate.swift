@@ -474,6 +474,7 @@ import UniformTypeIdentifiers
         refreshMenuStatus()
         guard statusItem != nil, !menuOpen else { return }
         let menu = NSMenu(); menu.delegate = self; menu.autoenablesItems = false
+        menu.userInterfaceLayoutDirection = InterfaceLanguage.current.userInterfaceLayoutDirection
         func add(_ label: String, action: Selector? = nil, enabled: Bool = true) -> NSMenuItem {
             let item = NSMenuItem(title: label, action: action, keyEquivalent: "")
             item.target = self; item.isEnabled = enabled && action != nil; menu.addItem(item); return item
@@ -495,6 +496,7 @@ import UniformTypeIdentifiers
         _ = add(L("Type a request…"), action: #selector(textRequest), enabled: state.ready && !state.isBusy)
         _ = add(L("Stop request"), action: #selector(stopFromMenu), enabled: state.isBusy)
         let shortcutMenu = NSMenu()
+        shortcutMenu.userInterfaceLayoutDirection = menu.userInterfaceLayoutDirection
         for (index, choice) in ShortcutChoice.choices.enumerated() {
             let item = NSMenuItem(title: choice.label, action: #selector(changeShortcut(_:)), keyEquivalent: "")
             item.target = self; item.tag = index; item.state = shortcut.choiceIndex == index ? .on : .off

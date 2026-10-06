@@ -35,6 +35,7 @@ struct RecordingCapsule: View {
         .background(PanelMaterial())
         .clipShape(Capsule())
         .preferredColorScheme(.dark)
+        .environment(\.layoutDirection, InterfaceLanguage.current.layoutDirection)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L("Recording, {0} seconds", String(describing: Int(state.duration))))
     }
@@ -109,7 +110,7 @@ struct ResultBubble: View {
                         }
                     } else if !state.raw.isEmpty {
                         VStack(alignment: .leading, spacing: 7) {
-                            sectionLabel("TRANSCRIPTION", tag: "ASR")
+                            sectionLabel(L("TRANSCRIPTION"), tag: "ASR")
                             naturalText(state.raw, size: 14).foregroundStyle(.white.opacity(0.68))
                         }
                     } else if state.isBusy {
@@ -128,7 +129,7 @@ struct ResultBubble: View {
                             if state.showOriginal {
                                 diffText
                                     .font(.system(size: 13)).lineSpacing(4)
-                                    .frame(maxWidth: .infinity, alignment: TranscriptDiff.isRTL(state.raw) ? .trailing : .leading)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                     .environment(\.layoutDirection, TranscriptDiff.isRTL(state.raw) ? .rightToLeft : .leftToRight)
                                     .textSelection(.enabled)
                             }
@@ -136,7 +137,7 @@ struct ResultBubble: View {
                     }
                     if !state.actions.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
-                            sectionLabel("ACTIONS", tag: state.actionsTag)
+                            sectionLabel(L("ACTIONS"), tag: state.actionsTag)
                             ForEach(Array(state.actions.enumerated()), id: \.element.id) { index, action in
                                 let note = state.interimText(before: index)
                                 if !note.isEmpty { naturalText(note, size: 13).opacity(0.8) }
@@ -200,6 +201,7 @@ struct ResultBubble: View {
         .background(PanelMaterial())
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .preferredColorScheme(.dark)
+        .environment(\.layoutDirection, InterfaceLanguage.current.layoutDirection)
         .onHover { state.hovered = $0 }
         .onAppear { onHeight(totalHeight) }
     }
@@ -227,7 +229,7 @@ struct ResultBubble: View {
             .font(.system(size: size)).foregroundStyle(.white.opacity(0.9)).tint(accent)
             .lineSpacing(4).textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: TranscriptDiff.isRTL(text) ? .trailing : .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .environment(\.layoutDirection, TranscriptDiff.isRTL(text) ? .rightToLeft : .leftToRight)
     }
 

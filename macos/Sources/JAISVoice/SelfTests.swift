@@ -39,14 +39,17 @@ import AVFoundation
 
             // Localization
             try check(localized("Settings…", language: .french) == "Réglages…", "French resources are bundled")
+            try check(localized("Settings…", language: .arabic) == "الإعدادات…", "Arabic resources are bundled")
+            try check(InterfaceLanguage.arabic.layoutDirection == .rightToLeft && InterfaceLanguage.french.layoutDirection == .leftToRight,
+                      "the Arabic interface reads right to left")
             try check(localized("Unknown diagnostic", language: .english) == "Unknown diagnostic", "unknown diagnostics are preserved")
             try check(localized("Hold {0}, speak, then release.", language: .english, arguments: ["{0} ⌥ Space"]) == "Hold {0} ⌥ Space, speak, then release.",
                       "interpolated content stays literal")
-            let strings = try ["fr", "en"].map { language -> Set<String> in
+            let strings = try InterfaceLanguage.allCases.map(\.rawValue).map { language -> Set<String> in
                 let url = Bundle.main.url(forResource: "Localizable", withExtension: "strings", subdirectory: "\(language).lproj")!
                 return Set((try PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil) as! [String: String]).keys)
             }
-            try check(strings[0] == strings[1], "every interface string exists in both languages")
+            try check(Set(strings).count == 1, "every interface string exists in every language")
 
             // Requests sent to the services and the agent
             let options = LocalPipeline.TurnOptions(conversationID: "c", modelSize: "0.9B")

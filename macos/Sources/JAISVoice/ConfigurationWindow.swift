@@ -73,6 +73,7 @@ struct ConfigurationView: View {
         .frame(width: 480, height: 540)
         .background(JAISBrand.background)
         .preferredColorScheme(.dark)
+        .environment(\.layoutDirection, preferences.interfaceLanguage.layoutDirection)
         .tint(configurationAccent)
     }
 
@@ -302,7 +303,7 @@ struct ConfigurationView: View {
                 .foregroundStyle(preferences.microphoneAuthorized ? JAISBrand.green : Color.orange)
                 .font(.system(size: 14)).frame(width: 20)
             VStack(alignment: .leading, spacing: 3) {
-                Text("Microphone").font(.system(size: 12, weight: .medium))
+                Text(L("Microphone")).font(.system(size: 12, weight: .medium))
                 Text(preferences.microphoneRequestPending ? L("Requesting access…") : preferences.microphoneStatus.label)
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
