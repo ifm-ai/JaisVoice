@@ -100,11 +100,15 @@ import AVFoundation
             try check(DesktopText.quoted("say \"hi\"\nnow") == #""say \"hi\" now""#, "element names stay on one quoted line")
 
             // Updates
-            let releaseJSON = #"{"tag_name":"v1.2.0-build.15","html_url":"https://github.com/o/r/releases/tag/v1.2.0-build.15","assets":[{"browser_download_url":"https://github.com/o/r/releases/download/v1.2.0-build.15/Jais-Voice-1.2.0.dmg"}]}"#
+            let releaseJSON = #"{"tag_name":"v1.2.10","html_url":"https://github.com/o/r/releases/tag/v1.2.10","assets":[{"browser_download_url":"https://github.com/o/r/releases/download/v1.2.10/Jais-Voice-1.2.10.dmg"}]}"#
             let release = AppRelease.parse(Data(releaseJSON.utf8))
-            try check(release?.version == "1.2.0" && release?.build == 15 && release?.downloadURL.pathExtension == "dmg" && release?.label == "1.2.0 (build 15)",
-                      "a CI release tag gives the version, build and disk image")
-            try check(AppRelease.parse(Data(#"{"tag_name":"nightly","html_url":"https://github.com"}"#.utf8)) == nil, "other tags are ignored")
+            try check(release?.version == "1.2.10" && release?.downloadURL.pathExtension == "dmg" && release?.label == "1.2.10",
+                      "a CI release tag gives the version and disk image")
+            let installed = { (version: String) in AppRelease(version: version, downloadURL: URL(string: "https://github.com")!) }
+            try check(release.map { $0.isNewer(than: installed("1.2.9")) && !$0.isNewer(than: installed("1.2.10")) && !$0.isNewer(than: installed("1.3.0")) } == true,
+                      "versions compare number by number")
+            try check(AppRelease.parse(Data(#"{"tag_name":"nightly","html_url":"https://github.com"}"#.utf8)) == nil
+                      && AppRelease.parse(Data(#"{"tag_name":"v1.1.0-build.3","html_url":"https://github.com"}"#.utf8)) == nil, "other tags are ignored")
 
             // Models
             let catalogJSON = #"[{"id":"asr-f5","kind":"asr","display_name":"ASR","installed":false,"download_bytes":10},{"id":"jais-3-3.7b","kind":"llm","display_name":"3.7B","size":"3.7B","installed":false},{"id":"jais-3-7b","kind":"llm","display_name":"7B","size":"7B","installed":false}]"#

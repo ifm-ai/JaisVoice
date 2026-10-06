@@ -65,9 +65,9 @@ node --test agent/
 
 ## Continuous integration and releases
 
-`.github/workflows/release.yml` runs on a GitHub-hosted macOS 26 runner. On pull requests it runs the tests and builds the app and disk image (kept as a workflow artifact for 7 days). On every push to `main` it also publishes a release `v<version>-build.<run number>` with the disk image and `.github/release-notes.md`. The version comes from `CFBundleShortVersionString` in `macos/Info.plist`; the run number becomes `CFBundleVersion`.
+`.github/workflows/release.yml` runs on a GitHub-hosted macOS 26 runner. On pull requests it runs the tests and builds the app and disk image (kept as a workflow artifact for 7 days). On every push to `main` it also publishes a release `v<major>.<minor>.<patch>` with the disk image and `.github/release-notes.md`. Each release bumps the patch of the latest release tag (`scripts/next_version.py`): 1.1.0, 1.1.1, 1.1.2… `CFBundleShortVersionString` in `macos/Info.plist` is the floor: set it to 1.2.0 or 2.0.0 to start a new series. The run number becomes `CFBundleVersion`.
 
-These CI builds also get `JAISUpdateFeedURL`, the GitHub API URL of the latest release: the app checks it at launch, once a day and from **Check for Updates…**, compares the release tag's build number with its own, and offers the disk image. Local builds have no feed and never check. The feed must be readable without signing in, so update checks only work once the releases are public (or the feed points to a public copy).
+These CI builds also get `JAISUpdateFeedURL`, the GitHub API URL of the latest release of the repository that built them: the app checks it at launch, once a day and from **Check for Updates…**, compares the release tag's version with its own, and offers the disk image. Local builds have no feed and never check. The feed must be readable without signing in, so update checks only work once the releases are public (or the feed points to a public copy).
 
 ## Interface language
 

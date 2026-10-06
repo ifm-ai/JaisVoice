@@ -1,38 +1,43 @@
 import AppKit
 
-/// A published release of the app, as tagged by CI: `v<version>-build.<number>`.
+/// A published release of the app, as tagged by CI: `v<major>.<minor>.<patch>`.
 struct AppRelease: Equatable {
     let version: String
-    let build: Int
     /// The disk image when the release has one, else the release page.
     let downloadURL: URL
 
-    var label: String { "\(version) (build \(build))" }
+    var label: String { version }
+
+    /// Numeric version parts, so 1.1.10 comes after 1.1.9.
+    var versionParts: [Int] { version.split(separator: ".").map { Int($0) ?? 0 } }
+
+    func isNewer(than other: AppRelease) -> Bool {
+        other.versionParts.lexicographicallyPrecedes(versionParts)
+    }
 
     /// Read a GitHub "latest release" response.
     static func parse(_ data: Data) -> AppRelease? {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let tag = object["tag_name"] as? String,
-              let match = tag.wholeMatch(of: #/v(.+)-build\.(\d+)/#), let build = Int(match.2),
+              let match = tag.wholeMatch(of: #/v(\d+\.\d+\.\d+)/#),
               let page = (object["html_url"] as? String).flatMap(URL.init(string:)) else { return nil }
         let assets = object["assets"] as? [[String: Any]] ?? []
         let disk = assets.compactMap { $0["browser_download_url"] as? String }.first { $0.hasSuffix(".dmg") }
-        return AppRelease(version: String(match.1), build: build, downloadURL: disk.flatMap(URL.init(string:)) ?? page)
+        return AppRelease(version: String(match.1), downloadURL: disk.flatMap(URL.init(string:)) ?? page)
     }
 }
 
 /// Looks for a newer release at launch, then once a day, and on request.
 ///
-/// Only CI release builds carry a feed (`JAISUpdateFeedURL` in Info.plist) and
-/// a build number; local builds never check. The user downloads the disk image
-/// and replaces the app: nothing is installed without them.
+/// Only CI release builds carry a feed (`JAISUpdateFeedURL` in Info.plist);
+/// local builds never check. The user downloads the disk image and replaces
+/// the app: nothing is installed without them.
 @MainActor final class UpdateChecker {
     static let feedURL = (Bundle.main.object(forInfoDictionaryKey: "JAISUpdateFeedURL") as? String).flatMap(URL.init(string:))
     static let current = AppRelease(
         version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
-        build: Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") ?? 0,
         downloadURL: URL(string: "https://github.com/MBZUAI-IFM/JaisVoice/releases")!)
-    private static let dismissedKey = "dismissedUpdateBuild"
+    private static let dismissedKey = "dismissedUpdateVersion"
 
     /// A newer release found by the last check.
     private(set) var available: AppRelease?
@@ -53,7 +58,7 @@ struct AppRelease: Equatable {
     /// Automatic checks stay silent on errors and do not repeat a release the user put off.
     private func automaticCheck() async {
         guard let release = try? await latestNewerRelease(),
-              release.build != UserDefaults.standard.integer(forKey: Self.dismissedKey) else { return }
+              release.version != UserDefaults.standard.string(forKey: Self.dismissedKey) else { return }
         onAvailable?(release)
     }
 
@@ -70,7 +75,7 @@ struct AppRelease: Equatable {
         guard status == 200, let release = AppRelease.parse(data) else {
             throw VoiceError.message(L("The release server did not answer as expected."))
         }
-        available = release.build > Self.current.build ? release : nil
+        available = release.isNewer(than: Self.current) ? release : nil
         return available
     }
 
@@ -86,7 +91,7 @@ struct AppRelease: Equatable {
         if alert.runModal() == .alertFirstButtonReturn {
             NSWorkspace.shared.open(release.downloadURL)
         } else {
-            UserDefaults.standard.set(release.build, forKey: Self.dismissedKey)
+            UserDefaults.standard.set(release.version, forKey: Self.dismissedKey)
         }
     }
 }

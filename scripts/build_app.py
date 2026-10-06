@@ -25,8 +25,10 @@ OUTPUTS = ROOT / "outputs"
 CACHE = ROOT / ".runtime/build-cache"
 # Project files needed at run time, copied into Contents/Resources/app.
 APP_SOURCES = ("agent", "jais_runtime", "models", "scripts", "package.json", "package-lock.json")
-# The latest release, as published by .github/workflows/release.yml.
-UPDATE_FEED = "https://api.github.com/repos/MBZUAI-IFM/JaisVoice/releases/latest"
+# The latest release of the repository building the app, as published by
+# .github/workflows/release.yml.
+UPDATE_FEED = "https://api.github.com/repos/{}/releases/latest".format(
+    os.environ.get("GITHUB_REPOSITORY", "MBZUAI-IFM/JaisVoice"))
 LAUNCHERS = (("launch-services", "run_services.py"), ("launch-agent", "run_agent.py"), ("launch-models", "models.py"))
 IGNORED = shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store", "*.test.ts")
 # What nothing in the app runs: Tk and IDLE, the shared library for embedding
@@ -155,6 +157,7 @@ def main():
     parser.add_argument("--dev", action="store_true", help="Launchers run this checkout instead of an embedded runtime")
     parser.add_argument("--dmg", action="store_true", help="Also write a drag-to-install disk image")
     parser.add_argument("--build-number", help="CFBundleVersion of this build (CI run number)")
+    parser.add_argument("--version", help="CFBundleShortVersionString of this build (default: macos/Info.plist)")
     # macOS ties the Accessibility and Screen Recording permissions to the signature:
     # an ad hoc one changes with every build, so each update asks for them again.
     parser.add_argument("--sign", default=os.environ.get("JAIS_CODESIGN_IDENTITY", "-"),
@@ -175,6 +178,8 @@ def main():
     with (ROOT / "macos/Info.plist").open("rb") as source:
         info = plistlib.load(source)
     info["CFBundleExecutable"] = "JAISVoice"
+    if args.version:
+        info["CFBundleShortVersionString"] = args.version
     if args.build_number:
         # CI release builds: numbered, and they look for newer releases.
         info["CFBundleVersion"] = args.build_number
