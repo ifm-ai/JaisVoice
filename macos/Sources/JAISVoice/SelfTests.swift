@@ -111,12 +111,12 @@ import AVFoundation
                       && AppRelease.parse(Data(#"{"tag_name":"v1.1.0-build.3","html_url":"https://github.com"}"#.utf8)) == nil, "other tags are ignored")
 
             // Models
-            let catalogJSON = #"[{"id":"asr-f5","kind":"asr","display_name":"ASR","installed":false,"download_bytes":10},{"id":"jais-3-3.7b","kind":"llm","display_name":"3.7B","size":"3.7B","installed":false},{"id":"jais-3-7b","kind":"llm","display_name":"7B","size":"7B","installed":false}]"#
+            let catalogJSON = #"[{"id":"jais-asr","kind":"asr","display_name":"ASR","installed":false,"download_bytes":10},{"id":"jais-3-3.7b","kind":"llm","display_name":"3.7B","size":"3.7B","installed":false},{"id":"jais-3-7b","kind":"llm","display_name":"7B","size":"7B","installed":false}]"#
             var catalog = try JSONDecoder().decode([CatalogModel].self, from: Data(catalogJSON.utf8))
             let store = ModelStore()
             try check(store.blockingMessage == nil && store.missingDownloads.isEmpty, "nothing is blocked before the catalog is read")
             store.show(models: catalog)
-            try check(store.missingDownloads.map(\.id) == ["asr-f5", "jais-3-3.7b"], "at launch, the ASR and the default size are offered")
+            try check(store.missingDownloads.map(\.id) == ["jais-asr", "jais-3-3.7b"], "at launch, the ASR and the default size are offered")
             try check(store.blockingMessage == L("Transcription model not installed: download it in Models"), "blocked without a transcription model")
             catalog = try JSONDecoder().decode([CatalogModel].self, from: Data(catalogJSON.replacingOccurrences(of: #""installed":false"#, with: #""installed":true"#).utf8))
             store.show(models: catalog)

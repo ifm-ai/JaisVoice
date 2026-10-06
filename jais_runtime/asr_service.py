@@ -1,17 +1,15 @@
-"""Persistent, offline Jais-ASR F5 worker; runs in the model's isolated Python env."""
+"""Persistent, offline Jais-ASR worker (MLX), on the services' Python environment."""
 from __future__ import annotations
 
 import base64
 import gc
 import concurrent.futures
 import dataclasses
-import importlib
 import io
 import json
 import logging
 import os
 from pathlib import Path
-import sys
 import threading
 import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -38,54 +36,9 @@ def decode_audio(payload):
     return frames, payload.get("language") or None
 
 
-def transcribe_pinned(runtime, waveform, language):
-    """Same F5 generation loop, with the source processor's official LanguagePin.
-
-    Automatic mode uses the unmodified published runtime. A language pin keeps
-    the model's abstention branch, unlike prefilling a language tag in the prompt.
-    """
-    if language is None:
-        return runtime.transcribe(waveform, 16000)
-    import mlx.core as mx
-    import numpy as np
-    import torch
-    from transformers import RepetitionPenaltyLogitsProcessor
-    batch = runtime.processor(text=[runtime.prompt], audio=[waveform], sampling_rate=16000, return_tensors="pt")
-    ids = batch["input_ids"][0].tolist()
-    if len(ids) > 4096 - 256 or not bool((batch["attention_mask"] == 1).all()):
-        raise ValueError("The audio exceeds the model context.")
-    with torch.inference_mode():
-        merged = runtime.frontend.model(**batch)
-    prefix = mx.array(merged.detach().float().numpy())
-    cache = runtime.decoder.make_cache()
-    for first in range(0, len(ids), 256):
-        scores = runtime.decoder(input_embeddings=prefix[:, first:first + 256, :], cache=cache).logits
-        mx.eval(scores)
-    tokens = []
-    penalty = RepetitionPenaltyLogitsProcessor(1.05)
-    pin = runtime.processor.language_pin(language)
-    for _ in range(256):
-        logits = torch.from_numpy(np.array(scores[0, -1, :].astype(mx.float32), copy=True)).reshape(1, -1)
-        logits = penalty(torch.tensor([ids + tokens]), logits)
-        pin.apply(tokens, logits[0])
-        token = int(logits.argmax(-1)[0])
-        tokens.append(token)
-        if token in (1, 250019) or len(tokens) == 256:
-            break
-        scores = runtime.decoder(inputs=mx.array([[token]], dtype=mx.int32), cache=cache).logits
-        mx.eval(scores)
-    transcript = runtime.processor.post_process_transcription(torch.tensor([ids + tokens]), input_lengths=len(ids))[0]
-    return {"transcription": dataclasses.asdict(transcript), "truncated": transcript.truncated,
-            "reached_max_new_tokens": len(tokens) == 256, "ended_with_eos": tokens[-1] in (1, 250019)}
-
-
 def normalize_result(row):
-    transcript = row.get("transcription", {})
-    return {"text": row.get("text") or transcript.get("text", ""),
-            "refused": bool(row.get("refused") or transcript.get("refused")),
-            "truncated": bool(row.get("truncated") or transcript.get("truncated")
-                              or row.get("reached_max_new_tokens") or row.get("ended_with_eos") is False),
-            "language": transcript.get("language"), "profile": "F5"}
+    return {"text": row.get("text", ""), "refused": bool(row.get("refused")),
+            "truncated": bool(row.get("truncated")), "language": row.get("language")}
 
 
 class LocalASR:
@@ -108,34 +61,28 @@ class LocalASR:
             mx.clear_cache()
 
     def load(self):
-        root = self.model_dir
-        for key, value in {"HF_HOME": root / ".cache/huggingface", "HF_MODULES_CACHE": root / ".cache/huggingface/modules",
-                           "NUMBA_CACHE_DIR": root / ".cache/numba", "TORCH_HOME": root / ".cache/torch"}.items():
-            os.environ[key] = str(value)
         os.environ.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1", TOKENIZERS_PARALLELISM="false")
-        sys.path.insert(0, str(root / "runtime"))
-        spec = root / "profiles/F5.json"
-        factory = importlib.import_module("scripts.mlx_pareto_ext.jais_runtime").load_runtime
-        self.runtime = factory(spec, device="gpu", threads=2)
+        from jais_runtime.asr_model import Transcriber
+        self.runtime = Transcriber(self.model_dir)
         import mlx.core as mx
         mx.synchronize()
-        logging.info("Jais-ASR F5 loaded locally")
+        logging.info("Jais-ASR loaded locally")
 
     def health(self):
         if not self.loading.done():
-            return {"status": "loading", "message": "Loading Jais-ASR F5…", "profile": "F5"}
+            return {"status": "loading", "message": "Loading Jais-ASR…"}
         if self.loading.exception() is not None:
-            return {"status": "error", "message": "Jais-ASR F5 failed to load. See the ASR log.", "profile": "F5"}
+            return {"status": "error", "message": "Jais-ASR failed to load. See the ASR log."}
         if self.runtime is None:
-            return {"status": "unloaded", "message": "Jais-ASR F5 unloaded", "profile": "F5"}
-        return {"status": "ready", "message": "Jais-ASR F5 ready", "profile": "F5"}
+            return {"status": "unloaded", "message": "Jais-ASR unloaded"}
+        return {"status": "ready", "message": "Jais-ASR ready"}
 
     def transcribe(self, frames, language):
         import mlx.core as mx
         import numpy as np
         waveform = np.frombuffer(frames, dtype="<i2").astype(np.float32) / 32768.0
         try:
-            return normalize_result(transcribe_pinned(self.runtime, waveform, language))
+            return normalize_result(dataclasses.asdict(self.runtime(waveform, language)))
         finally:
             mx.synchronize()
             mx.clear_cache()
@@ -214,8 +161,11 @@ def make_handler(worker):
 
 def main():
     logging.basicConfig(level=logging.INFO)
-    root = Path(__file__).resolve().parents[1]
-    directory = Path(os.environ.get("JAIS_ASR_MODEL_DIR", root / ".runtime/models/JAIS-ASR-MLX"))
+    directory = os.environ.get("JAIS_ASR_MODEL_DIR")
+    if not directory:
+        from jais_runtime import model_store
+        asr = next(entry for entry in model_store.load_catalog() if entry["kind"] == "asr")
+        directory = model_store.model_path(asr, model_store.models_dir())
     worker = LocalASR(directory)
     worker.loading.add_done_callback(lambda future: logging.error("ASR load failed: %s", future.exception()) if future.exception() else None)
     server = ThreadingHTTPServer(("127.0.0.1", 8790), make_handler(worker))

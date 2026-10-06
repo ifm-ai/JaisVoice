@@ -5,10 +5,10 @@ installed when its directory exists under the runtime models directory.
 Downloads are pinned to a commit, written to a hidden staging directory
 (resumable), checked, then renamed into place.
 
-A language model is the published MLX build, checked against Hugging Face's
-sizes and SHA-256. When the repository is not accessible, the files the user
-downloaded into `models/sources/<repository name>` are validated and installed
-instead.
+Each model is the published MLX build, checked against Hugging Face's sizes,
+SHA-256 (weights) and git hashes (other files). When the repository is not
+accessible, the files the user downloaded into `models/sources/<repository
+name>` are validated and installed instead.
 """
 from __future__ import annotations
 
@@ -22,8 +22,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import subprocess
-import sys
 import threading
 from typing import Callable
 
@@ -32,8 +30,10 @@ from safetensors import safe_open
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "models/catalog.json"
 SIZES = ("0.9B", "3.7B", "7B")
-# Files of a published MLX build; Python files are never fetched or run.
+# Files of a published MLX build; a language model's Python files are never fetched or run.
 MODEL_PATTERNS = ["*.json", "*.jinja", "*.safetensors"]
+# Jais-ASR's processor (mel features, prompt, language pin, transcript tag), run by the ASR service.
+ASR_CODE = ("processing_jais_asr.py", "language.py", "postprocess.py")
 PROVENANCE = "jais_download.json"
 Progress = Callable[[dict], None]
 
@@ -100,9 +100,13 @@ def staging_path(entry: dict, base: Path) -> Path:
     return base / f".{entry['directory']}.download"
 
 
-def source_path(entry: dict, base: Path) -> Path | None:
-    """Where the user can put a language model's files downloaded by hand."""
-    return base / "sources" / entry["download"]["repo"].split("/")[-1] if entry["kind"] == "llm" else None
+def source_path(entry: dict, base: Path) -> Path:
+    """Where the user can put a model's files downloaded by hand."""
+    return base / "sources" / entry["download"]["repo"].split("/")[-1]
+
+
+def patterns(entry: dict) -> list[str]:
+    return MODEL_PATTERNS + list(ASR_CODE) if entry["kind"] == "asr" else MODEL_PATTERNS
 
 
 class NoAccess(RuntimeError):
@@ -115,15 +119,10 @@ class NoAccess(RuntimeError):
                          "then download the model again.")
 
 
-def asr_profile(entry: dict) -> str:
-    return entry["download"].get("profile", "F5")
-
-
 def is_installed(entry: dict, base: Path) -> bool:
     path = model_path(entry, base)
-    if entry["kind"] == "asr":
-        return (path / ".venv/bin/python").exists() and (path / f"manifests/{asr_profile(entry)}.json").is_file()
-    return (path / "config.json").is_file()
+    code = ASR_CODE if entry["kind"] == "asr" else ()
+    return all((path / name).is_file() for name in ("config.json", *code))
 
 
 def disk_bytes(path: Path) -> int:
@@ -137,7 +136,7 @@ def disk_bytes(path: Path) -> int:
 
 def state(entry: dict, base: Path) -> dict:
     installed = is_installed(entry, base)
-    partial = sum(disk_bytes(path) for path in (staging_path(entry, base), source_path(entry, base)) if path and path.is_dir())
+    partial = sum(disk_bytes(path) for path in (staging_path(entry, base), source_path(entry, base)) if path.is_dir())
     return {key: entry[key] for key in ("id", "kind", "display_name", "size") if key in entry} | {
         "installed": installed, "download_bytes": entry["download"].get("bytes"),
         "disk_bytes": disk_bytes(model_path(entry, base)) if installed else 0, "partial_bytes": partial}
@@ -170,11 +169,7 @@ def expected_weight_shapes(config: dict) -> dict[str, tuple[int, ...]]:
     return result
 
 
-def validate_model(directory: Path) -> None:
-    """Check the complete tensor layout without loading the model or touching Metal."""
-    config = json.loads((directory / "config.json").read_text())
-    if not isinstance(config, dict) or config.get("model_type") != "k2_horizon":
-        raise ValueError(f"Not a Jais 3 configuration: {directory}")
+def _check_decoder(config: dict, directory: Path) -> None:
     for key in ("hidden_size", "intermediate_size", "num_attention_heads", "num_key_value_heads", "head_dim", "vocab_size", "num_hidden_layers"):
         if type(config.get(key)) is not int or config[key] <= 0:
             raise ValueError(f"Invalid dimension ({key}): {directory}")
@@ -183,12 +178,19 @@ def validate_model(directory: Path) -> None:
         raise ValueError(f"Invalid normalization: {directory}")
     if config.get("num_experts", 0) or config.get("query_key_norm") or config.get("attention_gate_func"):
         raise ValueError(f"Unsupported architecture: {directory}")
+
+
+def _check_text_files(directory: Path) -> None:
     for filename in ("tokenizer.json", "tokenizer_config.json"):
         data = json.loads((directory / filename).read_text())
         if not isinstance(data, dict) or not data:
             raise ValueError(f"Invalid tokenizer metadata: {directory / filename}")
     if not (directory / "chat_template.jinja").read_text().strip():
         raise ValueError(f"Empty template: {directory}")
+
+
+def _read_weights(directory: Path) -> dict[str, tuple[tuple[int, ...], str]]:
+    """Every tensor's shape and type, from the shard headers; the index must match them exactly."""
     index = json.loads((directory / "model.safetensors.index.json").read_text())
     weight_map = index.get("weight_map") if isinstance(index, dict) else None
     if not isinstance(weight_map, dict) or not weight_map or not all(isinstance(shard, str) for shard in weight_map.values()):
@@ -205,25 +207,72 @@ def validate_model(directory: Path) -> None:
                     raise ValueError(f"Duplicate weight or inconsistent index: {name}")
                 tensor = weights.get_slice(name)
                 actual[name] = (tuple(tensor.get_shape()), tensor.get_dtype())
-    quantization = config.get("quantization")
-    if quantization and (quantization.get("bits") != 8 or quantization.get("group_size") != 64 or quantization.get("mode", "affine") != "affine"):
-        raise ValueError(f"Unsupported quantization: {directory}")
+    if set(actual) != set(weight_map):
+        raise ValueError(f"Weight names do not match the index: {directory}")
+    return actual
+
+
+def _decoder_weights(config: dict, quantization: dict | None, actual: dict, prefix: str = "") -> dict:
+    """Expected decoder tensors (8-bit affine where the checkpoint is quantized)."""
     expected = {}
+    group = quantization["group_size"] if quantization else None
     for name, shape in expected_weight_shapes(config).items():
+        name = prefix + name
         scales_name = name.removesuffix(".weight") + ".scales"
         if quantization and len(shape) == 2 and scales_name in actual:
-            if shape[1] % 64:
+            if shape[1] % group:
                 raise ValueError(f"Invalid quantized dimension: {name}")
             expected[name] = ((shape[0], shape[1] // 4), {"U32"})
-            expected[scales_name] = ((shape[0], shape[1] // 64), {"BF16", "F16", "F32"})
+            expected[scales_name] = ((shape[0], shape[1] // group), {"BF16", "F16", "F32"})
             expected[name.removesuffix(".weight") + ".biases"] = expected[scales_name]
         else:
             expected[name] = (shape, {"BF16", "F16", "F32"})
-    if set(actual) != set(weight_map) or set(actual) != set(expected):
-        raise ValueError(f"Weight names do not match the architecture: {directory}")
+    return expected
+
+
+def _check_shapes(expected: dict, actual: dict) -> None:
     for name, (shape, dtypes) in expected.items():
         if actual[name][0] != shape or actual[name][1] not in dtypes:
             raise ValueError(f"Incompatible weight shape or type: {name}")
+
+
+def validate_model(directory: Path) -> None:
+    """Check the complete tensor layout without loading the model or touching Metal."""
+    config = json.loads((directory / "config.json").read_text())
+    if not isinstance(config, dict) or config.get("model_type") != "k2_horizon":
+        raise ValueError(f"Not a Jais 3 configuration: {directory}")
+    _check_decoder(config, directory)
+    _check_text_files(directory)
+    actual = _read_weights(directory)
+    quantization = config.get("quantization")
+    if quantization and (quantization.get("bits") != 8 or quantization.get("group_size") != 64 or quantization.get("mode", "affine") != "affine"):
+        raise ValueError(f"Unsupported quantization: {directory}")
+    expected = _decoder_weights(config, quantization, actual)
+    if set(actual) != set(expected):
+        raise ValueError(f"Weight names do not match the architecture: {directory}")
+    _check_shapes(expected, actual)
+
+
+def validate_asr(directory: Path) -> None:
+    """Jais-ASR: an audio encoder and projector in front of a Jais 3 decoder, and the processor code."""
+    config = json.loads((directory / "config.json").read_text())
+    if not isinstance(config, dict) or config.get("model_type") != "jais_asr" or not isinstance(config.get("text_config"), dict) \
+            or config["text_config"].get("model_type") != "k2_horizon" or not isinstance(config.get("audio_config"), dict):
+        raise ValueError(f"Not a Jais-ASR configuration: {directory}")
+    _check_decoder(config["text_config"], directory)
+    _check_text_files(directory)
+    for filename in ("preprocessor_config.json", "processor_config.json", "generation_config.json", *ASR_CODE):
+        if not (directory / filename).is_file():
+            raise ValueError(f"Missing file: {directory / filename}")
+    actual = _read_weights(directory)
+    quantization = config.get("quantization")
+    if quantization and (quantization.get("bits") != 8 or quantization.get("group_size") not in (32, 64) or quantization.get("mode", "affine") != "affine"):
+        raise ValueError(f"Unsupported quantization: {directory}")
+    expected = _decoder_weights(config["text_config"], quantization, actual, "language_model.")
+    others = set(actual) - set(expected)
+    if not set(expected) <= set(actual) or not others or not all(name.startswith(("audio_tower.", "multi_modal_projector.")) for name in others):
+        raise ValueError(f"Weight names do not match the architecture: {directory}")
+    _check_shapes(expected, actual)
 
 
 @contextlib.contextmanager
@@ -264,44 +313,13 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def asr_python() -> str:
-    """The interpreter the ASR environment is built on: the one running the services."""
-    name = f"python{sys.version_info.major}.{sys.version_info.minor}"
-    bundled = os.environ.get("JAIS_ASR_PYTHON_HOME")
-    if not bundled:
-        return str(Path(sys.base_prefix) / "bin" / name)
-    # The ASR environment points at its interpreter: copy the app's one, without
-    # the app's packages, so moving or updating the app does not break it.
-    home = runtime_dir() / name
-    if not (home / "bin" / name).is_file():
-        staging = runtime_dir() / f".{name}.copy"
-        shutil.rmtree(staging, ignore_errors=True)
-        shutil.copytree(bundled, staging, symlinks=True, ignore=shutil.ignore_patterns("site-packages"))
-        shutil.rmtree(home, ignore_errors=True)
-        os.replace(staging, home)
-    return str(home / "bin" / name)
-
-
-def _download_asr(entry: dict, staging: Path, progress: Progress, hub, python: str) -> None:
-    spec, profile = entry["download"], asr_profile(entry)
-    manifest_name = f"manifests/{profile}.json"
-    hub.hf_hub_download(spec["repo"], manifest_name, revision=spec["revision"], local_dir=staging)
-    document = json.loads((staging / manifest_name).read_text())
-    files = document["files"]
-    patterns = sorted(set(document["download_files"]) | {manifest_name, "install.sh", "requirements-mac.txt"})
-    with reporting(staging, sum(item["bytes"] for item in files), progress):
-        hub.snapshot_download(spec["repo"], revision=spec["revision"], local_dir=staging, allow_patterns=patterns, max_workers=8)
-    progress({"event": "progress", "phase": "verify"})
-    shutil.rmtree(staging / ".cache", ignore_errors=True)
-    for item in files:
-        path = staging / item["path"]
-        if not path.is_file() or path.stat().st_size != item["bytes"] or sha256(path) != item["sha256"]:
-            raise RuntimeError(f"Incomplete or altered ASR file: {item['path']}")
-    # The published installer builds the model's own environment on the app's Python.
-    progress({"event": "progress", "phase": "install"})
-    shutil.rmtree(staging / ".venv", ignore_errors=True)
-    subprocess.run(["/bin/bash", str(staging / "install.sh")], cwd=staging, check=True,
-                   env={**os.environ, "PYTHON_BIN": python}, stdout=subprocess.DEVNULL, stderr=None)
+def git_blob_sha1(path: Path) -> str:
+    """The git object id Hugging Face reports for files stored without LFS."""
+    digest = hashlib.sha1(f"blob {path.stat().st_size}\0".encode())
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _access_error(error: Exception) -> bool:
@@ -311,22 +329,24 @@ def _access_error(error: Exception) -> bool:
     return getattr(getattr(error, "response", None), "status_code", None) in (401, 403, 404)
 
 
-def _source_complete(source: Path) -> bool:
+def _source_complete(entry: dict, source: Path) -> bool:
     try:
         index = json.loads((source / "model.safetensors.index.json").read_text())
-        needed = {"config.json", "tokenizer.json", "tokenizer_config.json", "chat_template.jinja", *index["weight_map"].values()}
+        code = ASR_CODE if entry["kind"] == "asr" else ()
+        needed = {"config.json", "tokenizer.json", "tokenizer_config.json", "chat_template.jinja", *code, *index["weight_map"].values()}
     except (OSError, ValueError, KeyError, TypeError):
         return False
     return all((source / name).is_file() for name in needed)
 
 
-def _download_llm(entry: dict, staging: Path, base: Path, progress: Progress, hub) -> None:
+def _download_files(entry: dict, staging: Path, base: Path, progress: Progress, hub) -> None:
     """Fetch and check the MLX build, or take the copy the user downloaded by hand."""
-    spec, source = entry["download"], source_path(entry, base)
+    spec, source, wanted = entry["download"], source_path(entry, base), patterns(entry)
+    validate = validate_asr if entry["kind"] == "asr" else validate_model
     try:
         info = hub.HfApi().model_info(spec["repo"], revision=spec["revision"], files_metadata=True)
     except Exception as error:
-        if not _source_complete(source):
+        if not _source_complete(entry, source):
             if _access_error(error):
                 raise NoAccess(spec["repo"], source) from None
             raise
@@ -334,11 +354,11 @@ def _download_llm(entry: dict, staging: Path, base: Path, progress: Progress, hu
         shutil.rmtree(staging, ignore_errors=True)
         shutil.copytree(source, staging, ignore=shutil.ignore_patterns(".cache"))
         progress({"event": "progress", "phase": "verify"})
-        validate_model(staging)
+        validate(staging)
         return
-    files = [sibling for sibling in info.siblings if any(fnmatch.fnmatch(sibling.rfilename, pattern) for pattern in MODEL_PATTERNS)]
+    files = [sibling for sibling in info.siblings if any(fnmatch.fnmatch(sibling.rfilename, pattern) for pattern in wanted)]
     with reporting(staging, sum(sibling.size or 0 for sibling in files), progress):
-        hub.snapshot_download(spec["repo"], revision=spec["revision"], local_dir=staging, allow_patterns=MODEL_PATTERNS, max_workers=8)
+        hub.snapshot_download(spec["repo"], revision=spec["revision"], local_dir=staging, allow_patterns=wanted, max_workers=8)
     shutil.rmtree(staging / ".cache", ignore_errors=True)
     progress({"event": "progress", "phase": "verify"})
     for sibling in files:
@@ -347,10 +367,12 @@ def _download_llm(entry: dict, staging: Path, base: Path, progress: Progress, hu
             raise RuntimeError(f"Incomplete model file: {sibling.rfilename}")
         if sibling.lfs is not None and sha256(path) != sibling.lfs.sha256:
             raise RuntimeError(f"Model file altered: {sibling.rfilename}")
-    validate_model(staging)
+        if sibling.lfs is None and getattr(sibling, "blob_id", None) and git_blob_sha1(path) != sibling.blob_id:
+            raise RuntimeError(f"Model file altered: {sibling.rfilename}")
+    validate(staging)
 
 
-def download(entry: dict, base: Path, progress: Progress, *, hub=None, python: str | None = None) -> Path:
+def download(entry: dict, base: Path, progress: Progress, *, hub=None) -> Path:
     """Fetch a model, checked then installed atomically; resumes partial downloads."""
     if hub is None:
         import huggingface_hub as hub
@@ -359,16 +381,13 @@ def download(entry: dict, base: Path, progress: Progress, *, hub=None, python: s
         if target.exists() or target.is_symlink():
             raise RuntimeError(f"{entry['display_name']} is already installed.")
         staging.mkdir(parents=True, exist_ok=True)
-        if entry["kind"] == "asr":
-            _download_asr(entry, staging, progress, hub, python or asr_python())
-        else:
-            _download_llm(entry, staging, base, progress, hub)
+        _download_files(entry, staging, base, progress, hub)
         record = {"id": entry["id"], **entry["download"], "downloaded_at": datetime.now(timezone.utc).isoformat()}
         (staging / PROVENANCE).write_text(json.dumps(record, indent=2) + "\n")
         os.replace(staging, target)
         # The installed model is a checked copy: free the space of the user's files.
         source = source_path(entry, base)
-        if source and source.is_dir() and not source.is_symlink():
+        if source.is_dir() and not source.is_symlink():
             shutil.rmtree(source, ignore_errors=True)
     progress({"event": "done", "id": entry["id"]})
     return target
@@ -391,5 +410,5 @@ def delete(entry: dict, base: Path) -> None:
                 os.rename(path, doomed)
                 shutil.rmtree(doomed)
         source = source_path(entry, base)
-        if source and source.is_dir() and not source.is_symlink() and source.resolve().parent == (base / "sources").resolve():
+        if source.is_dir() and not source.is_symlink() and source.resolve().parent == (base / "sources").resolve():
             shutil.rmtree(source)

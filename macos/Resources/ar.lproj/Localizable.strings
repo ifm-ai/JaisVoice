@@ -18,7 +18,7 @@
 "Microphone access allowed" = "الوصول إلى الميكروفون مسموح";
 "Hold {0}, speak, then release." = "اضغط مطولًا على {0}، وتحدّث، ثم اترك المفاتيح.";
 "Up to 30 seconds per recording. The response appears in a small bubble without switching apps." = "حتى 30 ثانية لكل تسجيل. يظهر الرد في فقاعة صغيرة دون التبديل بين التطبيقات.";
-"F5 transcription, cleanup and the agent run on this Mac. Tools may access the Internet to handle your requests." = "يعمل نسخ F5 والتنقيح والوكيل على جهاز Mac هذا. قد تتصل الأدوات بالإنترنت لتلبية طلباتك.";
+"Transcription, cleanup and the agent run on this Mac. Tools may access the Internet to handle your requests." = "يعمل النسخ والتنقيح والوكيل على جهاز Mac هذا. قد تتصل الأدوات بالإنترنت لتلبية طلباتك.";
 "Last result" = "آخر نتيجة";
 "Import audio" = "استيراد صوت";
 "View service log" = "عرض سجل الخدمات";
@@ -150,8 +150,8 @@
 "Waiting for your answer" = "في انتظار إجابتك";
 "CLARIFICATION NEEDED" = "مطلوب توضيح";
 "Hold the dictation keys, answer, then release." = "اضغط مطولًا على مفاتيح الإملاء، وأجب، ثم اترك المفاتيح.";
-"Starting local Jais-ASR F5…" = "جارٍ تشغيل Jais-ASR F5 المحلي…";
-"Transcription failed. Check the status of the local Jais-ASR F5 model." = "فشل النسخ. تحقّق من حالة نموذج Jais-ASR F5 المحلي.";
+"Starting local Jais-ASR…" = "جارٍ تشغيل Jais-ASR المحلي…";
+"Transcription failed. Check the status of the local Jais-ASR model." = "فشل النسخ. تحقّق من حالة نموذج Jais-ASR المحلي.";
 "The file must be a 16-bit PCM WAV, mono, 16 kHz, from 0.1 to 30 seconds." = "يجب أن يكون الملف بتنسيق WAV PCM بدقة 16 بت، أحادي القناة، بتردد 16 كيلوهرتز، ومدته من 0.1 إلى 30 ثانية.";
 "The agent launcher is missing. Open the Jais Voice.app bundle created by the setup script." = "مشغّل الوكيل غير موجود. افتح حزمة Jais Voice.app التي أنشأها برنامج الإعداد.";
 "The local ASR model refused this recording." = "رفض نموذج ASR المحلي هذا التسجيل.";
@@ -200,7 +200,7 @@
 "Approval needed" = "مطلوب إذن";
 "APPROVAL" = "إذن";
 "New note" = "ملاحظة جديدة";
-"Jais-ASR F5 failed to load. See the ASR log." = "فشل تحميل Jais-ASR F5. راجع سجل ASR.";
+"Jais-ASR failed to load. See the ASR log." = "فشل تحميل Jais-ASR. راجع سجل ASR.";
 "Model memory is being changed." = "جارٍ تغيير ذاكرة النماذج.";
 "An operation is in progress. Try again when it ends." = "هناك عملية جارية. حاول مرة أخرى عند انتهائها.";
 "Expected audio: mono PCM16 WAV at 16 kHz." = "الصوت المتوقع: WAV PCM16 أحادي القناة بتردد 16 كيلوهرتز.";
@@ -210,8 +210,8 @@
 "Invalid audio duration." = "مدة الصوت غير صالحة.";
 "Incomplete audio." = "الصوت غير مكتمل.";
 "No language model installed" = "لا يوجد نموذج لغوي مثبّت";
-"Jais-ASR F5 ready" = "Jais-ASR F5 جاهز";
-"Jais-ASR F5 unloaded" = "أُلغي تحميل Jais-ASR F5";
+"Jais-ASR ready" = "Jais-ASR جاهز";
+"Jais-ASR unloaded" = "أُلغي تحميل Jais-ASR";
 "A local transcription is already running" = "هناك نسخ محلي قيد التشغيل بالفعل";
 "Local transcription failed" = "فشل النسخ المحلي";
 "Invalid audio or language" = "الصوت أو اللغة غير صالحة";
@@ -225,7 +225,7 @@
 "Type a request" = "اكتب طلبًا";
 "Local model" = "نموذج محلي";
 "Model · {0} — {1}" = "النموذج · {0} — {1}";
-"Loading Jais-ASR F5…" = "جارٍ تحميل Jais-ASR F5…";
+"Loading Jais-ASR…" = "جارٍ تحميل Jais-ASR…";
 "Check for Updates…" = "البحث عن تحديثات…";
 "Update available: {0}…" = "يتوفر تحديث: {0}…";
 "A new version of Jais Voice is available" = "يتوفر إصدار جديد من Jais Voice";

@@ -155,8 +155,8 @@ class Backbone(nn.Module):
         self.layers = [Block(args) for _ in range(args.num_hidden_layers)]
         self.norm = GroupRMSNorm(args.hidden_size, args.layernorm_num_groups, args.rms_norm_eps)
 
-    def __call__(self, inputs, cache=None):
-        x = self.embed_tokens(inputs)
+    def __call__(self, inputs, cache=None, input_embeddings=None):
+        x = self.embed_tokens(inputs) if input_embeddings is None else input_embeddings
         if cache is None:
             cache = [None] * len(self.layers)
         mask = create_attention_mask(x, cache[0])
@@ -180,8 +180,8 @@ class Model(nn.Module):
     def make_cache(self):
         return [KVCache() for _ in self.layers]
 
-    def __call__(self, inputs, cache=None):
-        h = self.model(inputs, cache)
+    def __call__(self, inputs, cache=None, input_embeddings=None):
+        h = self.model(inputs, cache, input_embeddings)
         return self.model.embed_tokens.as_linear(h) if self.args.tie_word_embeddings else self.lm_head(h)
 
 

@@ -18,7 +18,7 @@
 "Microphone access allowed" = "Microphone autorisé";
 "Hold {0}, speak, then release." = "Maintenez {0}, parlez, puis relâchez.";
 "Up to 30 seconds per recording. The response appears in a small bubble without switching apps." = "30 secondes maximum par prise. La réponse apparaît dans une petite bulle, sans changer d’application.";
-"F5 transcription, cleanup and the agent run on this Mac. Tools may access the Internet to handle your requests." = "La transcription F5, le nettoyage et l’agent s’exécutent sur ce Mac. Les outils peuvent accéder à Internet pour répondre à vos demandes.";
+"Transcription, cleanup and the agent run on this Mac. Tools may access the Internet to handle your requests." = "La transcription, le nettoyage et l’agent s’exécutent sur ce Mac. Les outils peuvent accéder à Internet pour répondre à vos demandes.";
 "Last result" = "Dernier résultat";
 "Import audio" = "Importer un audio";
 "View service log" = "Voir le journal des services";
@@ -150,8 +150,8 @@
 "Waiting for your answer" = "En attente de votre réponse";
 "CLARIFICATION NEEDED" = "PRÉCISION NÉCESSAIRE";
 "Hold the dictation keys, answer, then release." = "Maintenez les touches de dictée, répondez, puis relâchez.";
-"Starting local Jais-ASR F5…" = "Démarrage de Jais-ASR F5 local…";
-"Transcription failed. Check the status of the local Jais-ASR F5 model." = "La transcription a échoué. Vérifiez l’état du modèle local Jais-ASR F5.";
+"Starting local Jais-ASR…" = "Démarrage de Jais-ASR local…";
+"Transcription failed. Check the status of the local Jais-ASR model." = "La transcription a échoué. Vérifiez l’état du modèle local Jais-ASR.";
 "The file must be a 16-bit PCM WAV, mono, 16 kHz, from 0.1 to 30 seconds." = "Le fichier doit être un WAV PCM 16 bits, mono, 16 kHz, de 0,1 à 30 secondes.";
 "The agent launcher is missing. Open the Jais Voice.app bundle created by the setup script." = "Le lanceur de l’agent est absent. Ouvrez le bundle Jais Voice.app créé par le script d’installation.";
 "The local ASR model refused this recording." = "Le modèle ASR local a refusé cet enregistrement.";
@@ -200,7 +200,7 @@
 "Approval needed" = "Autorisation requise";
 "APPROVAL" = "AUTORISATION";
 "New note" = "Nouvelle note";
-"Jais-ASR F5 failed to load. See the ASR log." = "Échec du chargement de Jais-ASR F5. Consultez le journal ASR.";
+"Jais-ASR failed to load. See the ASR log." = "Échec du chargement de Jais-ASR. Consultez le journal ASR.";
 "Model memory is being changed." = "La mémoire des modèles est en cours de modification.";
 "An operation is in progress. Try again when it ends." = "Une opération est en cours. Réessayez après sa fin.";
 "Expected audio: mono PCM16 WAV at 16 kHz." = "Audio attendu : WAV PCM16 mono 16 kHz.";
@@ -210,8 +210,8 @@
 "Invalid audio duration." = "Durée audio invalide.";
 "Incomplete audio." = "Audio incomplet.";
 "No language model installed" = "Aucun modèle de langage installé";
-"Jais-ASR F5 ready" = "Jais-ASR F5 prêt";
-"Jais-ASR F5 unloaded" = "Jais-ASR F5 déchargé";
+"Jais-ASR ready" = "Jais-ASR prêt";
+"Jais-ASR unloaded" = "Jais-ASR déchargé";
 "A local transcription is already running" = "Transcription locale déjà en cours";
 "Local transcription failed" = "Échec de la transcription locale";
 "Invalid audio or language" = "Audio ou langue invalide";
@@ -225,7 +225,7 @@
 "Type a request" = "Saisir une demande";
 "Local model" = "Modèle local";
 "Model · {0} — {1}" = "Modèle · {0} — {1}";
-"Loading Jais-ASR F5…" = "Chargement de Jais-ASR F5…";
+"Loading Jais-ASR…" = "Chargement de Jais-ASR…";
 "Check for Updates…" = "Rechercher des mises à jour…";
 "Update available: {0}…" = "Mise à jour disponible : {0}…";
 "A new version of Jais Voice is available" = "Une nouvelle version de Jais Voice est disponible";

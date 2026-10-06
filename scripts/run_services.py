@@ -108,7 +108,7 @@ def main():
     asr_root = model_store.model_path(asr, base) if asr else None
     if asr_root:
         env["JAIS_ASR_MODEL_DIR"] = str(asr_root)
-    asr_command = [str(asr_root / ".venv/bin/python"), str(ROOT / "jais_runtime/asr_service.py")] if asr_root else None
+    asr_command = [python, "-m", "jais_runtime.asr_service"]
     asr_installed = lambda: asr is not None and model_store.is_installed(asr, base)
     for port in (8788, 8790):
         with socket.socket() as probe:
