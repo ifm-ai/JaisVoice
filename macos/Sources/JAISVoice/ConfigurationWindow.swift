@@ -373,14 +373,18 @@ struct ConfigurationView: View {
                 }.labelsHidden().frame(width: 190).disabled(state.isBusy)
             }
             rowDivider
-            settingRow(L("Reasoning")) {
-                Picker(L("Reasoning"), selection: Binding(get: { preferences.reasoningEffort }, set: { preferences.setReasoningEffort($0) })) {
-                    ForEach(ReasoningEffort.allCases, id: \.self) { effort in
-                        Text(effort.label).tag(effort)
-                    }
-                }.labelsHidden().frame(width: 190).disabled(state.isBusy)
-                    .help(L("How long the model thinks before it answers or acts. Higher is more careful, but slower."))
-            }
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(L("Reasoning")).font(.system(size: 12))
+                    Spacer(minLength: 12)
+                    Text(preferences.reasoningEffort.detail)
+                        .font(.system(size: 11, weight: .medium)).foregroundStyle(configurationAccent)
+                        .contentTransition(.opacity)
+                }
+                ReasoningSlider(selection: Binding(get: { preferences.reasoningEffort }, set: { preferences.setReasoningEffort($0) }))
+                    .disabled(state.isBusy)
+            }.padding(12)
+                .help(L("How long the model thinks before it answers or acts. Higher is more careful, but slower."))
         }.cardBackground()
     }
 
@@ -471,6 +475,67 @@ struct ConfigurationView: View {
                         .background(configurationAccent, in: RoundedRectangle(cornerRadius: 7))
                 }.buttonStyle(.plain).keyboardShortcut(.defaultAction)
             }.padding(.horizontal, 22).padding(.vertical, 12)
+        }
+    }
+}
+
+/// Three-stop slider for the reasoning effort: drag the knob or click a level.
+private struct ReasoningSlider: View {
+    @Binding var selection: ReasoningEffort
+    @Environment(\.isEnabled) private var isEnabled
+    private let levels = ReasoningEffort.allCases
+    private let knob: CGFloat = 16
+
+    var body: some View {
+        VStack(spacing: 7) {
+            GeometryReader { geometry in
+                let span = geometry.size.width - knob
+                let index = CGFloat(levels.firstIndex(of: selection) ?? 0)
+                let x = knob / 2 + span * index / CGFloat(levels.count - 1)
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.08)).frame(height: 4).padding(.horizontal, knob / 2)
+                    Capsule()
+                        .fill(LinearGradient(colors: [JAISBrand.forest, configurationAccent], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: max(x - knob / 2, 0), height: 4).offset(x: knob / 2)
+                    ForEach(levels.indices, id: \.self) { stop in
+                        Circle().fill(CGFloat(stop) <= index ? configurationAccent : .white.opacity(0.22))
+                            .frame(width: 6, height: 6)
+                            .offset(x: knob / 2 + span * CGFloat(stop) / CGFloat(levels.count - 1) - 3)
+                    }
+                    Circle().fill(JAISBrand.paper)
+                        .overlay(Circle().strokeBorder(configurationAccent, lineWidth: 2))
+                        .shadow(color: configurationAccent.opacity(0.55), radius: 5)
+                        .frame(width: knob, height: knob).offset(x: x - knob / 2)
+                }
+                .frame(maxHeight: .infinity).contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 0).onChanged { drag in
+                    let stop = Int(((drag.location.x - knob / 2) / span * CGFloat(levels.count - 1)).rounded())
+                    let level = levels[min(max(stop, 0), levels.count - 1)]
+                    if level != selection { withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) { selection = level } }
+                })
+            }.frame(height: knob)
+            HStack(spacing: 0) {
+                ForEach(levels, id: \.self) { level in
+                    Text(level.title)
+                        .font(.system(size: 10, weight: level == selection ? .semibold : .regular))
+                        .foregroundStyle(level == selection ? Color.primary : Color.secondary)
+                        .frame(maxWidth: .infinity, alignment: level == levels.first ? .leading : level == levels.last ? .trailing : .center)
+                        .contentShape(Rectangle())
+                        .onTapGesture { withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) { selection = level } }
+                }
+            }
+        }
+        .opacity(isEnabled ? 1 : 0.5)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L("Reasoning"))
+        .accessibilityValue("\(selection.title), \(selection.detail)")
+        .accessibilityAdjustableAction { direction in
+            let index = levels.firstIndex(of: selection) ?? 0
+            switch direction {
+            case .increment: selection = levels[min(index + 1, levels.count - 1)]
+            case .decrement: selection = levels[max(index - 1, 0)]
+            @unknown default: break
+            }
         }
     }
 }

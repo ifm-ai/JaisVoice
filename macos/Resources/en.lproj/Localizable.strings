@@ -264,9 +264,12 @@
 "Optional: reads text drawn in windows that do not describe themselves" = "Optional: reads text drawn in windows that do not describe themselves";
 "Allowed" = "Allowed";
 "Reasoning" = "Reasoning";
-"Low · fastest" = "Low · fastest";
-"Medium · balanced" = "Medium · balanced";
-"High · most careful" = "High · most careful";
+"Low" = "Low";
+"Medium" = "Medium";
+"High" = "High";
+"Fastest" = "Fastest";
+"Balanced" = "Balanced";
+"Most careful" = "Most careful";
 "How long the model thinks before it answers or acts. Higher is more careful, but slower." = "How long the model thinks before it answers or acts. Higher is more careful, but slower.";
 "Let Jais Voice read your files until this request ends?" = "Let Jais Voice read your files until this request ends?";
 "Create this file?" = "Create this file?";
