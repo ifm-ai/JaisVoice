@@ -67,7 +67,7 @@ import UniformTypeIdentifiers
         }.store(in: &subscriptions)
         preferences.objectWillChange.receive(on: RunLoop.main).sink { [weak self] _ in
             self?.state.objectWillChange.send()
-            self?.configuration.window?.title = L("Settings · JAIS Voice")
+            self?.configuration.window?.title = L("Settings · Jais Voice")
             self?.updateModelState()
             self?.updateMenu()
         }.store(in: &subscriptions)
@@ -256,7 +256,7 @@ import UniformTypeIdentifiers
         let lines = missing.map { model in
             "• " + model.display_name + (model.download_bytes.map { " (" + ModelStore.formatBytes($0) + ")" } ?? "")
         }
-        alert.informativeText = L("JAIS Voice needs these models to work:") + "\n" + lines.joined(separator: "\n") + "\n\n"
+        alert.informativeText = L("Jais Voice needs these models to work:") + "\n" + lines.joined(separator: "\n") + "\n\n"
             + L("They are downloaded from Hugging Face and stay on this Mac. You can delete them from Settings.")
         alert.addButton(withTitle: L("Download"))
         alert.addButton(withTitle: L("Later"))
@@ -390,7 +390,7 @@ import UniformTypeIdentifiers
         }
         preferences.refreshMicrophoneStatus()
         guard preferences.microphoneAuthorized else {
-            state.begin(); state.fail(L("Open JAIS Voice settings and allow microphone access before speaking."))
+            state.begin(); state.fail(L("Open Jais Voice settings and allow microphone access before speaking."))
             panels.anchorToPointer(); panels.showResult(); return
         }
         let continuingConversation = (panels.result.isVisible || state.awaitingClarification) && state.turnID != nil
@@ -510,7 +510,7 @@ import UniformTypeIdentifiers
         if launcher.logURL != nil { _ = add(L("View service log…"), action: #selector(showServiceLog)) }
         if updates.enabled { _ = add(L("Check for Updates…"), action: #selector(checkForUpdates)) }
         menu.addItem(.separator())
-        let quit = add(L("Quit JAIS Voice"), action: #selector(quit))
+        let quit = add(L("Quit Jais Voice"), action: #selector(quit))
         quit.keyEquivalent = "q"
         statusItem.menu = menu
         refreshMenuStatus()
@@ -567,7 +567,7 @@ import UniformTypeIdentifiers
                 if let release = try await updates.latestNewerRelease() {
                     updateMenu(); updates.present(release); return
                 }
-                alert.messageText = L("JAIS Voice is up to date")
+                alert.messageText = L("Jais Voice is up to date")
                 alert.informativeText = L("You have the latest version ({0}).", UpdateChecker.current.label)
             } catch {
                 alert.messageText = L("Could not check for updates")
@@ -643,7 +643,7 @@ import UniformTypeIdentifiers
         state.ready = true
         state.serviceMessage = "Ready · local models loaded"
         modelStore.show(models: [
-            CatalogModel(id: "asr-f5", kind: "asr", display_name: "JAIS-ASR · F5", installed: true, download_bytes: 4_780_192_247, disk_bytes: 5_995_121_326),
+            CatalogModel(id: "asr-f5", kind: "asr", display_name: "Jais-ASR · F5", installed: true, download_bytes: 4_780_192_247, disk_bytes: 5_995_121_326),
             CatalogModel(id: "jais-3-0.9b", kind: "llm", display_name: "Jais 3 · 0.9B", size: "0.9B", installed: true, disk_bytes: 2_161_683_689),
             CatalogModel(id: "jais-3-3.7b", kind: "llm", display_name: "Jais 3 · 3.7B", size: "3.7B", installed: true, disk_bytes: 5_395_429_534),
             CatalogModel(id: "jais-3-7b", kind: "llm", display_name: "Jais 3 · 7B", size: "7B", installed: false, download_bytes: 9_582_764_791)

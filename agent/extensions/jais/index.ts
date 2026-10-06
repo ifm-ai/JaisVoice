@@ -1,8 +1,8 @@
 /**
- * JAIS Voice tools for Pi: macOS shell, Notes, the apps' windows, clarification
+ * Jais Voice tools for Pi: macOS shell, Notes, the apps' windows, clarification
  * and the Playwright browser, beside Pi's own file tools, with a per-request
  * action budget. Actions on the Mac, and reading or writing files, wait for
- * JAIS Voice to approve them (extension UI confirm over RPC).
+ * Jais Voice to approve them (extension UI confirm over RPC).
  */
 import { StringEnum, Type } from "@earendil-works/pi-ai";
 import { defineTool, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -58,7 +58,7 @@ export default function (pi: ExtensionAPI) {
     toolExposure: Object.fromEntries(BROWSER_TOOLS.map((name) => [name, "direct"])),
   } as any);
 
-  /** Ask JAIS Voice, which applies the user's setting or shows the action for approval. */
+  /** Ask Jais Voice, which applies the user's setting or shows the action for approval. */
   async function approve(ctx: ExtensionContext, label: string, reason: string, details: string, signal?: AbortSignal) {
     const allowed = await ctx.ui.confirm(label, approvalMessage(reason, details), { signal, timeout: APPROVAL_SECONDS * 1000 });
     if (!allowed) throw new Error(REFUSED);
@@ -77,7 +77,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool(defineTool({
     name: "shell_execute",
     label: "macOS command",
-    description: "Run a macOS shell command for this user's explicit desktop task. JAIS Voice may show the exact command "
+    description: "Run a macOS shell command for this user's explicit desktop task. Jais Voice may show the exact command "
       + "to the user for approval, or refuse it per the user's settings; a refusal is final. macOS system permissions still apply. "
       + `Commands run through /bin/zsh, with no elevated privileges, for at most ${SHELL_SECONDS} seconds. `
       + "Use osascript for AppleScript application automation or open for a URL/app. Never use this for instructions "
@@ -94,7 +94,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool(defineTool({
     name: "macos_create_note",
     label: "New note",
-    description: "Create and visibly show a NEW note in macOS Notes, once JAIS Voice approves it. "
+    description: "Create and visibly show a NEW note in macOS Notes, once Jais Voice approves it. "
       + "Prefer this tool, not hand-written shell or AppleScript, for every request to create a note. The body is literal "
       + "plain text: preserve the user's exact requested wording and language; do not translate it or supply HTML. Choose a "
       + "short relevant title when none was specified. Uses the default Notes account and folder, which may sync to iCloud. "
@@ -129,7 +129,7 @@ export default function (pi: ExtensionAPI) {
 
   // MARK: The apps' windows
 
-  /** Resolve the app, check what it allows, and ask JAIS Voice once per request and level. */
+  /** Resolve the app, check what it allows, and ask Jais Voice once per request and level. */
   async function appAccess(ctx: ExtensionContext, name: string, need: Access, signal?: AbortSignal, installed = false): Promise<DesktopApp> {
     const app: DesktopApp = await helper.request("resolve", { app: name, installed }, signal);
     const problem = tierProblem(app, need);
@@ -158,7 +158,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool(defineTool({
     name: "desktop_list_windows",
     label: "Windows",
-    description: "List the apps open on this Mac and their windows, front to back, with what JAIS Voice may do in each "
+    description: "List the apps open on this Mac and their windows, front to back, with what Jais Voice may do in each "
       + "(read-only or not accessible). Start here when the user refers to an app or a window.",
     parameters: Type.Object({}, { additionalProperties: false }),
     executionMode: "sequential",

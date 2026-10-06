@@ -1,7 +1,7 @@
 import Foundation
 
 enum ServiceDiagnostics {
-    static var restartInstruction: String { L("Resolve the issue, then quit and reopen JAIS Voice.") }
+    static var restartInstruction: String { L("Resolve the issue, then quit and reopen Jais Voice.") }
 
     static func concise(_ message: String) -> String {
         let line = message.split(whereSeparator: \.isWhitespace).joined(separator: " ")
@@ -71,7 +71,7 @@ final class ServiceLaunchLog {
             return URL(fileURLWithPath: runtime).appendingPathComponent("logs", isDirectory: true)
         }
         return FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Logs/JAIS Voice", isDirectory: true)
+            .appendingPathComponent("Logs/Jais Voice", isDirectory: true)
     }
 
     /// Start the supervisor; the gateway first loads `modelSize` when it is installed.
@@ -84,7 +84,7 @@ final class ServiceLaunchLog {
         } else if let resource = Bundle.main.url(forResource: "launch-services", withExtension: nil) {
             executable = resource
         } else {
-            throw VoiceError.message(L("The local launcher is missing. Open JAIS Voice.app created by the installation script."))
+            throw VoiceError.message(L("The local launcher is missing. Open Jais Voice.app created by the installation script."))
         }
         guard FileManager.default.isExecutableFile(atPath: executable.path) else {
             throw VoiceError.message(L("The local launcher is not executable. Run application setup again."))

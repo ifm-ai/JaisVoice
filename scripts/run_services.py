@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Own and supervise the model services (ASR, MLX gateway) for one JAIS Voice instance.
+"""Own and supervise the model services (ASR, MLX gateway) for one Jais Voice instance.
 
 The gateway always runs. The ASR service runs while its model is installed:
 it starts after a download and stops after a deletion, without a restart.
@@ -85,7 +85,7 @@ def main():
         lock.close()
         if STOP.is_set():
             return 0
-        print("JAIS Voice services are already running in another instance.", file=sys.stderr)
+        print("Jais Voice services are already running in another instance.", file=sys.stderr)
         return 2
     if STOP.is_set():
         lock.close()

@@ -77,9 +77,9 @@ struct AppRelease: Equatable {
     /// Offer the release; "Later" keeps automatic checks from showing it again.
     func present(_ release: AppRelease) {
         let alert = NSAlert()
-        alert.messageText = L("A new version of JAIS Voice is available")
+        alert.messageText = L("A new version of Jais Voice is available")
         alert.informativeText = L("Version {0} is available; you have version {1}.", release.label, Self.current.label) + "\n\n"
-            + L("Download the disk image, quit JAIS Voice, then drag the new version onto Applications.")
+            + L("Download the disk image, quit Jais Voice, then drag the new version onto Applications.")
         alert.addButton(withTitle: L("Download"))
         alert.addButton(withTitle: L("Later"))
         NSApplication.shared.activate(ignoringOtherApps: true)

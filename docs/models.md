@@ -1,6 +1,6 @@
 # Models
 
-JAIS Voice uses one speech model and one language model. The same language model does both transcript cleanup and the agent's work. `models/catalog.json` lists the models the app knows, with their Hugging Face repository and pinned revision; the **Models** section of the settings downloads, loads, unloads and deletes them. Models live in `~/Library/Application Support/JAIS Voice/models/`.
+Jais Voice uses one speech model and one language model. The same language model does both transcript cleanup and the agent's work. `models/catalog.json` lists the models the app knows, with their Hugging Face repository and pinned revision; the **Models** section of the settings downloads, loads, unloads and deletes them. Models live in `~/Library/Application Support/Jais Voice/models/`.
 
 | Role | Repository |
 | --- | --- |
@@ -11,7 +11,7 @@ These repositories currently require access on Hugging Face. The app uses your H
 
 ## Speech recognition
 
-On first launch the app offers to download JAIS-ASR (profile F5, 4.8 GB). The download is pinned to a commit, resumable, and checked file by file (size and SHA-256) before installation.
+On first launch the app offers to download Jais-ASR (profile F5, 4.8 GB). The download is pinned to a commit, resumable, and checked file by file (size and SHA-256) before installation.
 
 ## Language models
 
@@ -35,7 +35,7 @@ The collection [IFM/jais-3-mlx](https://huggingface.co/collections/IFM/jais-3-ml
 If your account cannot read the repository, the app explains how to get access and where to put the files instead. You can download the repository files yourself (for example from the **Files** tab on Hugging Face, or with `hf download`) into the folder the message gives:
 
 ```sh
-hf download IFM/Jais-3-3.7B-MLX-8bit --revision b10d70beb6c8259b9af1f6dfcd465f469b8e95e2 --local-dir "$HOME/Library/Application Support/JAIS Voice/models/sources/Jais-3-3.7B-MLX-8bit"
+hf download IFM/Jais-3-3.7B-MLX-8bit --revision b10d70beb6c8259b9af1f6dfcd465f469b8e95e2 --local-dir "$HOME/Library/Application Support/Jais Voice/models/sources/Jais-3-3.7B-MLX-8bit"
 ```
 
 Then click **Download** again: the app finds the complete files and installs a copy without contacting Hugging Face. The folder needs `config.json`, `model.safetensors.index.json`, every shard it lists, `tokenizer.json`, `tokenizer_config.json` and `chat_template.jinja`. Files downloaded by hand are checked for structure and tensor shapes, not against Hugging Face's hashes.

@@ -24,11 +24,19 @@ struct ASRLanguageChoice: Identifiable, Equatable {
 enum ReasoningEffort: String, CaseIterable {
     case low, medium, high
 
-    var label: String {
+    var title: String {
         switch self {
-        case .low: return L("Low · fastest")
+        case .low: return L("Low")
         case .medium: return L("Medium")
-        case .high: return L("High · most careful")
+        case .high: return L("High")
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .low: return L("Fastest")
+        case .medium: return L("Balanced")
+        case .high: return L("Most careful")
         }
     }
 }

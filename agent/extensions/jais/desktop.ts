@@ -1,9 +1,9 @@
 /**
- * App control for the JAIS Voice Pi extension, testable without Pi.
+ * App control for the Jais Voice Pi extension, testable without Pi.
  *
  * The native helper (`JAISVoice --desktop-helper`, a child of the app's process
- * tree so macOS applies JAIS Voice's Accessibility permission) reads and drives
- * other apps' windows. This side asks JAIS Voice before each app is read or
+ * tree so macOS applies Jais Voice's Accessibility permission) reads and drives
+ * other apps' windows. This side asks Jais Voice before each app is read or
  * driven, once per request, and keeps the web from receiving what was read.
  */
 import { spawn, type ChildProcess } from "node:child_process";
@@ -43,7 +43,7 @@ export class DesktopHelper {
 
   private start(): ChildProcess {
     if (this.child) return this.child;
-    if (!this.command) throw new Error("App control is unavailable: run the agent from JAIS Voice, which provides its desktop helper.");
+    if (!this.command) throw new Error("App control is unavailable: run the agent from Jais Voice, which provides its desktop helper.");
     const child = spawn(this.command, this.args, { stdio: ["pipe", "pipe", "inherit"] });
     const failAll = (message: string) => {
       if (this.child === child) this.child = undefined;
@@ -111,24 +111,24 @@ export class DesktopGrants {
 
 /** Why an app cannot be used at the requested level, if it cannot. */
 export function tierProblem(app: DesktopApp, need: Access): string | undefined {
-  if (app.tier === "blocked") return `${app.name} is not accessible to JAIS Voice: ${app.note ?? "protected app"}. Do not try another way.`;
+  if (app.tier === "blocked") return `${app.name} is not accessible to Jais Voice: ${app.note ?? "protected app"}. Do not try another way.`;
   if (need === "control" && app.tier !== "control") {
-    return `${app.name} is read-only for JAIS Voice: ${app.note ?? "protected app"}. Do not try another way; tell the user what you found.`;
+    return `${app.name} is read-only for Jais Voice: ${app.note ?? "protected app"}. Do not try another way; tell the user what you found.`;
   }
   return undefined;
 }
 
-/** The approval JAIS Voice shows; `kind` and `app` let it word the question in the user's language. */
+/** The approval Jais Voice shows; `kind` and `app` let it word the question in the user's language. */
 export function appAccessMessage(app: DesktopApp, access: Access): string {
   const reason = access === "control"
-    ? `Let JAIS Voice control ${app.name} until this request ends: click, type, use its menus and keys.`
-    : `Let JAIS Voice read the windows of ${app.name} until this request ends.`;
+    ? `Let Jais Voice control ${app.name} until this request ends: click, type, use its menus and keys.`
+    : `Let Jais Voice read the windows of ${app.name} until this request ends.`;
   return JSON.stringify({ reason, details: app.bundle_id ? `${app.name} (${app.bundle_id})` : app.name, kind: "app_" + access, app: app.name });
 }
 
 export function appRefused(app: string, access: Access): string {
-  return `The user did not allow JAIS Voice to ${access === "control" ? "control" : "read"} ${app}, so nothing was done there. `
-    + "Do not retry and do not try another way. Tell the user; access to apps can be allowed in the JAIS Voice settings.";
+  return `The user did not allow Jais Voice to ${access === "control" ? "control" : "read"} ${app}, so nothing was done there. `
+    + "Do not retry and do not try another way. Tell the user; access to apps can be allowed in the Jais Voice settings.";
 }
 
 /** The overview of open windows is refused only when actions on the Mac are never allowed. */
@@ -153,7 +153,7 @@ export function navigationAllowed(url: string, hosts: string[]): boolean {
 }
 
 export function navigationMessage(url: string): string {
-  return JSON.stringify({ reason: "JAIS Voice read your apps during this request. Open this page?", details: url, kind: "web_after_desktop" });
+  return JSON.stringify({ reason: "Jais Voice read your apps during this request. Open this page?", details: url, kind: "web_after_desktop" });
 }
 
 export const NAVIGATION_REFUSED = "The user did not allow opening this page after the assistant read their apps, so it was NOT opened. "

@@ -37,7 +37,7 @@ test("writes reach only the user's own files", () => {
   assert.match(writeProblem(join(home, ".zshrc"), [app], home)!, /credentials/);
   assert.match(writeProblem(join(home, ".config/app.json"), [app], home)!, /hidden/);
   assert.match(writeProblem(join(home, "Documents/.hidden/a"), [app], home)!, /hidden/);
-  assert.match(writeProblem(join(app, "agent/SYSTEM.md"), [app], home)!, /JAIS Voice itself/);
+  assert.match(writeProblem(join(app, "agent/SYSTEM.md"), [app], home)!, /Jais Voice itself/);
   assert.match(writeProblem(resolveToolPath("~/Documents/keys/config", "/", home), [app], home)!, /credentials/);
 });
 

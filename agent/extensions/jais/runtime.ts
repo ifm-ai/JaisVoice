@@ -1,7 +1,7 @@
 /**
- * Pure helpers of the JAIS Voice Pi extension, testable without Pi.
+ * Pure helpers of the Jais Voice Pi extension, testable without Pi.
  *
- * Actions on the Mac run only once JAIS Voice approves them (its "Actions on this
+ * Actions on the Mac run only once Jais Voice approves them (its "Actions on this
  * Mac" setting: never, ask each time, or always). They then run with the current
  * user's privileges, in a fresh process group with a minimal environment. This
  * is not a sandbox; macOS privacy permissions still apply.
@@ -35,10 +35,10 @@ export const MAX_SNAPSHOT_BYTES = 60000;
 export const BROWSER_PREFIX = "mcp__browser__";
 /** Pi stops waiting slightly after the app closes its own approval alert (120 s). */
 export const APPROVAL_SECONDS = 125;
-export const REFUSED = "The user did not allow this action in JAIS Voice, so it was NOT executed. Do not retry it and do not "
-  + "try to achieve it with another tool. Tell the user it was not done; actions on this Mac can be allowed in the JAIS Voice settings.";
+export const REFUSED = "The user did not allow this action in Jais Voice, so it was NOT executed. Do not retry it and do not "
+  + "try to achieve it with another tool. Tell the user it was not done; actions on this Mac can be allowed in the Jais Voice settings.";
 
-/** The confirmation message JAIS Voice parses: why the action runs and exactly what runs. */
+/** The confirmation message Jais Voice parses: why the action runs and exactly what runs. */
 export function approvalMessage(reason: string, details: string): string {
   return JSON.stringify({ reason, details });
 }

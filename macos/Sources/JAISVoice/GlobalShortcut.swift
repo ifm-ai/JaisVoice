@@ -40,7 +40,7 @@ struct ShortcutChoice: Equatable {
         let status = RegisterEventHotKey(UInt32(kVK_Space), ShortcutChoice.choices[choiceIndex].modifiers, id, GetApplicationEventTarget(), 0, &hotKey)
         guard status == noErr else {
             unregister()
-            throw VoiceError.message(L("This shortcut is already in use. Choose another combination in the JAIS Voice menu."))
+            throw VoiceError.message(L("This shortcut is already in use. Choose another combination in the Jais Voice menu."))
         }
         UserDefaults.standard.set(choiceIndex, forKey: "shortcutChoice")
     }

@@ -33,7 +33,7 @@ enum DesktopPolicy {
     /// components (password prompts, Gatekeeper, consent alerts) never are.
     static func tier(bundleID: String?, regular: Bool) -> (DesktopTier, String?) {
         guard let id = bundleID, !id.isEmpty else { return (.blocked, "this app has no bundle identifier") }
-        if id == ownBundleID { return (.blocked, "JAIS Voice never controls itself") }
+        if id == ownBundleID { return (.blocked, "Jais Voice never controls itself") }
         if !regular { return (.blocked, "system and background components are not accessible") }
         let lower = id.lowercased()
         if blockedBundleIDs.contains(id) || secretKeywords.contains(where: lower.contains) {
