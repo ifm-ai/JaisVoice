@@ -28,10 +28,10 @@ struct ActionRequest: Equatable {
 
     var question: String {
         switch kind {
-        case "app_read": return L("Let JAIS Voice read the windows of {0} until this request ends?", app ?? "")
-        case "app_control": return L("Let JAIS Voice control {0} until this request ends? It can click, type, and use its menus and keys.", app ?? "")
-        case "web_after_desktop": return L("JAIS Voice read your apps during this request. Open this page?")
-        case "files_read": return L("Let JAIS Voice read your files until this request ends?")
+        case "app_read": return L("Let Jais Voice read the windows of {0} until this request ends?", app ?? "")
+        case "app_control": return L("Let Jais Voice control {0} until this request ends? It can click, type, and use its menus and keys.", app ?? "")
+        case "web_after_desktop": return L("Jais Voice read your apps during this request. Open this page?")
+        case "files_read": return L("Let Jais Voice read your files until this request ends?")
         // The extension words it: create, replace or change this file.
         case "file_write": return L(reason)
         default: return reason

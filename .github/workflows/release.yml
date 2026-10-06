@@ -51,12 +51,12 @@ jobs:
         run: .venv/bin/python scripts/build_app.py --dmg --build-number "${{ github.run_number }}"
 
       - name: Native self-test
-        run: '"outputs/JAIS Voice.app/Contents/MacOS/JAISVoice" --self-test'
+        run: '"outputs/Jais Voice.app/Contents/MacOS/JAISVoice" --self-test'
 
       - name: Keep the disk image
         uses: actions/upload-artifact@v4
         with:
-          name: JAIS-Voice-dmg
+          name: Jais-Voice-dmg
           path: outputs/*.dmg
           retention-days: 7
           compression-level: 0
@@ -70,6 +70,6 @@ jobs:
           tag="v${version}-build.${{ github.run_number }}"
           gh release create "$tag" outputs/*.dmg \
             --target "$GITHUB_SHA" \
-            --title "JAIS Voice ${version} (build ${{ github.run_number }})" \
+            --title "Jais Voice ${version} (build ${{ github.run_number }})" \
             --notes-file .github/release-notes.md \
             --latest

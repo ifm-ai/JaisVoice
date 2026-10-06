@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>JAIS Voice</string>
+	<string>Jais Voice</string>
 	<key>CFBundleExecutable</key>
 	<string>JAISVoice</string>
 	<key>CFBundleIconFile</key>
@@ -18,7 +18,7 @@
 		<string>fr</string>
 	</array>
 	<key>CFBundleName</key>
-	<string>JAIS Voice</string>
+	<string>Jais Voice</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -35,12 +35,12 @@
 		<true/>
 	</dict>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>JAIS Voice performs the macOS actions you request, such as creating a note. macOS asks for separate permission to control each application.</string>
+	<string>Jais Voice performs the macOS actions you request, such as creating a note. macOS asks for separate permission to control each application.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>With your explicit permission, JAIS Voice can check or change Bluetooth settings to manage your Mac’s connectivity.</string>
+	<string>With your explicit permission, Jais Voice can check or change Bluetooth settings to manage your Mac’s connectivity.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>JAIS Voice uses the microphone while you hold the shortcut to speak.</string>
+	<string>Jais Voice uses the microphone while you hold the shortcut to speak.</string>
 </dict>
 </plist>

@@ -55,7 +55,7 @@ private final class RecordReader: @unchecked Sendable {
         } else if let resource = Bundle.main.url(forResource: "launch-agent", withExtension: nil) {
             executable = resource
         } else {
-            throw VoiceError.message(L("The agent launcher is missing. Open the JAIS Voice.app bundle created by the setup script."))
+            throw VoiceError.message(L("The agent launcher is missing. Open the Jais Voice.app bundle created by the setup script."))
         }
         let task = Process()
         task.executableURL = executable

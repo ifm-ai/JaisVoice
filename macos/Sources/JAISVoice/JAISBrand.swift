@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Brand colors sampled from the supplied, unmodified JAIS artwork.
+/// Brand colors sampled from the supplied, unmodified Jais artwork.
 enum JAISBrand {
     static let green = Color(red: 36 / 255.0, green: 211 / 255.0, blue: 101 / 255.0)
     static let forest = Color(red: 0, green: 69 / 255.0, blue: 57 / 255.0)
@@ -20,9 +20,9 @@ struct JAISArtwork: View {
     var body: some View {
         if let image = JAISBrand.image(fullLogo ? "JAISLogo" : "JAISMark") {
             Image(nsImage: image).resizable().interpolation(.high).scaledToFit()
-                .accessibilityLabel("JAIS")
+                .accessibilityLabel("Jais")
         } else {
-            Text("JAIS").font(.system(size: 12, weight: .bold)).foregroundStyle(JAISBrand.green)
+            Text("Jais").font(.system(size: 12, weight: .bold)).foregroundStyle(JAISBrand.green)
         }
     }
 }

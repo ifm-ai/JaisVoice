@@ -1,9 +1,9 @@
 /**
  * What Pi's file tools (read, ls, find, grep, write, edit) may touch, testable without Pi.
  *
- * Reading asks JAIS Voice once per request, except for the agent's own skills.
+ * Reading asks Jais Voice once per request, except for the agent's own skills.
  * Writing asks for every file, and only reaches the user's own files: the home
- * folder, outside ~/Library, hidden files and JAIS Voice itself, so the agent
+ * folder, outside ~/Library, hidden files and Jais Voice itself, so the agent
  * can neither change its settings, prompt or skills nor plant startup scripts.
  * Credential stores are never read nor written.
  */
@@ -43,24 +43,24 @@ export function resolveToolPath(path: string | undefined, cwd: string, home = ho
 /** Why this path may not be read, if it may not. */
 export function readProblem(path: string, home = homedir()): string | undefined {
   const secret = SECRET_PATHS.find((entry) => isInside(path, join(home, entry)));
-  if (secret) return `${path} holds credentials (~/${secret}): JAIS Voice never reads it. Do not try another way.`;
+  if (secret) return `${path} holds credentials (~/${secret}): Jais Voice never reads it. Do not try another way.`;
   if (basename(path) === "auth.json" && path.includes("pi-agent")) return "The agent's credentials are never read.";
-  if (/^\.env(\..*)?$/.test(basename(path))) return `${path} is an environment file, which usually holds credentials: JAIS Voice never reads it.`;
+  if (/^\.env(\..*)?$/.test(basename(path))) return `${path} is an environment file, which usually holds credentials: Jais Voice never reads it.`;
   return undefined;
 }
 
-/** Why this path may not be written, if it may not; `protectedPaths` are JAIS Voice's own folders. */
+/** Why this path may not be written, if it may not; `protectedPaths` are Jais Voice's own folders. */
 export function writeProblem(path: string, protectedPaths: string[], home = homedir()): string | undefined {
   const secret = readProblem(path, home);
   if (secret) return secret;
   if (!isInside(path, home) || path === home) {
-    return `${path} is outside your home folder: JAIS Voice only writes your own files (for example in ~/Documents or ~/Desktop).`;
+    return `${path} is outside your home folder: Jais Voice only writes your own files (for example in ~/Documents or ~/Desktop).`;
   }
   const inside = relative(home, path).split(sep);
-  if (inside[0] === "Library") return `${path} is in ~/Library (app data and settings): JAIS Voice does not write there.`;
-  if (inside.some((part) => part.startsWith("."))) return `${path} is a hidden file or folder (settings, startup scripts): JAIS Voice does not write there.`;
+  if (inside[0] === "Library") return `${path} is in ~/Library (app data and settings): Jais Voice does not write there.`;
+  if (inside.some((part) => part.startsWith("."))) return `${path} is a hidden file or folder (settings, startup scripts): Jais Voice does not write there.`;
   const own = protectedPaths.filter(Boolean).map((entry) => resolveToolPath(entry, "/", home)).find((entry) => isInside(path, entry));
-  if (own) return `${path} belongs to JAIS Voice itself: the agent never changes its own app, settings, prompt or skills.`;
+  if (own) return `${path} belongs to Jais Voice itself: the agent never changes its own app, settings, prompt or skills.`;
   return undefined;
 }
 
@@ -71,7 +71,7 @@ export function toolPath(input: Record<string, unknown>, cwd: string, home = hom
 
 /** The approval for reading files, once per request. */
 export const FILES_READ_MESSAGE = JSON.stringify({
-  reason: "Let JAIS Voice read your files until this request ends?", details: "", kind: "files_read",
+  reason: "Let Jais Voice read your files until this request ends?", details: "", kind: "files_read",
 });
 
 /** The approval for one write: the file and what changes in it. */
@@ -87,8 +87,8 @@ export function fileWriteMessage(toolName: string, path: string, input: Record<s
   return JSON.stringify({ reason, details: path + (preview ? "\n\n" + preview : ""), kind: "file_write", path });
 }
 
-export const FILES_REFUSED = "The user did not allow JAIS Voice to read their files, so nothing was read. Do not retry and do not try another way. "
-  + "Tell the user; file access can be allowed in the JAIS Voice settings.";
+export const FILES_REFUSED = "The user did not allow Jais Voice to read their files, so nothing was read. Do not retry and do not try another way. "
+  + "Tell the user; file access can be allowed in the Jais Voice settings.";
 export const WRITE_REFUSED = "The user did not allow this change, so the file was NOT written. Do not retry it and do not try another way.";
 
 /** The skill that explains a tool's area: the web, the apps on this Mac or the user's files. */

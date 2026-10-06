@@ -1,4 +1,4 @@
-"""Persistent, offline JAIS-ASR F5 worker; runs in the model's isolated Python env."""
+"""Persistent, offline Jais-ASR F5 worker; runs in the model's isolated Python env."""
 from __future__ import annotations
 
 import base64
@@ -119,16 +119,16 @@ class LocalASR:
         self.runtime = factory(spec, device="gpu", threads=2)
         import mlx.core as mx
         mx.synchronize()
-        logging.info("JAIS-ASR F5 loaded locally")
+        logging.info("Jais-ASR F5 loaded locally")
 
     def health(self):
         if not self.loading.done():
-            return {"status": "loading", "message": "Loading JAIS-ASR F5…", "profile": "F5"}
+            return {"status": "loading", "message": "Loading Jais-ASR F5…", "profile": "F5"}
         if self.loading.exception() is not None:
-            return {"status": "error", "message": "JAIS-ASR F5 failed to load. See the ASR log.", "profile": "F5"}
+            return {"status": "error", "message": "Jais-ASR F5 failed to load. See the ASR log.", "profile": "F5"}
         if self.runtime is None:
-            return {"status": "unloaded", "message": "JAIS-ASR F5 unloaded", "profile": "F5"}
-        return {"status": "ready", "message": "JAIS-ASR F5 ready", "profile": "F5"}
+            return {"status": "unloaded", "message": "Jais-ASR F5 unloaded", "profile": "F5"}
+        return {"status": "ready", "message": "Jais-ASR F5 ready", "profile": "F5"}
 
     def transcribe(self, frames, language):
         import mlx.core as mx

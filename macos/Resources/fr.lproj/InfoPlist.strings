@@ -1,3 +1,3 @@
-"NSMicrophoneUsageDescription" = "JAIS Voice utilise le microphone pendant que vous maintenez le raccourci pour parler.";
-"NSAppleEventsUsageDescription" = "JAIS Voice exécute les actions macOS que vous demandez, par exemple créer une note. macOS vous demande une autorisation séparée pour contrôler chaque application.";
-"NSBluetoothAlwaysUsageDescription" = "Après votre accord explicite, JAIS Voice peut consulter ou modifier l’état du Bluetooth pour agir sur la connectivité de votre Mac.";
+"NSMicrophoneUsageDescription" = "Jais Voice utilise le microphone pendant que vous maintenez le raccourci pour parler.";
+"NSAppleEventsUsageDescription" = "Jais Voice exécute les actions macOS que vous demandez, par exemple créer une note. macOS vous demande une autorisation séparée pour contrôler chaque application.";
+"NSBluetoothAlwaysUsageDescription" = "Après votre accord explicite, Jais Voice peut consulter ou modifier l’état du Bluetooth pour agir sur la connectivité de votre Mac.";

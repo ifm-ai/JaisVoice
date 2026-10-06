@@ -1,4 +1,4 @@
-# JAIS Voice native app
+# Jais Voice native app
 
 AppKit/SwiftUI menu bar app with two non-activating panels, a Carbon shortcut and native audio capture. `LocalPipeline` orchestrates each turn: transcription by the local ASR service, cleanup by the MLX gateway (`/v1/clean`), then the Pi agent run as a child process (`AgentProcess`, JSONL over stdin/stdout).
 
