@@ -27,7 +27,7 @@ enum ReasoningEffort: String, CaseIterable {
     var label: String {
         switch self {
         case .low: return L("Low · fastest")
-        case .medium: return L("Medium")
+        case .medium: return L("Medium · balanced")
         case .high: return L("High · most careful")
         }
     }

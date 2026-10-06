@@ -265,7 +265,7 @@
 "Allowed" = "Autorisé";
 "Reasoning" = "Réflexion";
 "Low · fastest" = "Faible · plus rapide";
-"Medium" = "Moyenne";
+"Medium · balanced" = "Moyenne · équilibrée";
 "High · most careful" = "Élevée · plus soignée";
 "How long the model thinks before it answers or acts. Higher is more careful, but slower." = "Temps de réflexion du modèle avant de répondre ou d’agir. Plus il est élevé, plus le travail est soigné, mais lent.";
 "Let Jais Voice read your files until this request ends?" = "Autoriser Jais Voice à lire vos fichiers jusqu’à la fin de cette demande ?";

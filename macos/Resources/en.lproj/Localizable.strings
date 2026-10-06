@@ -265,7 +265,7 @@
 "Allowed" = "Allowed";
 "Reasoning" = "Reasoning";
 "Low · fastest" = "Low · fastest";
-"Medium" = "Medium";
+"Medium · balanced" = "Medium · balanced";
 "High · most careful" = "High · most careful";
 "How long the model thinks before it answers or acts. Higher is more careful, but slower." = "How long the model thinks before it answers or acts. Higher is more careful, but slower.";
 "Let Jais Voice read your files until this request ends?" = "Let Jais Voice read your files until this request ends?";
