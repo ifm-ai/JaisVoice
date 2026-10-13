@@ -98,6 +98,7 @@ def test_remote_cleanup_drops_leading_reasoning_and_omits_an_empty_key(gateway_c
 
 @pytest.mark.parametrize("status,payload,code,message", [
     (401, {"error": {"message": "Invalid API key"}}, "cleaner_unavailable", "401: Invalid API key"),
+    (400, {"detail": "400: Invalid value for 'messages.content'."}, "cleaner_unavailable", "400: 400: Invalid value"),
     (200, {"choices": [{"message": {"content": "Text"}, "finish_reason": "length"}]}, "cleaner_incomplete", "did not finish"),
     (200, {"choices": [{"message": {"content": " "}, "finish_reason": "stop"}]}, "cleaner_empty", "no corrected text"),
     (200, {"unexpected": True}, "cleaner_unavailable", "unexpected response"),
@@ -120,3 +121,11 @@ def test_unreachable_api_is_unavailable(gateway_client, remote_api):
 def test_endpoint_must_be_http(gateway_client):
     http, _ = gateway_client
     assert http.post("/v1/clean", json={"text": "Text", "endpoint": {**ENDPOINT, "base_url": "file:///etc"}}).status_code == 422
+
+
+def test_an_html_error_page_is_reduced_to_its_title(gateway_client, remote_api):
+    http, _ = gateway_client
+    page = "<html> <head><title>503 Service Temporarily\n Unavailable</title></head><body><center><h1>503</h1></center></body></html>"
+    remote_api["reply"] = lambda request: httpx.Response(503, text=page, headers={"Content-Type": "text/html"})
+    detail = http.post("/v1/clean", json={"text": "Text", "endpoint": ENDPOINT}).json()["detail"]
+    assert detail["message"] == "Cleanup failed. The API answered 503: 503 Service Temporarily Unavailable"

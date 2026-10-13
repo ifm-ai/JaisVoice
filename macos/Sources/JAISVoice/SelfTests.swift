@@ -70,6 +70,12 @@ import AVFoundation
             }
             try check(Set(strings).count == 1, "every interface string exists in every language")
 
+            let page = Data("<html><head><title>503 Service Temporarily\n Unavailable</title></head><body>…</body></html>".utf8)
+            try check(RemoteEndpoint.errorDetail(nil, page) == "503 Service Temporarily Unavailable"
+                      && RemoteEndpoint.errorDetail(["error": ["message": "Invalid API key"]], Data()) == "Invalid API key"
+                      && RemoteEndpoint.errorDetail(["detail": "400: Invalid value"], Data()) == "400: Invalid value",
+                      "API errors are shown as the API's own message")
+
             // Text fields of a menu-bar app get their editing shortcuts from a hidden Edit menu
             let editing = AppDelegate.editMenu().items.first?.submenu?.items ?? []
             try check(editing.contains { $0.action == #selector(NSText.paste(_:)) && $0.keyEquivalent == "v" && $0.keyEquivalentModifierMask == .command }

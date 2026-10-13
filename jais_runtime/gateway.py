@@ -383,12 +383,16 @@ def remote_messages(text: str) -> list[dict]:
 
 
 def remote_error(response: httpx.Response) -> str:
+    """The API's own message: its JSON error, an HTML page's title, or the start of its text."""
     try:
-        error = response.json().get("error")
+        body = response.json()
+        error = body.get("error") or body.get("detail")
         detail = error.get("message") if isinstance(error, dict) else error
     except (ValueError, AttributeError):
-        detail = None
-    return f"The API answered {response.status_code}: {str(detail or response.text or response.reason_phrase)[:300]}"
+        title = re.search(r"<title>(.*?)</title>", response.text, re.IGNORECASE | re.DOTALL)
+        detail = title.group(1) if title else response.text
+    detail = " ".join(str(detail or response.reason_phrase).split())
+    return f"The API answered {response.status_code}: {detail[:300]}"
 
 
 async def remote_clean(text: str, endpoint: RemoteEndpoint) -> tuple[str, str | None]:

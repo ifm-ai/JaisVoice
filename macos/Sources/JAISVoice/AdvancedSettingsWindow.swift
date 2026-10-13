@@ -21,12 +21,19 @@ extension RemoteEndpoint {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         guard status == 200, (object?["choices"] as? [Any])?.isEmpty == false else {
-            let error = object?["error"]
-            let detail = (error as? [String: Any])?["message"] as? String ?? error as? String
-                ?? String(decoding: data.prefix(300), as: UTF8.self)
-            throw VoiceError.message(L("The API answered {0}: {1}", String(describing: status), detail))
+            throw VoiceError.message(L("The API answered {0}: {1}", String(describing: status), Self.errorDetail(object, data)))
         }
         return Date().timeIntervalSince(started)
+    }
+
+    /// The API's own message: its JSON error, an HTML page's title, or the start of its text.
+    static func errorDetail(_ object: [String: Any]?, _ data: Data) -> String {
+        let error = object?["error"] ?? object?["detail"]
+        var detail = (error as? [String: Any])?["message"] as? String ?? error as? String ?? String(decoding: data, as: UTF8.self)
+        if object == nil, let title = detail.range(of: "(?is)<title>(.*?)</title>", options: .regularExpression) {
+            detail = String(detail[title]).replacingOccurrences(of: "(?i)</?title>", with: "", options: .regularExpression)
+        }
+        return String(detail.split(whereSeparator: \.isWhitespace).joined(separator: " ").prefix(300))
     }
 }
 
