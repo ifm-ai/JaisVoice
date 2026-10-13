@@ -30,19 +30,19 @@ function run(argv) {
   rep.setSize($.NSMakeSize(W, H));
   $.NSGraphicsContext.saveGraphicsState;
   $.NSGraphicsContext.setCurrentContext($.NSGraphicsContext.graphicsContextWithBitmapImageRep(rep));
-  $.NSColor.colorWithSRGBRedGreenBlueAlpha(0.96, 0.97, 0.96, 1).setFill;
+  $.NSColor.whiteColor.setFill;
   $.NSRectFill($.NSMakeRect(0, 0, W, H));
-  const green = $.NSColor.colorWithSRGBRedGreenBlueAlpha(0.18, 0.62, 0.38, 1);
+  const ink = $.NSColor.blackColor;
   const y = H - %(arrow_y)d;
   const line = $.NSBezierPath.bezierPath;
   line.moveToPoint($.NSMakePoint(255, y)); line.lineToPoint($.NSMakePoint(372, y));
-  line.setLineWidth(5); line.setLineCapStyle(1); green.setStroke; line.stroke;
+  line.setLineWidth(5); line.setLineCapStyle(1); ink.setStroke; line.stroke;
   const head = $.NSBezierPath.bezierPath;
   head.moveToPoint($.NSMakePoint(388, y)); head.lineToPoint($.NSMakePoint(366, y + 13));
-  head.lineToPoint($.NSMakePoint(366, y - 13)); head.closePath; green.setFill; head.fill;
+  head.lineToPoint($.NSMakePoint(366, y - 13)); head.closePath; ink.setFill; head.fill;
   const style = $.NSMutableParagraphStyle.alloc.init; style.setAlignment(1);
   const attributes = $.NSDictionary.dictionaryWithObjectsForKeys(
-    $([$.NSFont.systemFontOfSizeWeight(15, 0.23), $.NSColor.colorWithSRGBRedGreenBlueAlpha(0.25, 0.28, 0.27, 1), style]),
+    $([$.NSFont.fontWithNameSize('HelveticaNeue-Medium', 15), $.NSColor.blackColor, style]),
     $([$.NSFontAttributeName, $.NSForegroundColorAttributeName, $.NSParagraphStyleAttributeName]));
   $(%(caption)s).drawInRectWithAttributes($.NSMakeRect(0, 52, W, 24), attributes);
   $.NSGraphicsContext.restoreGraphicsState;

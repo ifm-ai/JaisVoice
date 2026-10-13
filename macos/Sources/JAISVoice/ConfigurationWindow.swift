@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-private let configurationAccent = JAISBrand.green
+private let configurationAccent = JAISBrand.accent
 
 enum SettingsTab: String, CaseIterable {
     case general, assistant, models
@@ -79,14 +79,13 @@ struct ConfigurationView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            JAISArtwork(fullLogo: true)
-                .frame(width: 88, height: 33)
-                .padding(.horizontal, 9).padding(.vertical, 7)
-                .background(JAISBrand.paper, in: RoundedRectangle(cornerRadius: 10))
+            JAISWordmark(size: 22)
+            Rectangle().fill(.white.opacity(0.18)).frame(width: 1, height: 38)
             VStack(alignment: .leading, spacing: 3) {
-                Text("Voice").font(.system(size: 18, weight: .semibold, design: .rounded))
+                Text("Voice").font(JAISBrand.display(19)).tracking(-0.4)
+                    .environment(\.layoutDirection, .leftToRight)
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Circle().fill(state.ready ? JAISBrand.green : Color.orange).frame(width: 7, height: 7)
+                    Circle().fill(state.ready ? JAISBrand.accent : Color.orange).frame(width: 7, height: 7)
                     Text(L(state.serviceMessage)).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
                 }.accessibilityElement(children: .combine)
             }
@@ -263,8 +262,8 @@ struct ConfigurationView: View {
 
     private func modelPhaseColor(_ phase: ModelLoadPhase) -> Color {
         switch phase {
-        case .ready: return JAISBrand.green
-        case .loading: return configurationAccent
+        case .ready: return JAISBrand.accent
+        case .loading: return configurationAccent.opacity(0.6)
         case .error: return Color(red: 1, green: 0.48, blue: 0.44)
         case .waiting, .unavailable, .unloaded, .notInstalled: return .secondary
         }
@@ -300,7 +299,7 @@ struct ConfigurationView: View {
     private var microphone: some View {
         HStack(spacing: 10) {
             Image(systemName: preferences.microphoneAuthorized ? "mic.fill" : "mic.slash")
-                .foregroundStyle(preferences.microphoneAuthorized ? JAISBrand.green : Color.orange)
+                .foregroundStyle(preferences.microphoneAuthorized ? JAISBrand.accent : Color.orange)
                 .font(.system(size: 14)).frame(width: 20)
             VStack(alignment: .leading, spacing: 3) {
                 Text(L("Microphone")).font(.system(size: 12, weight: .medium))
@@ -314,7 +313,7 @@ struct ConfigurationView: View {
                     .controlSize(.small)
                     .disabled(preferences.microphoneRequestPending || state.isBusy)
             } else {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(JAISBrand.green)
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(JAISBrand.accent)
                     .accessibilityLabel(L("Microphone access allowed"))
             }
         }.padding(12).cardBackground()
@@ -431,7 +430,7 @@ struct ConfigurationView: View {
 
     private func permissionRow(_ title: String, symbol: String, allowed: Bool, detail: String, action: @escaping () -> Void) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: symbol).foregroundStyle(allowed ? JAISBrand.green : .secondary)
+            Image(systemName: symbol).foregroundStyle(allowed ? JAISBrand.accent : .secondary)
                 .font(.system(size: 13)).frame(width: 20)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.system(size: 12, weight: .medium))
@@ -439,7 +438,7 @@ struct ConfigurationView: View {
             }
             Spacer(minLength: 6)
             if allowed {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(JAISBrand.green).accessibilityLabel(L("Allowed"))
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(JAISBrand.accent).accessibilityLabel(L("Allowed"))
             } else {
                 Button(L("Allow…"), action: action).controlSize(.small)
             }
@@ -471,7 +470,7 @@ struct ConfigurationView: View {
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                 Button(action: onClose) {
                     Text(L("Done")).font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(JAISBrand.forest)
+                        .foregroundStyle(JAISBrand.ink)
                         .padding(.horizontal, 16).padding(.vertical, 7)
                         .background(configurationAccent, in: RoundedRectangle(cornerRadius: 7))
                 }.buttonStyle(.plain).keyboardShortcut(.defaultAction)
@@ -496,7 +495,7 @@ private struct ReasoningSlider: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(.white.opacity(0.08)).frame(height: 4).padding(.horizontal, knob / 2)
                     Capsule()
-                        .fill(LinearGradient(colors: [JAISBrand.forest, configurationAccent], startPoint: .leading, endPoint: .trailing))
+                        .fill(configurationAccent)
                         .frame(width: max(x - knob / 2, 0), height: 4).offset(x: knob / 2)
                     ForEach(levels.indices, id: \.self) { stop in
                         Circle().fill(CGFloat(stop) <= index ? configurationAccent : .white.opacity(0.22))
@@ -504,8 +503,8 @@ private struct ReasoningSlider: View {
                             .offset(x: knob / 2 + span * CGFloat(stop) / CGFloat(levels.count - 1) - 3)
                     }
                     Circle().fill(JAISBrand.paper)
-                        .overlay(Circle().strokeBorder(configurationAccent, lineWidth: 2))
-                        .shadow(color: configurationAccent.opacity(0.55), radius: 5)
+                        .overlay(Circle().strokeBorder(JAISBrand.ink, lineWidth: 2))
+                        .shadow(color: .black.opacity(0.6), radius: 3)
                         .frame(width: knob, height: knob).offset(x: x - knob / 2)
                 }
                 .frame(maxHeight: .infinity).contentShape(Rectangle())

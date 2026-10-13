@@ -1,28 +1,54 @@
 import AppKit
 import SwiftUI
 
-/// Brand colors sampled from the supplied, unmodified Jais artwork.
+/// Jais 3 identity: black and white, set in a bold neo-grotesque. The wordmark is
+/// type only ("Jais 3" over "جيس"); there is no graphic mark.
 enum JAISBrand {
-    static let green = Color(red: 36 / 255.0, green: 211 / 255.0, blue: 101 / 255.0)
-    static let forest = Color(red: 0, green: 69 / 255.0, blue: 57 / 255.0)
+    static let ink = Color.black
+    static let paper = Color.white
     static let background = Color(nsColor: backgroundNS)
-    static let backgroundNS = NSColor(srgbRed: 6 / 255.0, green: 35 / 255.0, blue: 30 / 255.0, alpha: 1)
-    static let paper = Color(red: 242 / 255.0, green: 247 / 255.0, blue: 242 / 255.0)
+    static let backgroundNS = NSColor.black
+    /// Interactive emphasis on the black surfaces: white, like the wordmark.
+    static let accent = Color.white
+    /// Links stay apart from body text without leaving the greyscale.
+    static let link = Color(white: 0.62)
 
-    static func image(_ name: String) -> NSImage? {
-        guard let url = Bundle.main.url(forResource: name, withExtension: "png") else { return nil }
-        return NSImage(contentsOf: url)
+    /// Latin display face. Helvetica Neue ships with macOS, so nothing is bundled.
+    static func display(_ size: CGFloat, weight: NSFont.Weight = .bold) -> Font {
+        Font(displayNS(size, weight: weight))
+    }
+
+    static func displayNS(_ size: CGFloat, weight: NSFont.Weight = .bold) -> NSFont {
+        let name: String
+        switch weight {
+        case .bold, .heavy, .black, .semibold: name = "HelveticaNeue-Bold"
+        case .medium: name = "HelveticaNeue-Medium"
+        default: name = "HelveticaNeue"
+        }
+        return NSFont(name: name, size: size) ?? .systemFont(ofSize: size, weight: weight)
+    }
+
+    /// Arabic face of the wordmark: the system Arabic (SF Arabic).
+    static func arabicNS(_ size: CGFloat) -> NSFont {
+        .systemFont(ofSize: size, weight: .heavy)
     }
 }
 
-struct JAISArtwork: View {
-    var fullLogo = false
+/// The Jais 3 lockup: "Jais 3" with "جيس" beneath, aligned on the right edge.
+/// Its layout never mirrors with the interface language.
+struct JAISWordmark: View {
+    var size: CGFloat = 20
+    var color: Color = JAISBrand.paper
+
     var body: some View {
-        if let image = JAISBrand.image(fullLogo ? "JAISLogo" : "JAISMark") {
-            Image(nsImage: image).resizable().interpolation(.high).scaledToFit()
-                .accessibilityLabel("Jais")
-        } else {
-            Text("Jais").font(.system(size: 12, weight: .bold)).foregroundStyle(JAISBrand.green)
+        VStack(alignment: .trailing, spacing: -size * 0.34) {
+            Text("Jais 3").font(JAISBrand.display(size)).tracking(-size * 0.045)
+            Text("جيس").font(Font(JAISBrand.arabicNS(size * 1.1)))
         }
+        .foregroundStyle(color)
+        .fixedSize()
+        .environment(\.layoutDirection, .leftToRight)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Jais")
     }
 }
