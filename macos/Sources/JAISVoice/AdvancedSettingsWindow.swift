@@ -86,7 +86,7 @@ struct AdvancedSettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 12) {
-                Text(L("Advanced settings")).font(.system(size: 18, weight: .semibold, design: .rounded))
+                Text(L("Advanced settings")).font(JAISBrand.display(19)).tracking(-0.4)
                 Text(L("LANGUAGE MODEL API")).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
                 apiCard
                 testRow
@@ -104,7 +104,7 @@ struct AdvancedSettingsView: View {
         .background(JAISBrand.background)
         .preferredColorScheme(.dark)
         .environment(\.layoutDirection, preferences.interfaceLanguage.layoutDirection)
-        .tint(JAISBrand.green)
+        .tint(JAISBrand.accent)
     }
 
     private var apiCard: some View {
@@ -153,7 +153,7 @@ struct AdvancedSettingsView: View {
                 ProgressView().controlSize(.small).scaleEffect(0.6).frame(width: 14, height: 14)
             } else if let status = draft.status {
                 Text(status.text).font(.system(size: 10))
-                    .foregroundStyle(status.failed ? Color(red: 1, green: 0.48, blue: 0.44) : JAISBrand.green)
+                    .foregroundStyle(status.failed ? Color(red: 1, green: 0.48, blue: 0.44) : JAISBrand.accent)
                     .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
             }
             Spacer(minLength: 0)
@@ -173,9 +173,9 @@ struct AdvancedSettingsView: View {
                     .keyboardShortcut(.cancelAction)
                 Button(action: onSave) {
                     Text(L("Save")).font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(JAISBrand.forest)
+                        .foregroundStyle(JAISBrand.ink)
                         .padding(.horizontal, 16).padding(.vertical, 7)
-                        .background(JAISBrand.green, in: RoundedRectangle(cornerRadius: 7))
+                        .background(JAISBrand.accent, in: RoundedRectangle(cornerRadius: 7))
                 }.buttonStyle(.plain).keyboardShortcut(.defaultAction).disabled(state.isBusy)
             }.padding(.horizontal, 22).padding(.vertical, 12)
         }
