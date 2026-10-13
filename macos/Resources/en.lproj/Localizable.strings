@@ -312,3 +312,9 @@
 "Sends the Reasoning setting as reasoning_effort. Leave off if the API refuses it." = "Sends the Reasoning setting as reasoning_effort. Leave off if the API refuses it.";
 "Test connection" = "Test connection";
 "Save" = "Save";
+"Edit" = "Edit";
+"Undo" = "Undo";
+"Redo" = "Redo";
+"Cut" = "Cut";
+"Paste" = "Paste";
+"Select All" = "Select All";

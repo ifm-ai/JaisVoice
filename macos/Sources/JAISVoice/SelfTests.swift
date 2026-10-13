@@ -70,6 +70,11 @@ import AVFoundation
             }
             try check(Set(strings).count == 1, "every interface string exists in every language")
 
+            // Text fields of a menu-bar app get their editing shortcuts from a hidden Edit menu
+            let editing = AppDelegate.editMenu().items.first?.submenu?.items ?? []
+            try check(editing.contains { $0.action == #selector(NSText.paste(_:)) && $0.keyEquivalent == "v" && $0.keyEquivalentModifierMask == .command }
+                      && editing.count == 6, "⌘V pastes into text fields")
+
             // Requests sent to the services and the agent
             let options = LocalPipeline.TurnOptions(conversationID: "c", modelSize: "0.9B")
             let body = LocalPipeline.cleanBody("t", options: options)

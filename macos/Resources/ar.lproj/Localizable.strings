@@ -312,3 +312,9 @@
 "Sends the Reasoning setting as reasoning_effort. Leave off if the API refuses it." = "يرسل إعداد التفكير بصفته reasoning_effort. اتركه معطّلًا إذا رفضته واجهة API.";
 "Test connection" = "اختبار الاتصال";
 "Save" = "حفظ";
+"Edit" = "تحرير";
+"Undo" = "تراجع";
+"Redo" = "إعادة";
+"Cut" = "قص";
+"Paste" = "لصق";
+"Select All" = "تحديد الكل";

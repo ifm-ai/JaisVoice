@@ -47,6 +47,7 @@ import UniformTypeIdentifiers
         smokeText = Self.argument(after: "--smoke-text")
         panels = FloatingPanels(state: state, preview: preview, onStop: { [weak self] in self?.stopCurrent() })
         statusItem = StatusItemPresentation.makeItem(shortcutTitle: preferences.shortcutLabel)
+        NSApplication.shared.mainMenu = Self.editMenu()
         configuration = ConfigurationWindowController(
             state: state, preferences: preferences,
             onShortcutChange: { [weak self] in self?.registerShortcut($0) },
@@ -609,6 +610,24 @@ import UniformTypeIdentifiers
     /// `terminate` waits for shutdown tasks on the main actor (terminateLater).
     /// Called from inside a main-actor task, it would block them: run it from a
     /// run-loop source instead, as a menu action does.
+    /// A menu-bar app shows no main menu, but text fields only get ⌘X, ⌘C, ⌘V, ⌘A and
+    /// ⌘Z through its key equivalents: this hidden Edit menu provides them.
+    static func editMenu() -> NSMenu {
+        let edit = NSMenu(title: L("Edit"))
+        let items: [(String, Selector, String, NSEvent.ModifierFlags)] = [
+            (L("Undo"), Selector(("undo:")), "z", .command), (L("Redo"), Selector(("redo:")), "z", [.command, .shift]),
+            (L("Cut"), #selector(NSText.cut(_:)), "x", .command), (L("Copy"), #selector(NSText.copy(_:)), "c", .command),
+            (L("Paste"), #selector(NSText.paste(_:)), "v", .command), (L("Select All"), #selector(NSText.selectAll(_:)), "a", .command)
+        ]
+        for (title, action, key, modifiers) in items {
+            edit.addItem(withTitle: title, action: action, keyEquivalent: key).keyEquivalentModifierMask = modifiers
+        }
+        let menu = NSMenu(), item = NSMenuItem()
+        item.submenu = edit
+        menu.addItem(item)
+        return menu
+    }
+
     private static func terminateFromRunLoop() {
         RunLoop.main.perform(inModes: [.default]) { NSApplication.shared.terminate(nil) }
     }
