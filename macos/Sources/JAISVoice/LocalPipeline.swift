@@ -301,7 +301,8 @@ struct PipelineFailure: Error {
         catch { throw PipelineFailure(code: "agent_unavailable", message: L("The local agent did not start. Check the service status in the menu.")) }
         if options.conversationID != agentConversation {
             try await agent.call("new_session")
-            agentConversation = options.conversationID
+            // A new session starts on Pi's default model and thinking level: set both again.
+            agentConversation = options.conversationID; agentModel = nil; agentEffort = nil
         }
         let (provider, model) = Self.agentModel(options)
         if provider + "/" + model != agentModel {

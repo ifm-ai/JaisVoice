@@ -31,7 +31,9 @@ import UniformTypeIdentifiers
     private var serviceMenuItem: NSMenuItem?
     private var modelMenuItem: NSMenuItem?
     private var smokeFile: URL?
-    private var smokeText: String?
+    /// Each `--smoke-text` is one turn, in a new conversation; the app quits after the last.
+    private var smokeTexts: [String] = []
+    private var smokeText: String? { smokeTexts.first }
     private var smokeStarted = false
     private var smokeReported = false
     private var latestHealth: ServiceHealth?
@@ -44,7 +46,8 @@ import UniformTypeIdentifiers
     func applicationDidFinishLaunching(_ notification: Notification) {
         preview = Self.argument(after: "--render-preview") != nil || Self.argument(after: "--render-settings") != nil
         smokeFile = Self.argument(after: "--smoke-file").map { URL(fileURLWithPath: $0) }
-        smokeText = Self.argument(after: "--smoke-text")
+        smokeTexts = CommandLine.arguments.indices.dropLast().filter { CommandLine.arguments[$0] == "--smoke-text" }
+            .map { CommandLine.arguments[$0 + 1] }
         panels = FloatingPanels(state: state, preview: preview, onStop: { [weak self] in self?.stopCurrent() })
         statusItem = StatusItemPresentation.makeItem(shortcutTitle: preferences.shortcutLabel)
         NSApplication.shared.mainMenu = Self.editMenu()
@@ -764,13 +767,18 @@ import UniformTypeIdentifiers
 
     private func reportSmokeIfNeeded() {
         guard smokeStarted, !smokeReported else { return }
-        smokeReported = true
         let result: [String: Any] = ["stage": state.stage, "transcript": state.raw, "correction": state.cleaned, "response": state.response,
                                      "error": state.error ?? "", "tool_count": state.actions.count, "asr_used": smokeText == nil,
                                      "tools": state.actions.map { $0.name + " " + $0.arguments.replacingOccurrences(of: "\n", with: " ") }]
         if let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys, .withoutEscapingSlashes]), let text = String(data: data, encoding: .utf8) {
             print("JAIS_SMOKE_RESULT=\(text)"); fflush(stdout)
         }
+        if smokeTexts.count > 1 {
+            smokeTexts.removeFirst(); smokeStarted = false
+            Task { @MainActor in self.startSmokeIfNeeded() }
+            return
+        }
+        smokeReported = true
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             Self.terminateFromRunLoop()
