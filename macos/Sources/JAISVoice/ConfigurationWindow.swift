@@ -44,6 +44,7 @@ struct ConfigurationView: View {
     var onCancelDownload: (String) -> Void
     var onDeleteModel: (String) -> Void
     var onShowServiceLog: () -> Void
+    var onShowAdvanced: () -> Void
     var onClose: () -> Void
     var onQuit: () -> Void
 
@@ -153,8 +154,31 @@ struct ConfigurationView: View {
     private var modelsTab: some View {
         Group {
             asrService
+            if let endpoint = preferences.remoteEndpoint { remoteService(endpoint) }
             services
+            HStack {
+                Spacer()
+                Button(action: onShowAdvanced) { Label(L("Advanced settings…"), systemImage: "slider.horizontal.3") }
+                    .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary)
+            }
         }
+    }
+
+    /// The OpenAI-compatible API that replaces the local language model, set in the advanced settings.
+    private func remoteService(_ endpoint: RemoteEndpoint) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionTitle(L("CLEANUP AND AGENT · API"))
+            HStack(spacing: 9) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(endpoint.model).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    Text(endpoint.host).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                Button(L("Change…"), action: onShowAdvanced).controlSize(.small)
+            }.padding(8).background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+            Text(L("The local language models below are not used while the API is on."))
+                .font(.system(size: 10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }.padding(13).cardBackground()
     }
 
     // MARK: Models
@@ -449,7 +473,8 @@ struct ConfigurationView: View {
     private var privacy: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "network").font(.system(size: 12)).padding(.top, 1)
-            Text(L("Transcription, cleanup and the agent run on this Mac. Tools may access the Internet to handle your requests."))
+            Text(preferences.remoteEndpoint.map { L("Transcription runs on this Mac. Cleanup and the agent use the API at {0}: your requests and what the agent reads are sent there.", String(describing: $0.host)) }
+                 ?? L("Transcription, cleanup and the agent run on this Mac. Tools may access the Internet to handle your requests."))
                 .font(.system(size: 10)).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
         }.foregroundStyle(.secondary).padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -541,7 +566,7 @@ private struct ReasoningSlider: View {
     }
 }
 
-private extension View {
+extension View {
     func cardBackground() -> some View {
         background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 11))
             .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(.white.opacity(0.075), lineWidth: 0.7))
@@ -570,6 +595,7 @@ private extension View {
         onCancelDownload: @escaping (String) -> Void,
         onDeleteModel: @escaping (String) -> Void,
         onShowServiceLog: @escaping () -> Void,
+        onShowAdvanced: @escaping () -> Void,
         onQuit: @escaping () -> Void
     ) {
         self.preferences = preferences
@@ -601,6 +627,7 @@ private extension View {
             onCancelDownload: onCancelDownload,
             onDeleteModel: onDeleteModel,
             onShowServiceLog: onShowServiceLog,
+            onShowAdvanced: onShowAdvanced,
             onClose: { [weak self] in self?.close() },
             onQuit: onQuit
         )
@@ -627,7 +654,9 @@ private extension View {
     func select(_ tab: SettingsTab) {
         navigation.tab = tab
     }
+}
 
+extension NSWindowController {
     /// Render the real SwiftUI content for visual QA, without starting services or audio.
     func renderPreview(to url: URL) throws {
         guard let view = window?.contentView else { throw VoiceError.message(L("The settings window is missing.")) }

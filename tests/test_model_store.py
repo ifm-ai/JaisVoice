@@ -314,11 +314,26 @@ def test_agent_launcher_uses_isolated_configuration(store, monkeypatch):
     agent_dir = tmp / "runtime/pi-agent"
     assert env["PI_CODING_AGENT_DIR"] == str(agent_dir) and env["PI_OFFLINE"] == "1"
     assert all((agent_dir / name).read_text() == (run_agent.ROOT / "agent" / name).read_text() for name in run_agent.CONFIG_FILES)
+    assert json.loads((agent_dir / "models.json").read_text()) == json.loads((run_agent.ROOT / "agent/models.json").read_text())
+    assert env["JAIS_REMOTE_API_KEY"] == "none"
     skills = sorted(path.relative_to(agent_dir) for path in (agent_dir / "skills").rglob("SKILL.md"))
     assert skills and skills == sorted(path.relative_to(run_agent.ROOT / "agent") for path in (run_agent.ROOT / "agent/skills").rglob("SKILL.md"))
     assert env["JAIS_AGENT_WORKSPACE"] == str(tmp / "runtime/agent-workspace") and (tmp / "runtime/agent-workspace").is_dir()
     # Pi's file tools resolve paths from the home folder; rg and fd come first on the PATH.
     assert cwd == Path.home() and env["PATH"].split(":")[0] == "/bundle/runtime/bin"
+
+
+def test_agent_launcher_adds_the_remote_api(store, monkeypatch):
+    _, _, tmp = store
+    monkeypatch.setattr(run_agent, "RUNTIME", tmp / "runtime")
+    _, env, _ = run_agent.command({"JAIS_NODE": run_agent.find_node({}), "JAIS_REMOTE_BASE_URL": "https://api.example.com/v1/",
+                                   "JAIS_REMOTE_MODEL": "big-model", "JAIS_REMOTE_API_KEY": "sk-test", "JAIS_REMOTE_REASONING": "1"})
+    written = (tmp / "runtime/pi-agent/models.json").read_text()
+    providers = json.loads(written)["providers"]
+    assert set(providers) == {"jais", "remote"} and providers["remote"]["baseUrl"] == "https://api.example.com/v1"
+    assert providers["remote"]["models"][0]["id"] == "big-model" and providers["remote"]["models"][0]["reasoning"] is True
+    # The key reaches Pi through its environment only.
+    assert providers["remote"]["apiKey"] == "$JAIS_REMOTE_API_KEY" and "sk-test" not in written and env["JAIS_REMOTE_API_KEY"] == "sk-test"
 
 
 def test_agent_tools_are_pinned_builtins_without_bash_or_personal_skills():

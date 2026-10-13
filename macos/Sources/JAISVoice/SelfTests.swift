@@ -37,6 +37,25 @@ import AVFoundation
             try check(preferences.modelSize == "3.7B" && preferences.asrLanguageCode == nil, "invalid values fall back to the defaults")
             try check(AppPreferences.normalizedShortcutChoice(999) == 0, "an invalid shortcut falls back to ⌥ Space")
 
+            // Advanced: an OpenAI-compatible API instead of the local language model
+            let keyFile = FileManager.default.temporaryDirectory.appendingPathComponent("jais-key-\(UUID().uuidString)/remote-api-key")
+            defer { try? FileManager.default.removeItem(at: keyFile.deletingLastPathComponent()) }
+            let api = AppPreferences(defaults: defaults, apiKeyURL: keyFile)
+            try check(api.remoteEndpoint == nil && !api.remoteEnabled, "the local model is used by default")
+            try check((try? api.setRemote(enabled: true, endpoint: RemoteEndpoint(baseURL: "api.example.com", model: "m"))) == nil
+                      && (try? api.setRemote(enabled: true, endpoint: RemoteEndpoint(baseURL: "https://api.example.com/v1", model: " "))) == nil
+                      && api.remoteEndpoint == nil, "the API needs an http(s) URL and a model")
+            try api.setRemote(enabled: true, endpoint: RemoteEndpoint(baseURL: " https://api.example.com/v1/ ", model: " big ", apiKey: " sk-1 ", reasoning: true))
+            let permissions = try FileManager.default.attributesOfItem(atPath: keyFile.path)[.posixPermissions] as? Int
+            try check(permissions == 0o600 && defaults.dictionaryRepresentation().values.allSatisfy { ($0 as? String)?.contains("sk-1") != true },
+                      "the API key is kept in a private file, not in the preferences")
+            let reopened = AppPreferences(defaults: defaults, apiKeyURL: keyFile)
+            try check(reopened.remoteEndpoint == RemoteEndpoint(baseURL: "https://api.example.com/v1", model: "big", apiKey: "sk-1", reasoning: true),
+                      "the API settings persist, trimmed")
+            try reopened.setRemote(enabled: false, endpoint: RemoteEndpoint(baseURL: "https://api.example.com/v1", model: "big"))
+            try check(reopened.remoteEndpoint == nil && reopened.remoteDraft.model == "big" && !FileManager.default.fileExists(atPath: keyFile.path),
+                      "switching the API off keeps its settings; an empty key is deleted")
+
             // Localization
             try check(localized("Settings…", language: .french) == "Réglages…", "French resources are bundled")
             try check(localized("Settings…", language: .arabic) == "الإعدادات…", "Arabic resources are bundled")
@@ -58,6 +77,16 @@ import AVFoundation
             try check(options.reasoningEffort == "low" && ReasoningEffort.allCases.map(\.rawValue) == ["low", "medium", "high"],
                       "the agent's reasoning levels are the chat template's")
             try check(LocalPipeline.agentModelID("3.7B") == "jais-3-3.7b", "the agent model ID matches agent/models.json")
+            let endpoint = RemoteEndpoint(baseURL: "https://api.example.com/v1", model: "big", apiKey: "sk-1")
+            let remote = LocalPipeline.TurnOptions(conversationID: "c", modelSize: "0.9B", endpoint: endpoint)
+            let remoteBody = LocalPipeline.cleanBody("t", options: remote)
+            try check(remoteBody["model_size"] == nil && (remoteBody["endpoint"] as? [String: Any])?["model"] as? String == "big"
+                      && (remoteBody["endpoint"] as? [String: Any])?["api_key"] as? String == "sk-1", "cleanup gets the API instead of a size")
+            try check(LocalPipeline.agentModel(remote) == ("remote", "big") && LocalPipeline.agentModel(options) == ("jais", "jais-3-0.9b"),
+                      "the agent uses the remote provider of scripts/run_agent.py")
+            try check(LocalPipeline.agentEnvironment(endpoint)["JAIS_REMOTE_API_KEY"] == "sk-1"
+                      && LocalPipeline.agentEnvironment(endpoint)["JAIS_REMOTE_REASONING"] == "0" && LocalPipeline.agentEnvironment(nil).isEmpty,
+                      "the agent launcher gets the API in its environment")
             try check(LocalPipeline.asrBody(audio: Data(), language: nil)["language"] == nil
                       && LocalPipeline.asrBody(audio: Data(), language: "fr")["language"] as? String == "fr", "automatic mode omits the language")
             let action = ActionRequest(title: "macOS command", message: #"{"reason":"Open Safari","details":"open -a Safari"}"#)
@@ -118,6 +147,9 @@ import AVFoundation
             store.show(models: catalog)
             try check(store.missingDownloads.map(\.id) == ["jais-asr", "jais-3-3.7b"], "at launch, the ASR and the default size are offered")
             try check(store.blockingMessage == L("Transcription model not installed: download it in Models"), "blocked without a transcription model")
+            store.languageModelRequired = false
+            try check(store.missingDownloads.map(\.id) == ["jais-asr"], "with an API, no local language model is offered")
+            store.languageModelRequired = true
             catalog = try JSONDecoder().decode([CatalogModel].self, from: Data(catalogJSON.replacingOccurrences(of: #""installed":false"#, with: #""installed":true"#).utf8))
             store.show(models: catalog)
             try check(store.missingDownloads.isEmpty && store.blockingMessage == nil, "nothing is offered when the models are present")
@@ -138,8 +170,12 @@ import AVFoundation
             state.updateModels(health, selected: "3.7B")
             try check(state.modelPhase == .error && state.modelError == "Missing weights" && state.phase(of: "0.9B") == .ready, "a failed size does not mark another as failed")
             try check(state.canChangeModel("0.9B") && state.phase(of: "7B") == .unavailable, "loading allowed when idle; unknown sizes are unavailable")
+            state.updateModels(health, selected: "3.7B", remote: RemoteEndpoint(baseURL: "https://api.example.com/v1", model: "big"))
+            try check(state.modelPhase == .ready && state.modelLabel == "big" && state.modelError == nil, "the API needs no loaded local model")
             state.updateModels(nil, selected: "3.7B")
             try check(state.modelPhase == .unavailable && state.modelInventory.isEmpty, "a lost connection keeps no false ready state")
+            state.updateModels(nil, selected: "3.7B", remote: RemoteEndpoint(baseURL: "https://api.example.com/v1", model: "big"))
+            try check(state.modelPhase == .unavailable, "the API is not ready while the local services are unreachable")
             state.begin(recording: true)
             try check(!state.canToggleModelMemory, "unloading is forbidden during a request")
             state.cancel()

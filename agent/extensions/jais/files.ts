@@ -45,6 +45,7 @@ export function readProblem(path: string, home = homedir()): string | undefined 
   const secret = SECRET_PATHS.find((entry) => isInside(path, join(home, entry)));
   if (secret) return `${path} holds credentials (~/${secret}): Jais Voice never reads it. Do not try another way.`;
   if (basename(path) === "auth.json" && path.includes("pi-agent")) return "The agent's credentials are never read.";
+  if (basename(path) === "remote-api-key" && path.includes("Jais Voice")) return "The API key of Jais Voice is never read.";
   if (/^\.env(\..*)?$/.test(basename(path))) return `${path} is an environment file, which usually holds credentials: Jais Voice never reads it.`;
   return undefined;
 }

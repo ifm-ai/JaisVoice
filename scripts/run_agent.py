@@ -6,7 +6,11 @@ closes stdin to stop the agent. Configuration and skills come from `agent/`
 and runtime state (credentials store, caches) stays under `.runtime/pi-agent`.
 Pi runs from the home folder, so its file tools resolve paths as the user
 says them; the browser and other helpers work in `.runtime/agent-workspace`.
+When the app sets JAIS_REMOTE_BASE_URL and JAIS_REMOTE_MODEL, the agent's
+models also list that OpenAI-compatible API as the `remote` provider; its key
+stays in the environment (JAIS_REMOTE_API_KEY), never in a file.
 """
+import json
 import os
 from pathlib import Path
 import shutil
@@ -14,7 +18,10 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("JAIS_RUNTIME_DIR", ROOT / ".runtime"))
-CONFIG_FILES = ("settings.json", "models.json", "SYSTEM.md")
+CONFIG_FILES = ("settings.json", "SYSTEM.md")
+REMOTE_PROVIDER = "remote"
+# Pi needs these numbers; they bound what it sends, the API enforces its own limits.
+REMOTE_CONTEXT, REMOTE_MAX_TOKENS = 128000, 16384
 
 
 def find_node(env: dict) -> str:
@@ -25,12 +32,32 @@ def find_node(env: dict) -> str:
     raise RuntimeError("Node.js not found. Run the Jais Voice setup again.")
 
 
+def models_config(env: dict) -> dict:
+    """agent/models.json, plus the remote API the app chose, if any."""
+    config = json.loads((ROOT / "agent" / "models.json").read_text())
+    base_url, model = env.get("JAIS_REMOTE_BASE_URL", "").strip(), env.get("JAIS_REMOTE_MODEL", "").strip()
+    if base_url and model:
+        reasoning = env.get("JAIS_REMOTE_REASONING") == "1"
+        config["providers"][REMOTE_PROVIDER] = {
+            "baseUrl": base_url.rstrip("/"),
+            "api": "openai-completions",
+            "apiKey": "$JAIS_REMOTE_API_KEY",
+            "models": [{
+                "id": model, "name": f"{model} (API)", "reasoning": reasoning, "input": ["text"],
+                "contextWindow": REMOTE_CONTEXT, "maxTokens": REMOTE_MAX_TOKENS,
+                "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+            }],
+        }
+    return config
+
+
 def command(env: dict) -> tuple[list[str], dict, Path]:
     node = find_node(env)
     agent_dir = RUNTIME / "pi-agent"
     agent_dir.mkdir(parents=True, exist_ok=True)
     for name in CONFIG_FILES:
         shutil.copyfile(ROOT / "agent" / name, agent_dir / name)
+    (agent_dir / "models.json").write_text(json.dumps(models_config(env), indent=2))
     # The agent's skills are replaced as a whole, like its configuration.
     shutil.rmtree(agent_dir / "skills", ignore_errors=True)
     shutil.copytree(ROOT / "agent" / "skills", agent_dir / "skills")
@@ -47,6 +74,8 @@ def command(env: dict) -> tuple[list[str], dict, Path]:
         "JAIS_NODE": node,
         "JAIS_PLAYWRIGHT_CLI": str(ROOT / "node_modules/@playwright/mcp/cli.js"),
         "JAIS_AGENT_WORKSPACE": str(workspace),
+        # Pi refuses an empty key; servers without authentication ignore this one.
+        "JAIS_REMOTE_API_KEY": env.get("JAIS_REMOTE_API_KEY") or "none",
         # Without Google Chrome, the agent downloads Chromium there when it starts.
         "PLAYWRIGHT_BROWSERS_PATH": env.get("PLAYWRIGHT_BROWSERS_PATH") or str(RUNTIME / "browsers"),
         # rg and fd for Pi's grep and find tools come first.
