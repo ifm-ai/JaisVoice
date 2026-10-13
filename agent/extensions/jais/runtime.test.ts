@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
-  ARABIC_REMINDER, approvalMessage, browserArgs, chromiumDownloader, commandProblem, compactContext, inlineSnapshots, noteCommand, runShell,
-  shellQuote, type Message,
+  ARABIC_REMINDER, approvalMessage, browserArgs, chromiumDownloader, commandProblem, compactContext, inlineSnapshots, noteCommand, plainTextPayload,
+  runShell, shellQuote, type Message,
 } from "./runtime.ts";
 
 const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
@@ -141,4 +141,24 @@ fs.appendFileSync(runs, process.argv.slice(2).join(" ") + " " + process.env.PLAY
   await Promise.all([ensure(), ensure()]);
   await ensure();
   assert.equal(readFileSync(join(dir, "runs"), "utf8"), `install chromium --no-shell ${join(dir, "browsers")}\n`);
+});
+
+test("provider requests use plain text content and the system role", () => {
+  const payload = {
+    model: "m", stream: true,
+    messages: [
+      { role: "developer", content: "Rules" },
+      { role: "user", content: [{ type: "text", text: "Hello" }, { type: "text", text: "there" }] },
+      { role: "assistant", content: null, tool_calls: [{ id: "c", type: "function", function: { name: "ls", arguments: "{}" } }] },
+      { role: "tool", content: "a.txt", tool_call_id: "c" },
+      { role: "user", content: [{ type: "text", text: "Look" }, { type: "image_url", image_url: { url: "data:," } }] },
+    ],
+  };
+  const plain = plainTextPayload(payload) as typeof payload;
+  assert.deepEqual(plain.messages.map((message) => [message.role, message.content]), [
+    ["system", "Rules"], ["user", "Hello\nthere"], ["assistant", null], ["tool", "a.txt"], ["user", payload.messages[4].content],
+  ]);
+  assert.equal(plain.model, "m");
+  assert.equal(plain.messages[2].tool_calls, payload.messages[2].tool_calls);
+  assert.equal(plainTextPayload({ input: [] }).constructor, Object);
 });

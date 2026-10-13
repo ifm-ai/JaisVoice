@@ -10,7 +10,7 @@ import { join } from "node:path";
 import {
   APPROVAL_SECONDS, approvalMessage, BROWSER_OUTPUT, BROWSER_PREFIX, BROWSER_TOOLS, BROWSERS, browserArgs, CHROME, chromiumDownloader,
   MAC_TOOLS, MAX_ACTIONS, NODE, PLAYWRIGHT_CLI, PLAYWRIGHT_INSTALLER, RUNTIME, SHELL_SECONDS, WORKSPACE, bounded, bytes, commandProblem,
-  compactContext, inlineSnapshots, noteCommand, REFUSED, runShell, type Message,
+  compactContext, inlineSnapshots, noteCommand, plainTextPayload, REFUSED, runShell, type Message,
 } from "./runtime.ts";
 import {
   appAccessMessage, appRefused, DESKTOP_HELPER, DESKTOP_TOOLS, DesktopGrants, DesktopHelper, hostsIn, NAVIGATION_REFUSED,
@@ -357,4 +357,5 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("context", (event) => ({ messages: compactContext(event.messages as Message[]) as any }));
+  pi.on("before_provider_request", (event) => plainTextPayload(event.payload));
 }
