@@ -1,14 +1,14 @@
 import AppKit
 import SwiftUI
 
-private let accent = JAISBrand.green
+private let accent = JAISBrand.accent
 
 private struct PanelMaterial: View {
     var body: some View {
         RoundedRectangle(cornerRadius: 22, style: .continuous)
             .fill(.ultraThinMaterial)
             .overlay(RoundedRectangle(cornerRadius: 22).fill(JAISBrand.background.opacity(0.94)))
-            .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(JAISBrand.green.opacity(0.20), lineWidth: 0.7))
+            .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(.white.opacity(0.16), lineWidth: 0.7))
     }
 }
 
@@ -16,7 +16,8 @@ struct RecordingCapsule: View {
     @ObservedObject var state: TurnState
     var body: some View {
         HStack(spacing: 12) {
-            JAISArtwork().frame(width: 20, height: 20)
+            Text("Jais").font(JAISBrand.display(14)).tracking(-0.4).foregroundStyle(.white)
+                .environment(\.layoutDirection, .leftToRight)
             TimelineView(.animation(minimumInterval: 0.07)) { context in
                 let phase = context.date.timeIntervalSinceReferenceDate
                 HStack(spacing: 3) {
@@ -61,14 +62,10 @@ struct ResultBubble: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 9) {
-                ZStack {
-                    Circle().fill(accent.opacity(0.13)).frame(width: 27, height: 27)
-                    JAISArtwork().frame(width: 18, height: 18)
-                }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(preview ? L("JAIS VOICE · PREVIEW") : "JAIS VOICE")
-                        .font(.system(size: 10, weight: .bold, design: .rounded)).tracking(1.8)
-                        .foregroundStyle(.white.opacity(0.92))
+                        .font(JAISBrand.display(11)).tracking(1.4)
+                        .foregroundStyle(.white)
                     Text(state.stageLabel).font(.system(size: 11)).foregroundStyle(.white.opacity(0.54))
                 }
                 Spacer(minLength: 4)
@@ -157,7 +154,7 @@ struct ResultBubble: View {
                             }
                         }
                         .padding(state.awaitingClarification ? 12 : 0)
-                        .background(accent.opacity(state.awaitingClarification ? 0.10 : 0), in: RoundedRectangle(cornerRadius: 12))
+                        .background(accent.opacity(state.awaitingClarification ? 0.07 : 0), in: RoundedRectangle(cornerRadius: 12))
                     }
                     Color.clear.frame(height: 1).id("latest-output")
                 }
@@ -226,7 +223,7 @@ struct ResultBubble: View {
 
     private func naturalText(_ text: String, size: CGFloat) -> some View {
         Text(.init(text))
-            .font(.system(size: size)).foregroundStyle(.white.opacity(0.9)).tint(accent)
+            .font(.system(size: size)).foregroundStyle(.white.opacity(0.9)).tint(JAISBrand.link)
             .lineSpacing(4).textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -236,8 +233,8 @@ struct ResultBubble: View {
     private var diffText: Text {
         TranscriptDiff.words(original: state.raw, cleaned: state.cleaned).reduce(Text("")) { result, word in
             result + Text(word.text + " ")
-                .strikethrough(word.removed, pattern: .solid, color: .orange.opacity(0.8))
-                .foregroundColor(word.removed ? .orange.opacity(0.7) : .white.opacity(0.65))
+                .strikethrough(word.removed, pattern: .solid, color: .white.opacity(0.55))
+                .foregroundColor(word.removed ? .white.opacity(0.38) : .white.opacity(0.75))
         }
     }
 
@@ -265,12 +262,12 @@ struct ResultBubble: View {
                     Text(L("Allow")).font(.system(size: 12, weight: .semibold))
                         .padding(.horizontal, 14).padding(.vertical, 6)
                         .background(accent, in: RoundedRectangle(cornerRadius: 7))
-                }.buttonStyle(.plain).foregroundStyle(JAISBrand.forest)
+                }.buttonStyle(.plain).foregroundStyle(JAISBrand.ink)
             }
         }
         .padding(12)
-        .background(accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(accent.opacity(0.35), lineWidth: 0.7))
+        .background(accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(accent.opacity(0.28), lineWidth: 0.7))
     }
 
     private func actionRow(_ action: ToolAction) -> some View {
@@ -282,7 +279,7 @@ struct ResultBubble: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: action.errorCode != nil ? "exclamationmark.circle.fill" : (action.finished ? "checkmark.circle.fill" : "arrow.up.right.circle"))
-                        .foregroundStyle(action.errorCode != nil ? Color(red: 1, green: 0.48, blue: 0.44) : (action.finished ? JAISBrand.green : accent))
+                        .foregroundStyle(action.errorCode != nil ? Color(red: 1, green: 0.48, blue: 0.44) : (action.finished ? accent : accent.opacity(0.55)))
                     Text(action.label + (action.errorCode != nil ? L(" · failed") : "")).font(.system(size: 12))
                     Spacer()
                     Image(systemName: state.expandedTools.contains(action.id) ? "chevron.up" : "chevron.down").font(.system(size: 8))

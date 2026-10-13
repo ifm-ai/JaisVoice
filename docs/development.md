@@ -72,3 +72,11 @@ These CI builds also get `JAISUpdateFeedURL`, the GitHub API URL of the latest r
 ## Interface language
 
 Interface strings are English keys passed to `L(...)`. `macos/Resources/fr.lproj/Localizable.strings` and `ar.lproj` map them to French and Arabic, and `en.lproj` lists them for English; English is the default. The Arabic interface lays its windows, bubbles and menus out right to left; user and model text keeps its own direction.
+
+## Brand
+
+The interface follows the Jais 3 identity: black and white only, with the type wordmark "Jais 3" over "جيس" and no graphic mark. Colors and fonts live in `macos/Sources/JAISVoice/JAISBrand.swift`: Helvetica Neue Bold for the Latin display text, the system Arabic font (SF Arabic) for the Arabic, both shipped with macOS. Orange and red stay reserved for warnings and errors. Regenerate the app icon after changing the wordmark:
+
+```bash
+swift scripts/make_jais_icon.swift /tmp/JAIS.iconset && iconutil -c icns /tmp/JAIS.iconset -o macos/Resources/JAISVoice.icns
+```
