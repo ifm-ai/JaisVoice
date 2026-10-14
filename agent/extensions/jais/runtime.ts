@@ -25,6 +25,9 @@ export const CHROME = ["/Applications", join(homedir(), "Applications")]
 /** Where the agent's helpers run; Pi itself runs from the home folder, for the file tools. */
 export const WORKSPACE = process.env.JAIS_AGENT_WORKSPACE || process.cwd();
 export const BROWSER_OUTPUT = join(RUNTIME, "browser-output", String(process.pid));
+/** Skills the user adds or edits without rebuilding the app; one named like an app skill replaces it. */
+export const USER_SKILLS = process.env.JAIS_USER_SKILLS || join(RUNTIME, "skills");
+export const APP_SKILLS = process.env.JAIS_APP_SKILLS || join(ROOT, "agent/skills");
 
 export const MAX_ACTIONS = 50;
 export const SHELL_SECONDS = 30;

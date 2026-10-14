@@ -102,6 +102,8 @@ import AVFoundation
                       "the agent launcher gets the API in its environment")
             try check(LocalPipeline.asrBody(audio: Data(), language: nil)["language"] == nil
                       && LocalPipeline.asrBody(audio: Data(), language: "fr")["language"] as? String == "fr", "automatic mode omits the language")
+            try check(TurnState.withoutToolMarkup("Slide 6.<ifm|tool_calls>\n<ifm|tool_call>shell_execute") == "Slide 6."
+                      && TurnState.withoutToolMarkup(" Done. ") == "Done.", "tool-call markup written as text is never shown")
             let action = ActionRequest(title: "macOS command", message: #"{"reason":"Open Safari","details":"open -a Safari"}"#)
             try check(action == ActionRequest(tool: "macOS command", reason: "Open Safari", details: "open -a Safari"), "action request parsed from the extension")
             try check(ActionRequest(title: "Command", message: "ls").details == "ls", "a non-JSON message is shown as is")

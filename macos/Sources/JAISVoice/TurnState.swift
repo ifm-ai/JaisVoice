@@ -163,11 +163,16 @@ struct ConversationExchange: Identifiable {
     func interimText(before index: Int) -> String {
         let end = min(actions[index].textOffset, response.count)
         let start = index == 0 ? 0 : min(actions[index - 1].textOffset, end)
-        return String(response.dropFirst(start).prefix(end - start)).trimmingCharacters(in: .whitespacesAndNewlines)
+        return Self.withoutToolMarkup(String(response.dropFirst(start).prefix(end - start)))
     }
     /// The answer written after the last action; the whole response when no action ran.
     var finalResponse: String {
-        String(response.dropFirst(min(actions.last?.textOffset ?? 0, response.count))).trimmingCharacters(in: .whitespacesAndNewlines)
+        Self.withoutToolMarkup(String(response.dropFirst(min(actions.last?.textOffset ?? 0, response.count))))
+    }
+    /// Tool calls a model wrote as text stream in before the agent recovers and runs them: never show their markup.
+    static func withoutToolMarkup(_ text: String) -> String {
+        let cut = text.range(of: "<ifm|tool_call").map { String(text[..<$0.lowerBound]) } ?? text
+        return cut.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     /// Where the actions of this turn ran: the browser, the Mac, or both.
     var actionsTag: String {
