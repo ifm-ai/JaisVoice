@@ -82,6 +82,8 @@ bullets=()
 for line in "${content[@]}"; do bullets+=("${line##[[:space:]]#[•*-][[:space:]]#}"); done
 body=${(F)bullets}
 [[ $action == (chart|table) ]] && body=${(F)rows}
+# An Arabic table reads from the right: its labels column goes on the right.
+[[ $action == table && "$title$body" == *[ء-ي]* ]] && kind=rtl
 
 osascript - "$action" "$kind" "$title" "$body" "$notes" <<'APPLESCRIPT'
 on split(theText, delimiter)
@@ -253,14 +255,25 @@ on run {action, kind, slideTitle, body, notes}
     else if action is "table" then
       set rowCount to count of rowTexts
       set columnCount to count of headerCells
-      tell s to set tb to make new table with properties {row count:rowCount, column count:columnCount, header row count:1, header column count:1}
+      set rtl to kind is "rtl"
+      set headerColumns to 1
+      if rtl then set headerColumns to 0
+      tell s to set tb to make new table with properties {row count:rowCount, column count:columnCount, header row count:1, header column count:headerColumns}
       repeat with r from 1 to rowCount
         set rowCells to my split(item r of rowTexts, tab)
+        repeat while (count of rowCells) < columnCount
+          set end of rowCells to ""
+        end repeat
+        if rtl then set rowCells to reverse of rowCells
         repeat with k from 1 to columnCount
-          set cellText to ""
-          if k ≤ (count of rowCells) then set cellText to item k of rowCells
-          set value of cell k of row r of tb to cellText
-          set font size of cell k of row r of tb to 30
+          set c to cell k of row r of tb
+          set value of c to item k of rowCells
+          set font size of c to 30
+          if rtl then
+            set alignment of c to right
+            -- Keynote styles header columns only on the left: mark the labels column on the right.
+            if k is columnCount and r > 1 then set background color of c to {58000, 61000, 65535}
+          end if
         end repeat
       end repeat
       set position of tb to {W * 0.06, contentTop}

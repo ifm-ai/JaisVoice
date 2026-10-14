@@ -164,9 +164,12 @@ struct PipelineFailure: Error {
         }
     }
 
+    /// A typed request may be a whole task brief, such as a GDPval prompt in Arabic (about 2 bytes per letter).
+    static let maxTypedBytes = 16_000
+
     /// Explicit text input: skips ASR only; the cleaner (when enabled) and agent still run.
     func sendText(_ text: String, turnID: String, options: TurnOptions) async throws {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.utf8.count <= 4000, !text.contains("\0") else {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.utf8.count <= Self.maxTypedBytes, !text.contains("\0") else {
             throw VoiceError.message(L("The text is empty or too long."))
         }
         await startTurn(turnID) { pipeline in
