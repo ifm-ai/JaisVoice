@@ -13,6 +13,9 @@
 "Type a request without a microphone…" = "Saisir une demande sans microphone…";
 "Hold to talk" = "Maintenir pour parler";
 "Transcription language" = "Langue de transcription";
+"Correct transcripts" = "Corriger les transcriptions";
+"The model removes hesitations and self-corrections before the assistant acts." = "Le modèle retire les hésitations et les reformulations avant que l’assistant agisse.";
+"The assistant receives the transcript exactly as recognized." = "L’assistant reçoit la transcription telle qu’elle a été reconnue.";
 "These settings will be available when the request finishes." = "Ces réglages seront disponibles à la fin de la demande.";
 "Requesting access…" = "Autorisation en cours…";
 "Microphone access allowed" = "Microphone autorisé";

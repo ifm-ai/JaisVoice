@@ -21,7 +21,8 @@ struct PipelineFailure: Error {
 
 /// One turn: local ASR → transcript cleanup (gateway) → Pi agent, in this app.
 ///
-/// Only the cleaned text reaches the agent. A new turn, or `cancel`, aborts the
+/// Only the cleaned text reaches the agent, or the raw transcript when cleanup is
+/// turned off in the settings. A new turn, or `cancel`, aborts the
 /// previous one; events of a cancelled turn are never emitted.
 @MainActor final class LocalPipeline {
     static let gatewayURL = URL(string: ProcessInfo.processInfo.environment["JAIS_MLX_URL"] ?? "http://127.0.0.1:8788")!
@@ -141,14 +142,16 @@ struct PipelineFailure: Error {
 
     // MARK: Turns
 
-    /// What a turn needs besides its input: the conversation, the shared model size
-    /// and how long the agent thinks (Pi's thinking level, the template's reasoning_effort).
+    /// What a turn needs besides its input: the conversation, the shared model size,
+    /// how long the agent thinks (Pi's thinking level, the template's reasoning_effort)
+    /// and whether the transcript is cleaned up first.
     struct TurnOptions {
         var conversationID: String
         var modelSize: String
         var reasoningEffort = ReasoningEffort.low.rawValue
         /// The OpenAI-compatible API used instead of the local model, if any.
         var endpoint: RemoteEndpoint? = nil
+        var cleanup = true
     }
 
     func sendWAV(_ data: Data, turnID: String, language: String?, options: TurnOptions) async throws {
@@ -161,7 +164,7 @@ struct PipelineFailure: Error {
         }
     }
 
-    /// Explicit text input: skips ASR only; the cleaner and agent still run.
+    /// Explicit text input: skips ASR only; the cleaner (when enabled) and agent still run.
     func sendText(_ text: String, turnID: String, options: TurnOptions) async throws {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.utf8.count <= 4000, !text.contains("\0") else {
             throw VoiceError.message(L("The text is empty or too long."))
@@ -288,6 +291,11 @@ struct PipelineFailure: Error {
     }
 
     private func refineAndAct(_ raw: String, turnID: String, options: TurnOptions) async throws {
+        guard options.cleanup else {
+            emit(turnID, "status", stage: "acting")
+            try await act(raw, turnID: turnID, options: options)
+            return
+        }
         emit(turnID, "status", stage: "refining")
         let started = Date()
         let cleaned = try await clean(raw, options: options)

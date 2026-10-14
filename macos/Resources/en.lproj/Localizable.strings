@@ -13,6 +13,9 @@
 "Type a request without a microphone…" = "Type a request without a microphone…";
 "Hold to talk" = "Hold to talk";
 "Transcription language" = "Transcription language";
+"Correct transcripts" = "Correct transcripts";
+"The model removes hesitations and self-corrections before the assistant acts." = "The model removes hesitations and self-corrections before the assistant acts.";
+"The assistant receives the transcript exactly as recognized." = "The assistant receives the transcript exactly as recognized.";
 "These settings will be available when the request finishes." = "These settings will be available when the request finishes.";
 "Requesting access…" = "Requesting access…";
 "Microphone access allowed" = "Microphone access allowed";

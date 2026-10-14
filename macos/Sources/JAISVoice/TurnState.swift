@@ -157,6 +157,8 @@ struct ConversationExchange: Identifiable {
     var onBegin: (() -> Void)?
 
     var awaitingClarification: Bool { stage == "awaiting_clarification" }
+    /// What the agent received: the corrected transcript, or the raw one when cleanup is off.
+    var prompt: String { cleaned.isEmpty ? raw : cleaned }
     /// The text the model wrote between the previous action and this one.
     func interimText(before index: Int) -> String {
         let end = min(actions[index].textOffset, response.count)
@@ -223,8 +225,8 @@ struct ConversationExchange: Identifiable {
     }
     @discardableResult func begin(recording: Bool = false, continuingConversation: Bool = false) -> String {
         if continuingConversation {
-            if let previous = turnID, !cleaned.isEmpty || !response.isEmpty {
-                history.append(ConversationExchange(id: previous, prompt: cleaned, response: finalResponse, error: error))
+            if let previous = turnID, !prompt.isEmpty || !response.isEmpty {
+                history.append(ConversationExchange(id: previous, prompt: prompt, response: finalResponse, error: error))
             }
         } else {
             conversationID = UUID().uuidString
