@@ -11,9 +11,10 @@ anything: deck.sh does it all.
 
 1. Read the sources with the browser tools. The browser cannot read the text of a PDF: for a PDF
    source, search for an HTML page with the same content and say which source you could not read.
-2. Plan every slide first. A good deck mixes slide kinds: a table to compare, a chart for numbers
-   that change, a big fact for the one figure to remember, a quote from a source, and bullet slides
-   in between. Use only figures from your sources, or label an example as hypothetical.
+2. Plan every slide first, choosing its kind. A deck of 6 slides or more has at least one table
+   (to compare), one chart (for numbers over time or shares) and one big fact (the figure to
+   remember); add a quote or section slides if they help, and use bullet slides for the rest. Use
+   only figures from your sources, or label a worked example as hypothetical.
 3. Run one command per slide. Text goes between `<<'EOF'` and `EOF` exactly as written: quotes,
    apostrophes and $ need no escaping. Any slide can end with a line `---` and the speaker notes.
 
@@ -47,8 +48,8 @@ EOF
 ```
 
 Chart: `chart bar`, `chart line` or `chart pie`. The title, a header row of categories, then one
-row per series with its numbers (`$`, `%` and thousands commas are fine). For a pie, one row per
-slice with one number.
+row per series with its numbers (`$`, `%` and thousands commas are fine). Give several categories,
+such as years, so the bars or lines show a change. For a pie, one row per slice with one number.
 
 ```
 zsh /full/path/to/deck.sh chart bar <<'EOF'
@@ -59,7 +60,8 @@ Growth of $100,000 (hypothetical, 4% vs. 1.5% net)
 EOF
 ```
 
-Big fact: the number or short phrase, then what it means. Quote: the quote, then its source.
+Big fact: the number alone on the first line (such as 7% or $7,000), then one line saying what it
+means. Quote: the quote, then its source.
 Section: one title that opens a new part.
 
 ```
