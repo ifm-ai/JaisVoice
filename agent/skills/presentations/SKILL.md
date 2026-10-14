@@ -6,7 +6,7 @@ description: Create a presentation in Keynote, slide by slide so the user sees i
 # Presentations in Keynote
 
 `deck.sh`, next to this file, builds the deck in Keynote: call it with shell_execute and its full
-path, one command per slide. Never write AppleScript, script files or python, and never install
+path in double quotes (the path may contain spaces), one command per slide. Never write AppleScript, script files or python, and never install
 anything: deck.sh does it all.
 
 ## 1. Sources
@@ -38,7 +38,7 @@ it did and reminds you while the deck still lacks a chart or a table.
 ### Title (first)
 
 ```
-zsh /full/path/to/deck.sh new <<'EOF'
+zsh "/full/path/to/deck.sh" new <<'EOF'
 Deck title
 Subtitle
 EOF
@@ -50,7 +50,7 @@ The title, then one row per line with `|` between the cells. The first row holds
 headers and the first column the row labels. Keep cells short (a few words); 3 to 7 rows.
 
 ```
-zsh /full/path/to/deck.sh table <<'EOF'
+zsh "/full/path/to/deck.sh" table <<'EOF'
 CD vs. variable annuity
 | Feature | CD | Variable annuity |
 | Insurance | FDIC up to $250,000 | Not FDIC-insured |
@@ -69,7 +69,7 @@ The title, then a header row with the categories (for example years), then one r
 commas. Give 3 to 8 categories and 1 to 4 series; a legend is added with the series names.
 
 ```
-zsh /full/path/to/deck.sh chart bar <<'EOF'
+zsh "/full/path/to/deck.sh" chart bar <<'EOF'
 Growth of $100,000 (hypothetical: 4% vs. 1.5% after fees)
 | | Year 1 | Year 3 | Year 5 | Year 10 |
 | CD | 104,000 | 112,486 | 121,665 | 148,024 |
@@ -80,7 +80,7 @@ EOF
 A pie: one row per slice, one number each.
 
 ```
-zsh /full/path/to/deck.sh chart pie <<'EOF'
+zsh "/full/path/to/deck.sh" chart pie <<'EOF'
 Yearly costs of a variable annuity (hypothetical)
 | | Share of yearly cost |
 | Mortality and expense | 1.25 |
@@ -94,7 +94,7 @@ EOF
 The number alone on the first line (such as 7% or $7,000), then one line saying what it means.
 
 ```
-zsh /full/path/to/deck.sh fact <<'EOF'
+zsh "/full/path/to/deck.sh" fact <<'EOF'
 7%
 Typical first-year surrender charge (FINRA)
 EOF
@@ -106,7 +106,7 @@ Bullets: the title, then 3 to 5 short bullets, one per line. Quote: the quote, t
 Section: one title that opens a new part.
 
 ```
-zsh /full/path/to/deck.sh slide <<'EOF'
+zsh "/full/path/to/deck.sh" slide <<'EOF'
 Slide title
 First point
 Second point
@@ -116,14 +116,14 @@ EOF
 ```
 
 ```
-zsh /full/path/to/deck.sh quote <<'EOF'
+zsh "/full/path/to/deck.sh" quote <<'EOF'
 The quoted sentence.
 Who said it
 EOF
 ```
 
 ```
-zsh /full/path/to/deck.sh section <<'EOF'
+zsh "/full/path/to/deck.sh" section <<'EOF'
 What the regulators say
 EOF
 ```
@@ -133,7 +133,7 @@ EOF
 Once every slide is added, export to Documents with the name the user asked for:
 
 ```
-zsh /full/path/to/deck.sh export "Name.pptx"
+zsh "/full/path/to/deck.sh" export "Name.pptx"
 ```
 
 If a command fails, read its message, fix that command and run it again; keep the same deck.
