@@ -344,7 +344,7 @@ export default function (pi: ExtensionAPI) {
       if (part.type !== "text" || !browser) return part;
       let value = inlineSnapshots(part.text, BROWSER_OUTPUT, [WORKSPACE, process.cwd()]);
       if (!event.isError && name !== "browser_snapshot" && !value.includes("### Snapshot")) {
-        value += "\n[This action returned no page snapshot. Call browser_snapshot before using element references.]";
+        value += `\n[This action returned no page snapshot. Call ${BROWSER_PREFIX}browser_snapshot before using element references.]`;
       }
       changed ||= value !== part.text;
       return { ...part, text: value };
