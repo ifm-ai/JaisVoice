@@ -196,6 +196,18 @@ on run {action, kind, slideTitle, body, notes}
         end repeat
         set end of seriesValues to rowNumbers
       end repeat
+      -- One row per year and a column per product: series and categories are swapped.
+      if (count of seriesNames) > 4 and (count of categories) ≤ 4 then
+        set swappedValues to {}
+        repeat with k from 1 to count of categories
+          set valuesOfCategory to {}
+          repeat with r from 1 to count of seriesNames
+            set end of valuesOfCategory to item k of item r of seriesValues
+          end repeat
+          set end of swappedValues to valuesOfCategory
+        end repeat
+        set {seriesNames, categories, seriesValues} to {categories, seriesNames, swappedValues}
+      end if
       tell s
         if kind is "line" then
           add chart row names seriesNames column names categories data seriesValues type line_2d group by chart row
@@ -250,7 +262,19 @@ on run {action, kind, slideTitle, body, notes}
     end if
     set presenter notes of s to notes
     set current slide of d to s
-    return "Slide " & (count of slides of d) & " added (" & action & "): " & slideTitle
+    set summary to "Slide " & (count of slides of d) & " added (" & action & "): " & slideTitle
+    -- The model reads this summary after every slide: remind it of the charts and tables a deck needs.
+    if (count of slides of d) ≥ 3 then
+      set chartCount to 0
+      set tableCount to 0
+      repeat with oneSlide in slides of d
+        set chartCount to chartCount + (count of charts of oneSlide)
+        set tableCount to tableCount + (count of tables of oneSlide)
+      end repeat
+      if chartCount is 0 then set summary to summary & linefeed & "This deck has no chart yet: add one with deck.sh chart bar, line or pie for the figures from your sources."
+      if tableCount is 0 then set summary to summary & linefeed & "This deck has no table yet: add one with deck.sh table to compare the options side by side."
+    end if
+    return summary
   end tell
 end run
 APPLESCRIPT
