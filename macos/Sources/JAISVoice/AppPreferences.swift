@@ -84,6 +84,29 @@ enum MicrophoneAuthorization: Equatable {
     }
 }
 
+/// An OpenAI-compatible API that replaces the local Jais 3 model for cleanup and the agent.
+struct RemoteEndpoint: Equatable {
+    var baseURL: String
+    var model: String
+    var apiKey = ""
+    /// Whether the model accepts `reasoning_effort`: the Reasoning setting is then sent.
+    var reasoning = false
+
+    /// "https://host/v1" without a trailing slash, when it is an http(s) URL with a host.
+    static func normalizedBaseURL(_ value: String) -> String? {
+        var text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        while text.hasSuffix("/") { text.removeLast() }
+        guard let url = URL(string: text), ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+              !(url.host ?? "").isEmpty else { return nil }
+        return text
+    }
+
+    var host: String { URL(string: baseURL)?.host ?? baseURL }
+
+    /// The gateway's `/v1/clean` endpoint field.
+    var cleanupBody: [String: Any] { ["base_url": baseURL, "model": model, "api_key": apiKey] }
+}
+
 /// Persist the shortcut, languages, model size and action permission.
 /// Permission is a live macOS state, not an application preference.
 @MainActor final class AppPreferences: ObservableObject {
@@ -92,8 +115,14 @@ enum MicrophoneAuthorization: Equatable {
     static let modelSizeKey = "sharedModelSize"
     static let actionPermissionKey = "actionPermission"
     static let reasoningEffortKey = "reasoningEffort"
+    static let remoteEnabledKey = "remoteAPIEnabled"
+    static let remoteBaseURLKey = "remoteAPIBaseURL"
+    static let remoteModelKey = "remoteAPIModel"
+    static let remoteReasoningKey = "remoteAPIReasoning"
     @Published private(set) var interfaceLanguage: InterfaceLanguage
     private let defaults: UserDefaults
+    /// The API key stays out of the preferences, in a file only this user can read.
+    private let apiKeyURL: URL
 
     @Published private(set) var shortcutChoice: Int
     @Published private(set) var asrLanguage: String
@@ -101,6 +130,9 @@ enum MicrophoneAuthorization: Equatable {
     @Published private(set) var modelSize: String
     @Published private(set) var actionPermission: ActionPermission
     @Published private(set) var reasoningEffort: ReasoningEffort
+    /// Advanced: an OpenAI-compatible API, kept when it is switched off.
+    @Published private(set) var remoteEnabled: Bool
+    @Published private(set) var remoteDraft: RemoteEndpoint
     @Published var microphoneStatus: MicrophoneAuthorization = .notDetermined
     /// macOS permissions to read and use other apps, and to read text drawn in their windows.
     @Published var accessibilityTrusted = false
@@ -111,15 +143,31 @@ enum MicrophoneAuthorization: Equatable {
     var asrLanguageCode: String? { asrLanguage.isEmpty ? nil : asrLanguage }
     var microphoneAuthorized: Bool { microphoneStatus == .authorized }
     var shortcutLabel: String { ShortcutChoice.choices[shortcutChoice].label }
+    /// The API cleanup and the agent use instead of the local model, when enabled and complete.
+    var remoteEndpoint: RemoteEndpoint? {
+        remoteEnabled && !remoteDraft.baseURL.isEmpty && !remoteDraft.model.isEmpty ? remoteDraft : nil
+    }
 
-    init(defaults: UserDefaults = .standard) {
+    nonisolated static var defaultAPIKeyURL: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Jais Voice/remote-api-key")
+    }
+
+    init(defaults: UserDefaults = .standard, apiKeyURL: URL = AppPreferences.defaultAPIKeyURL) {
         self.defaults = defaults
+        self.apiKeyURL = apiKeyURL
         interfaceLanguage = .resolved(defaults.string(forKey: InterfaceLanguage.preferenceKey))
         shortcutChoice = Self.normalizedShortcutChoice(defaults.integer(forKey: Self.shortcutKey))
         asrLanguage = Self.normalizedASRLanguage(defaults.string(forKey: Self.asrLanguageKey))
         modelSize = Self.normalizedModel(defaults.string(forKey: Self.modelSizeKey))
         actionPermission = defaults.string(forKey: Self.actionPermissionKey).flatMap(ActionPermission.init(rawValue:)) ?? .ask
         reasoningEffort = defaults.string(forKey: Self.reasoningEffortKey).flatMap(ReasoningEffort.init(rawValue:)) ?? .low
+        remoteEnabled = defaults.bool(forKey: Self.remoteEnabledKey)
+        remoteDraft = RemoteEndpoint(
+            baseURL: defaults.string(forKey: Self.remoteBaseURLKey).flatMap(RemoteEndpoint.normalizedBaseURL) ?? "",
+            model: defaults.string(forKey: Self.remoteModelKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            apiKey: (try? String(contentsOf: apiKeyURL, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            reasoning: defaults.bool(forKey: Self.remoteReasoningKey))
         refreshMicrophoneStatus()
         refreshAppControlStatus()
     }
@@ -153,6 +201,39 @@ enum MicrophoneAuthorization: Equatable {
     func setReasoningEffort(_ effort: ReasoningEffort) {
         reasoningEffort = effort
         defaults.set(effort.rawValue, forKey: Self.reasoningEffortKey)
+    }
+
+    /// Save the API settings; enabling requires a valid http(s) URL and a model.
+    func setRemote(enabled: Bool, endpoint: RemoteEndpoint) throws {
+        let model = endpoint.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        let apiKey = endpoint.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedURL = endpoint.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let baseURL = RemoteEndpoint.normalizedBaseURL(trimmedURL)
+        if enabled || !trimmedURL.isEmpty, baseURL == nil {
+            throw VoiceError.message(L("Enter the API's base URL, starting with https:// or http://."))
+        }
+        if enabled && model.isEmpty { throw VoiceError.message(L("Enter the model name the API expects.")) }
+        try writeAPIKey(apiKey)
+        remoteDraft = RemoteEndpoint(baseURL: baseURL ?? "", model: model, apiKey: apiKey, reasoning: endpoint.reasoning)
+        remoteEnabled = enabled
+        defaults.set(enabled, forKey: Self.remoteEnabledKey)
+        defaults.set(remoteDraft.baseURL, forKey: Self.remoteBaseURLKey)
+        defaults.set(model, forKey: Self.remoteModelKey)
+        defaults.set(endpoint.reasoning, forKey: Self.remoteReasoningKey)
+    }
+
+    private func writeAPIKey(_ key: String) throws {
+        let manager = FileManager.default
+        if key.isEmpty {
+            if manager.fileExists(atPath: apiKeyURL.path) { try manager.removeItem(at: apiKeyURL) }
+            return
+        }
+        try manager.createDirectory(at: apiKeyURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        guard manager.createFile(atPath: apiKeyURL.path, contents: Data(key.utf8), attributes: [.posixPermissions: 0o600]) else {
+            throw VoiceError.message(L("The API key could not be saved."))
+        }
+        // createFile keeps the permissions of a file it replaces.
+        try manager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: apiKeyURL.path)
     }
 
     func setModelSize(_ value: String) {

@@ -1,7 +1,8 @@
 """Local MLX gateway: one resident Jais 3 model, shared by transcript cleanup and the agent.
 
 `/v1/clean` cleans one transcript; `/v1/chat/completions` (streamed, OpenAI
-style) serves the Pi agent. A single executor thread runs every load and
+style) serves the Pi agent. When the app points the language model at an
+OpenAI-compatible API, `/v1/clean` forwards the same prompt there instead. A single executor thread runs every load and
 generation, so Metal work never races. A disconnected client cancels its
 queued work, or stops its generation at the next token.
 """
@@ -24,6 +25,7 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
+import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import model_store
@@ -41,6 +43,9 @@ CLEANER_CONTEXT, AGENT_CONTEXT = 4096, 32768
 AGENT_TEMPERATURE, AGENT_TOP_P, AGENT_TOP_K = 0.7, 0.95, 20
 # A request may ask for more output than fits; it gets what the context leaves.
 MIN_OUTPUT_TOKENS = 256
+# JAIS_MODEL_SIZE when the app uses a remote API: no local language model is loaded.
+NO_LOCAL_MODEL = "none"
+REMOTE_TIMEOUT = 120
 
 
 def prepare_prompt(tokenizer, messages, tools, effort: str):
@@ -118,16 +123,20 @@ class Worker:
             return {"status": self.status, "message": self.message, "models": models}
 
     def start(self):
-        """Load the size the app asked for when installed, else the first installed one."""
+        """Load the size the app asked for when installed, else the first installed one.
+
+        Nothing is loaded when the app uses a remote API for the language model.
+        """
         try:
             base = model_store.models_dir()
             installed = [size for size, entry in model_store.language_models().items() if model_store.is_installed(entry, base)]
             preferred = os.environ.get("JAIS_MODEL_SIZE", "3.7B")
-            size = preferred if preferred in installed else (installed[0] if installed else None)
+            remote = preferred == NO_LOCAL_MODEL
+            size = None if remote else preferred if preferred in installed else (installed[0] if installed else None)
             if size:
                 self.change(size, "load")
             with self.lock:
-                self.status, self.message = "ready", "Ready" if size else "No language model installed"
+                self.status, self.message = "ready", "Ready" if size or remote else "No language model installed"
         except Exception as exc:
             logger.exception("MLX model loading failed")
             with self.lock:
@@ -349,14 +358,62 @@ async def completions(body: CompletionRequest, request: Request):
     return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
 
+class RemoteEndpoint(BaseModel):
+    """An OpenAI-compatible API chosen in the app's advanced settings."""
+    model_config = ConfigDict(extra="forbid")
+    base_url: str = Field(pattern=r"^https?://", max_length=2048)
+    model: str = Field(min_length=1, max_length=256)
+    api_key: str = Field(default="", max_length=4096)
+
+
 class CleanRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     text: str = Field(min_length=1, max_length=4000)
     model_size: Size | None = None
+    endpoint: RemoteEndpoint | None = None
 
 
 def clean_failure(status: int, code: str, message: str) -> HTTPException:
     return HTTPException(status, {"code": code, "message": message})
+
+
+def remote_messages(text: str) -> list[dict]:
+    """The cleanup prompt without Jais 3's template fields, which other APIs may refuse."""
+    return [{"role": message["role"], "content": message["content"]} for message in cleaner_messages(text)]
+
+
+def remote_error(response: httpx.Response) -> str:
+    """The API's own message: its JSON error, an HTML page's title, or the start of its text."""
+    try:
+        body = response.json()
+        error = body.get("error") or body.get("detail")
+        detail = error.get("message") if isinstance(error, dict) else error
+    except (ValueError, AttributeError):
+        title = re.search(r"<title>(.*?)</title>", response.text, re.IGNORECASE | re.DOTALL)
+        detail = title.group(1) if title else response.text
+    detail = " ".join(str(detail or response.reason_phrase).split())
+    return f"The API answered {response.status_code}: {detail[:300]}"
+
+
+async def remote_clean(text: str, endpoint: RemoteEndpoint) -> tuple[str, str | None]:
+    """One greedy, non-streamed completion; returns its content and finish reason."""
+    headers = {"Authorization": f"Bearer {endpoint.api_key}"} if endpoint.api_key else {}
+    body = {"model": endpoint.model, "messages": remote_messages(text), "temperature": 0, "stream": False}
+    try:
+        async with httpx.AsyncClient(timeout=REMOTE_TIMEOUT) as client:
+            response = await client.post(endpoint.base_url.rstrip("/") + "/chat/completions", json=body, headers=headers)
+    except httpx.HTTPError as exc:
+        raise clean_failure(502, "cleaner_unavailable", f"Cleanup failed: the API could not be reached ({type(exc).__name__}).") from exc
+    if response.status_code != 200:
+        raise clean_failure(502, "cleaner_unavailable", "Cleanup failed. " + remote_error(response))
+    try:
+        choice = response.json()["choices"][0]
+        content = choice["message"].get("content") or ""
+    except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+        raise clean_failure(502, "cleaner_unavailable", "Cleanup failed: the API returned an unexpected response.") from exc
+    # Reasoning models served without a reasoning parser put their thoughts first.
+    content = re.sub(r"^\s*<think>.*?</think>", "", content, flags=re.DOTALL)
+    return content, choice.get("finish_reason")
 
 
 @app.post("/v1/clean")
@@ -366,9 +423,12 @@ async def clean(body: CleanRequest, request: Request):
     Incomplete or empty corrections are refused; the raw transcript is never
     forwarded as a fallback.
     """
-    job = Job(body.model_size or worker.loaded_size or "", cleaner_messages(body.text), [], "low", 2048, 0.0, 0.95, 0, CLEANER_CONTEXT)
-    started = time.perf_counter()
     incomplete = clean_failure(422, "cleaner_incomplete", "The corrector did not finish cleanup. The request was not executed.")
+    started = time.perf_counter()
+    if body.endpoint:
+        text, finish = await remote_clean(body.text, body.endpoint)
+        return cleaned(text, finish, started, incomplete)
+    job = Job(body.model_size or worker.loaded_size or "", cleaner_messages(body.text), [], "low", 2048, 0.0, 0.95, 0, CLEANER_CONTEXT)
     try:
         next_event, release = await begin(job, request)
     except HTTPException as exc:
@@ -382,8 +442,12 @@ async def clean(body: CleanRequest, request: Request):
                 raise incomplete
     finally:
         release()
-    text = data["content"].strip()
-    if data["finish_reason"] != "stop":
+    return cleaned(data["content"], data["finish_reason"], started, incomplete)
+
+
+def cleaned(content: str, finish: str | None, started: float, incomplete: HTTPException) -> dict:
+    text = content.strip()
+    if finish != "stop":
         raise incomplete
     if not text:
         raise clean_failure(422, "cleaner_empty", "The corrector returned no corrected text. The request was not executed.")

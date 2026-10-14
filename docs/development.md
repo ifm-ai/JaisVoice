@@ -61,7 +61,7 @@ node --test agent/
 "outputs/Jais Voice.app/Contents/MacOS/JAISVoice" --smoke-text "What is the capital of France?"
 ```
 
-`--smoke-text` and `--smoke-file clip.wav` run the real pipeline with the installed models and print `JAIS_SMOKE_RESULT=`. `JAIS_ACTION_PERMISSION=never|ask|always` overrides the action setting for these runs. `--render-preview` and `--render-settings` export screenshots of the bubble and the settings; add `--settings-tab general|assistant|models` to pick the settings tab.
+`--smoke-text` and `--smoke-file clip.wav` run the real pipeline with the installed models and print `JAIS_SMOKE_RESULT=`; repeat `--smoke-text` to run several conversations in one app process. `JAIS_ACTION_PERMISSION=never|ask|always` overrides the action setting for these runs. `--render-preview` and `--render-settings` export screenshots of the bubble and the settings; add `--settings-tab general|assistant|models` to pick the settings tab.
 
 ## Continuous integration and releases
 

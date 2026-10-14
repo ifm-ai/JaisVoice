@@ -191,12 +191,13 @@ struct ConversationExchange: Identifiable {
         }
     }
     /// Follow the services' state for the selected size; nil when they are unreachable.
-    func updateModels(_ health: ServiceHealth?, selected size: String) {
+    /// A remote API needs no local model: it is ready as soon as the services answer.
+    func updateModels(_ health: ServiceHealth?, selected size: String, remote: RemoteEndpoint? = nil) {
         modelInventory = health?.models ?? [:]
         let model = modelInventory[size]
-        modelLabel = model?.display_name ?? size
-        modelPhase = health == nil ? .unavailable : ModelLoadPhase(status: model?.status)
-        modelError = model?.error.map(ServiceDiagnostics.concise)
+        modelLabel = remote?.model ?? model?.display_name ?? size
+        modelPhase = health == nil ? .unavailable : remote != nil ? .ready : ModelLoadPhase(status: model?.status)
+        modelError = remote == nil ? model?.error.map(ServiceDiagnostics.concise) : nil
     }
     func phase(of key: String) -> ModelLoadPhase {
         modelsUnloaded ? .unloaded : ModelLoadPhase(status: modelInventory[key]?.status)

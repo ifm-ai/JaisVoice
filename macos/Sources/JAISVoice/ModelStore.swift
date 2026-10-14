@@ -63,6 +63,8 @@ struct DownloadProgress: Equatable {
     @Published private(set) var deleting: Set<String> = []
     @Published var error: String?
     @Published private(set) var loaded = false
+    /// False while a remote API replaces the local language model.
+    @Published var languageModelRequired = true
     private var processes: [String: Process] = [:]
     /// Called after a model was installed or removed.
     var onChange: ((CatalogModel) -> Void)?
@@ -75,7 +77,7 @@ struct DownloadProgress: Equatable {
     var missingDownloads: [CatalogModel] {
         var result: [CatalogModel] = []
         if let asr, !asr.installed { result.append(asr) }
-        if !languageModels.contains(where: \.installed),
+        if languageModelRequired, !languageModels.contains(where: \.installed),
            let model = languageModels.first(where: { $0.size == AppPreferences.defaultModelSize }) ?? languageModels.first {
             result.append(model)
         }
@@ -86,7 +88,7 @@ struct DownloadProgress: Equatable {
     var blockingMessage: String? {
         guard loaded else { return nil }
         if let asr, !asr.installed { return L("Transcription model not installed: download it in Models") }
-        if !languageModels.contains(where: \.installed) { return L("No language model installed: download one in Models") }
+        if languageModelRequired, !languageModels.contains(where: \.installed) { return L("No language model installed: download one in Models") }
         return nil
     }
 

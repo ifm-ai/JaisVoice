@@ -24,6 +24,7 @@ test("credentials are never read; other files can be, once approved", () => {
   assert.match(readProblem(join(home, "Library/Keychains/login.keychain-db"), home)!, /credentials/);
   assert.match(readProblem(join(home, ".zshrc"), home)!, /credentials/);
   assert.match(readProblem(join(home, "Projects/app/.env.local"), home)!, /environment file/);
+  assert.match(readProblem(join(home, "Library/Application Support/Jais Voice/remote-api-key"), home)!, /API key/);
   assert.equal(readProblem(join(home, "Documents/list.txt"), home), undefined);
   assert.equal(readProblem("/etc/hosts", home), undefined);
 });

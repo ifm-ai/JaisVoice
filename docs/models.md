@@ -46,6 +46,12 @@ Then click **Download** again: the app finds the complete files and installs a c
 
 The settings offer a single **0.9B / 3.7B / 7B** selector, shared by transcript cleanup and the agent. Both stages keep their own prompts and parameters but use the same weights, loaded once; loading another size frees the previous one. Cleanup always uses the `low` reasoning effort and greedy decoding, to reproduce the transcript faithfully. The agent uses the **Reasoning** setting (`low` by default, `medium` or `high`, which the model cards recommend but which is much slower), samples as the cards recommend for thinking mode (temperature 0.7, top-p 0.95, top-k 20), and has a 32k-token context with up to 16k tokens for its answer.
 
+## Larger models through an API
+
+**Models › Advanced settings…** opens a separate window where cleanup and the agent can use an OpenAI-compatible API instead of the local Jais 3 model, for much larger models: a hosted service (OpenAI, OpenRouter…) or your own server (vLLM, Ollama, LM Studio…). Enter the base URL ending in `/v1`, the API key (optional for local servers) and the model name, check them with **Test connection**, switch on **Use an OpenAI-compatible API** and save. Turn on **Reasoning model** only when the API accepts `reasoning_effort`: the **Reasoning** setting is then sent with each agent request.
+
+Transcription stays on the Mac, but your requests, the cleaned transcripts and everything the agent reads (web pages, files, windows) are sent to that server. While the API is on, the local language model is unloaded and none needs to be installed; switching the API off loads the selected size again. Cleanup uses the same prompt with greedy decoding (`temperature: 0`).
+
 ## Catalog entries
 
 A language model entry's `download` points to its MLX build:

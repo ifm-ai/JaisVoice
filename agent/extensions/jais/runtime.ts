@@ -260,3 +260,21 @@ function withReminder(content: any): any {
   if (last < 0) return [...content, { type: "text", text: ARABIC_REMINDER.trim() }];
   return content.map((part, index) => index === last ? { ...part, text: part.text + ARABIC_REMINDER } : part);
 }
+
+/**
+ * The provider request in Chat Completions' plainest form, which every
+ * OpenAI-compatible server accepts: text-only content as one string, and the
+ * `developer` role as `system`. Pi sends user text as content parts and
+ * instructions as `developer`; some APIs (Open WebUI) refuse both.
+ */
+export function plainTextPayload(payload: unknown): unknown {
+  const request = payload as { messages?: Message[] };
+  if (!Array.isArray(request?.messages)) return payload;
+  const messages = request.messages.map((message) => {
+    const parts = message.content;
+    const textOnly = Array.isArray(parts) && parts.every((part: any) => part?.type === "text" && typeof part.text === "string");
+    const content = textOnly ? parts.map((part: any) => part.text).join("\n") : parts;
+    return { ...message, role: message.role === "developer" ? "system" : message.role, content };
+  });
+  return { ...request, messages };
+}

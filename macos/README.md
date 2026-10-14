@@ -19,7 +19,7 @@ The bundle supports explicit validation modes:
 - `--self-test`: preferences, localization, requests, model state, turn states, app access policy, key combinations and menu matching, Arabic diff, dismissal delay, WAV and resampling. No microphone, services or models.
 - `--render-preview /path/preview.png`: renders the result bubble for an example turn, without services or inference, then quits.
 - `--render-settings /path/settings.png [--settings-tab general|assistant|models]`: the same for the settings window, with example models.
-- `--smoke-file /path/clip.wav` and `--smoke-text "…"`: real ASR → cleanup → Pi → response pipeline, without microphone capture. Prints `JAIS_SMOKE_RESULT=` with the JSON result, then quits.
+- `--smoke-file /path/clip.wav` and `--smoke-text "…"`: real ASR → cleanup → Pi → response pipeline, without microphone capture. Prints `JAIS_SMOKE_RESULT=` with the JSON result, then quits. `--smoke-text` can be repeated: each text is a turn in a new conversation, with one result line each.
 
 The same binary also serves the agent: `--desktop-helper` reads and uses other apps through the accessibility API, for the Pi extension (JSON lines on stdin/stdout, see [docs/development.md](../docs/development.md)).
 

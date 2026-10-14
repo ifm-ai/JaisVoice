@@ -14,6 +14,7 @@ import UniformTypeIdentifiers
     private let updates = UpdateChecker()
     private var actionApprover: ActionApprover!
     private var configuration: ConfigurationWindowController!
+    private var advanced: AdvancedSettingsWindowController!
     private var panels: FloatingPanels!
     private var statusItem: NSStatusItem!
     private var startupTask: Task<Void, Never>?
@@ -30,7 +31,9 @@ import UniformTypeIdentifiers
     private var serviceMenuItem: NSMenuItem?
     private var modelMenuItem: NSMenuItem?
     private var smokeFile: URL?
-    private var smokeText: String?
+    /// Each `--smoke-text` is one turn, in a new conversation; the app quits after the last.
+    private var smokeTexts: [String] = []
+    private var smokeText: String? { smokeTexts.first }
     private var smokeStarted = false
     private var smokeReported = false
     private var latestHealth: ServiceHealth?
@@ -43,9 +46,11 @@ import UniformTypeIdentifiers
     func applicationDidFinishLaunching(_ notification: Notification) {
         preview = Self.argument(after: "--render-preview") != nil || Self.argument(after: "--render-settings") != nil
         smokeFile = Self.argument(after: "--smoke-file").map { URL(fileURLWithPath: $0) }
-        smokeText = Self.argument(after: "--smoke-text")
+        smokeTexts = CommandLine.arguments.indices.dropLast().filter { CommandLine.arguments[$0] == "--smoke-text" }
+            .map { CommandLine.arguments[$0 + 1] }
         panels = FloatingPanels(state: state, preview: preview, onStop: { [weak self] in self?.stopCurrent() })
         statusItem = StatusItemPresentation.makeItem(shortcutTitle: preferences.shortcutLabel)
+        NSApplication.shared.mainMenu = Self.editMenu()
         configuration = ConfigurationWindowController(
             state: state, preferences: preferences,
             onShortcutChange: { [weak self] in self?.registerShortcut($0) },
@@ -60,8 +65,13 @@ import UniformTypeIdentifiers
             onCancelDownload: { [weak self] in self?.modelStore.cancel($0) },
             onDeleteModel: { [weak self] in self?.deleteModel($0) },
             onShowServiceLog: { [weak self] in self?.showServiceLog() },
+            onShowAdvanced: { [weak self] in self?.advanced.show() },
             onQuit: { [weak self] in self?.quit() }
         )
+        advanced = AdvancedSettingsWindowController(state: state, preferences: preferences) { [weak self] enabled, endpoint in
+            try self?.applyRemote(enabled: enabled, endpoint: endpoint)
+        }
+        modelStore.languageModelRequired = preferences.remoteEndpoint == nil
         state.objectWillChange.throttle(for: .milliseconds(150), scheduler: RunLoop.main, latest: true).sink { [weak self] _ in
             self?.updateMenu()
         }.store(in: &subscriptions)
@@ -176,7 +186,7 @@ import UniformTypeIdentifiers
     /// Show the selected model's state; the assistant is usable only while it is loaded.
     private func updateModelState() {
         guard !state.modelsUnloaded else { return }
-        state.updateModels(latestHealth, selected: preferences.modelSize)
+        state.updateModels(latestHealth, selected: preferences.modelSize, remote: preferences.remoteEndpoint)
         if latestHealth != nil && state.modelPhase != .ready {
             state.ready = false
             if latestHealth?.status == "ready" { state.serviceMessage = L("Load the selected model to continue.") }
@@ -193,7 +203,9 @@ import UniformTypeIdentifiers
             guard let self else { return }
             guard !Task.isCancelled, !self.shuttingDown else { return }
             if !self.launcher.isRunning {
-                do { try self.launcher.start(modelSize: self.preferences.modelSize) }
+                // With a remote API, the gateway keeps the local language model unloaded.
+                let size = self.preferences.remoteEndpoint == nil ? self.preferences.modelSize : "none"
+                do { try self.launcher.start(modelSize: size) }
                 catch { self.serviceFailed(error.localizedDescription); return }
             }
             while !Task.isCancelled {
@@ -218,12 +230,13 @@ import UniformTypeIdentifiers
                         return
                     } else if health.status == "ready" && self.state.modelPhase == .ready {
                         if !self.state.ready {
-                            try await self.transport.connect()
+                            try await self.transport.connect(endpoint: self.preferences.remoteEndpoint)
                             try Task.checkCancellation()
                             guard !self.state.modelsChanging, self.state.modelPhase == .ready else { continue }
                             self.state.ready = true
                         }
-                        self.state.serviceMessage = "Ready · local models loaded"
+                        self.state.serviceMessage = self.preferences.remoteEndpoint == nil
+                            ? "Ready · local models loaded" : "Ready · language model via API"
                         self.startSmokeIfNeeded()
                     } else {
                         self.state.ready = false
@@ -272,7 +285,7 @@ import UniformTypeIdentifiers
         Task { @MainActor in
             self.latestHealth = try? await self.transport.health()
             self.updateModelState()
-            guard model.installed, let size = model.size, !self.state.modelsUnloaded,
+            guard model.installed, let size = model.size, !self.state.modelsUnloaded, self.preferences.remoteEndpoint == nil,
                   self.state.phase(of: self.preferences.modelSize) != .ready else { return }
             self.preferences.setModelSize(size)
             self.changeModelMemory(size)
@@ -365,6 +378,23 @@ import UniformTypeIdentifiers
         }
     }
 
+    /// Save the advanced API settings. Switching to the API frees the local language
+    /// model; switching back loads the selected size. The agent restarts on its next turn.
+    private func applyRemote(enabled: Bool, endpoint: RemoteEndpoint) throws {
+        guard !state.isBusy else { throw VoiceError.message(L("These settings will be available when the request finishes.")) }
+        let wasRemote = preferences.remoteEndpoint != nil
+        try preferences.setRemote(enabled: enabled, endpoint: endpoint)
+        let remote = preferences.remoteEndpoint != nil
+        modelStore.languageModelRequired = !remote
+        updateModelState()
+        guard remote != wasRemote, !state.modelsUnloaded else { return }
+        if remote, let loaded = AppPreferences.modelSizes.first(where: { state.phase(of: $0) == .ready }) {
+            changeModelMemory(loaded)
+        } else if !remote, modelStore.languageModels.contains(where: { $0.size == preferences.modelSize && $0.installed }) {
+            changeModelMemory(preferences.modelSize)
+        }
+    }
+
     private func serviceFailed(_ message: String) {
         serviceRequiresRelaunch = true
         state.ready = false
@@ -374,7 +404,8 @@ import UniformTypeIdentifiers
     }
 
     private var turnOptions: LocalPipeline.TurnOptions {
-        .init(conversationID: state.conversationID, modelSize: preferences.modelSize, reasoningEffort: preferences.reasoningEffort.rawValue)
+        .init(conversationID: state.conversationID, modelSize: preferences.modelSize, reasoningEffort: preferences.reasoningEffort.rawValue,
+              endpoint: preferences.remoteEndpoint)
     }
 
     private func press() {
@@ -519,7 +550,8 @@ import UniformTypeIdentifiers
 
     private func refreshMenuStatus() {
         serviceMenuItem?.title = L(state.serviceMessage)
-        modelMenuItem?.title = L("Model · {0} — {1}", String(describing: state.modelLabel), String(describing: state.modelPhase.label))
+        let phase = preferences.remoteEndpoint != nil && state.modelPhase == .ready ? L("via API") : state.modelPhase.label
+        modelMenuItem?.title = L("Model · {0} — {1}", String(describing: state.modelLabel), String(describing: phase))
         modelMenuItem?.image = NSImage(systemSymbolName: state.modelPhase.symbolName, accessibilityDescription: state.modelPhase.label)
         modelMenuItem?.toolTip = state.modelError
     }
@@ -581,6 +613,24 @@ import UniformTypeIdentifiers
     /// `terminate` waits for shutdown tasks on the main actor (terminateLater).
     /// Called from inside a main-actor task, it would block them: run it from a
     /// run-loop source instead, as a menu action does.
+    /// A menu-bar app shows no main menu, but text fields only get ⌘X, ⌘C, ⌘V, ⌘A and
+    /// ⌘Z through its key equivalents: this hidden Edit menu provides them.
+    static func editMenu() -> NSMenu {
+        let edit = NSMenu(title: L("Edit"))
+        let items: [(String, Selector, String, NSEvent.ModifierFlags)] = [
+            (L("Undo"), Selector(("undo:")), "z", .command), (L("Redo"), Selector(("redo:")), "z", [.command, .shift]),
+            (L("Cut"), #selector(NSText.cut(_:)), "x", .command), (L("Copy"), #selector(NSText.copy(_:)), "c", .command),
+            (L("Paste"), #selector(NSText.paste(_:)), "v", .command), (L("Select All"), #selector(NSText.selectAll(_:)), "a", .command)
+        ]
+        for (title, action, key, modifiers) in items {
+            edit.addItem(withTitle: title, action: action, keyEquivalent: key).keyEquivalentModifierMask = modifiers
+        }
+        let menu = NSMenu(), item = NSMenuItem()
+        item.submenu = edit
+        menu.addItem(item)
+        return menu
+    }
+
     private static func terminateFromRunLoop() {
         RunLoop.main.perform(inModes: [.default]) { NSApplication.shared.terminate(nil) }
     }
@@ -651,11 +701,15 @@ import UniformTypeIdentifiers
         latestHealth = Self.exampleHealth
         updateModelState()
         configuration.show()
-        if let tab = Self.argument(after: "--settings-tab").flatMap(SettingsTab.init(rawValue:)) { configuration.select(tab) }
+        // `--settings-tab advanced` exports the advanced settings window instead.
+        let tab = Self.argument(after: "--settings-tab")
+        if let tab = tab.flatMap(SettingsTab.init(rawValue:)) { configuration.select(tab) }
+        let window: NSWindowController = tab == "advanced" ? advanced : configuration
+        if tab == "advanced" { advanced.show() }
         let url = URL(fileURLWithPath: Self.argument(after: "--render-settings")!)
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_000_000_000)
-            do { try configuration.renderPreview(to: url); print("Settings exported: \(url.path)") }
+            do { try window.renderPreview(to: url); print("Settings exported: \(url.path)") }
             catch { fputs("\(error.localizedDescription)\n", stderr) }
             Self.terminateFromRunLoop()
         }
@@ -713,13 +767,18 @@ import UniformTypeIdentifiers
 
     private func reportSmokeIfNeeded() {
         guard smokeStarted, !smokeReported else { return }
-        smokeReported = true
         let result: [String: Any] = ["stage": state.stage, "transcript": state.raw, "correction": state.cleaned, "response": state.response,
                                      "error": state.error ?? "", "tool_count": state.actions.count, "asr_used": smokeText == nil,
                                      "tools": state.actions.map { $0.name + " " + $0.arguments.replacingOccurrences(of: "\n", with: " ") }]
         if let data = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys, .withoutEscapingSlashes]), let text = String(data: data, encoding: .utf8) {
             print("JAIS_SMOKE_RESULT=\(text)"); fflush(stdout)
         }
+        if smokeTexts.count > 1 {
+            smokeTexts.removeFirst(); smokeStarted = false
+            Task { @MainActor in self.startSmokeIfNeeded() }
+            return
+        }
+        smokeReported = true
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             Self.terminateFromRunLoop()

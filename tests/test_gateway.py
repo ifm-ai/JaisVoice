@@ -156,3 +156,13 @@ def test_output_budget_shrinks_to_the_context_left():
     with pytest.raises(ValueError, match="Context budget exceeded"):
         gateway.output_budget(32700, 16384, 32768)
     assert gateway.output_budget(100, 50, 200) == 50
+
+
+def test_remote_mode_loads_no_local_model(store, monkeypatch):
+    _, base, _ = store
+    write_model(base / "model-3.7B")
+    monkeypatch.setenv("JAIS_MODEL_SIZE", gateway.NO_LOCAL_MODEL)
+    worker = gateway.Worker()
+    monkeypatch.setattr(worker, "change", lambda size, action: pytest.fail("no model may load"))
+    worker.start()
+    assert worker.loaded_size is None and worker.status == "ready" and worker.message == "Ready"

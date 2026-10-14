@@ -46,7 +46,8 @@ private final class RecordReader: @unchecked Sendable {
     var onExit: ((String) -> Void)?
     var isRunning: Bool { process?.isRunning ?? false }
 
-    func start() throws {
+    /// `environment` adds to the app's own, such as the remote API for `scripts/run_agent.py`.
+    func start(environment extra: [String: String] = [:]) throws {
         guard !isRunning else { return }
         let environment = ProcessInfo.processInfo.environment
         let executable: URL
@@ -64,6 +65,7 @@ private final class RecordReader: @unchecked Sendable {
         if childEnvironment["JAIS_DESKTOP_HELPER"] == nil, let binary = Bundle.main.executablePath {
             childEnvironment["JAIS_DESKTOP_HELPER"] = binary
         }
+        childEnvironment.merge(extra) { _, new in new }
         task.environment = childEnvironment
         let stdin = Pipe(), stdout = Pipe()
         let log = try ServiceLaunchLog(url: ServiceLauncher.logsDirectory.appendingPathComponent("agent.log"))

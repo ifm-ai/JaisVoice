@@ -1,15 +1,21 @@
 # Jais Voice implementation contract
 
-Native macOS app + Python supervisor (`scripts/run_services.py`) for the local Jais-ASR service (127.0.0.1:8790) and the MLX gateway (127.0.0.1:8788), + the Pi agent in RPC mode, a pipe child of the app (`scripts/run_agent.py`). One Jais 3 model, chosen by size (0.9B, 3.7B or 7B), serves both transcript cleanup and the agent.
+Native macOS app + Python supervisor (`scripts/run_services.py`) for the local Jais-ASR service (127.0.0.1:8790) and the MLX gateway (127.0.0.1:8788), + the Pi agent in RPC mode, a pipe child of the app (`scripts/run_agent.py`). One Jais 3 model, chosen by size (0.9B, 3.7B or 7B), serves both transcript cleanup and the agent; the advanced settings can replace it with an OpenAI-compatible API (see "Remote API").
 
 ## Native app: one turn
 - The app owns the turn. Audio: complete WAV PCM signed 16-bit mono 16000 Hz, at most 30 seconds.
 - 1. ASR: `POST :8790/transcribe` `{audio: base64 WAV, language?: ar|msa|fr|en|es|it}`; omit language for automatic detection. Response `{text, refused, truncated, language}`. A refused, truncated or empty transcript stops the turn.
-- 2. Cleanup: `POST :8788/v1/clean` `{text, model_size?: "0.9B"|"3.7B"|"7B"}`. Success `{text, elapsed_ms}`; failure 4xx `{detail: {code, message}}` with `cleaner_incomplete`, `cleaner_empty` or `cleaner_unavailable`. The raw transcript is never forwarded as a fallback. Explicit text input skips step 1 only.
-- 3. Agent: Pi RPC `prompt` with the cleaned text only. Before it, `new_session` when the conversation changes and `set_model {provider: "jais", modelId: "jais-3-0.9b"|"jais-3-3.7b"|"jais-3-7b"}` when the size changes.
+- 2. Cleanup: `POST :8788/v1/clean` `{text, model_size?: "0.9B"|"3.7B"|"7B", endpoint?: {base_url, model, api_key}}`. Success `{text, elapsed_ms}`; failure 4xx `{detail: {code, message}}` with `cleaner_incomplete`, `cleaner_empty` or `cleaner_unavailable`. The raw transcript is never forwarded as a fallback. Explicit text input skips step 1 only.
+- 3. Agent: Pi RPC `prompt` with the cleaned text only. Before it, `new_session` when the conversation changes and `set_model {provider: "jais", modelId: "jais-3-0.9b"|"jais-3-3.7b"|"jais-3-7b"}` (or `{provider: "remote", modelId: <the API's model>}`) when the model changes.
 - Cancellation or a new turn: cancel the turn task, send Pi `abort`. Events of a stale turn are never shown.
 - Health: `GET :8788/health` → `{status, message, models: {"0.9B": {display_name, installed, status: ready|loading|unloaded|error|not_installed, error?}, …}}` and `GET :8790/health`. Memory: `POST :8788/models/{0.9B|3.7B|7B}/memory` and `POST :8790/memory` `{action: load|unload}`. Only one language model is resident; loading one unloads the other.
-- The app starts the supervisor with `JAIS_MODEL_SIZE` set to the selected size; the gateway loads it, or another installed size when it is missing.
+- The app starts the supervisor with `JAIS_MODEL_SIZE` set to the selected size; the gateway loads it, or another installed size when it is missing. With the remote API on, `JAIS_MODEL_SIZE=none`: no language model is loaded.
+
+## Remote API
+- Advanced settings (a separate window, opened from **Models**): an OpenAI-compatible base URL (`https://…/v1`), an optional API key, a model name and whether it is a reasoning model. The URL, model and flag are app preferences (`remoteAPI*`); the key is in `~/Library/Application Support/Jais Voice/remote-api-key` (mode 600), which the agent's file tools refuse to read. **Test connection** sends one short `POST {base}/chat/completions`.
+- When on, it replaces the local language model for both stages; transcription stays local. Turning it on unloads the resident language model; turning it off loads the selected size. The app is ready once the ASR and the gateway answer, without a loaded language model, and no longer requires one to be installed.
+- Cleanup: the app adds `endpoint` to `/v1/clean`; the gateway sends the same prompt to `{base_url}/chat/completions` (non-streamed, `temperature: 0`, `Authorization: Bearer` when a key is set, without the Jais template fields), drops a leading `<think>…</think>` block and applies the same refusals; an API or network error is `502 cleaner_unavailable` with the API's message.
+- Agent: the app starts `scripts/run_agent.py` with `JAIS_REMOTE_BASE_URL`, `JAIS_REMOTE_MODEL`, `JAIS_REMOTE_API_KEY` and `JAIS_REMOTE_REASONING`; the launcher adds provider `remote` (`openai-completions`, `apiKey: "$JAIS_REMOTE_API_KEY"`, 128k context, 16k output) to the copied `models.json`, so the key never reaches a file. Pi detects the API's request format from its URL; `reasoning_effort` is sent only for a reasoning model. Another API, or turning it off, restarts the agent before the next turn.
 
 ## Models
 - `models/catalog.json`: the ASR and one Jais 3 MLX build per size, each pinned to a Hugging Face commit.

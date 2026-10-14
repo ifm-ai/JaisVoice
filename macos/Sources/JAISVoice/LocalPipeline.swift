@@ -34,6 +34,8 @@ struct PipelineFailure: Error {
     private var agentConversation: String?
     private var agentModel: String?
     private var agentEffort: String?
+    /// The remote API the running agent was started with: another one needs a restart.
+    private var agentEndpoint: RemoteEndpoint?
     private var run: AgentRun?
     var onEvent: ((WireEvent) -> Void)?
     var onDisconnect: ((String) -> Void)?
@@ -104,13 +106,23 @@ struct PipelineFailure: Error {
         return try await health()
     }
 
-    /// Start the agent if needed and wait until it answers.
-    func connect() async throws {
+    /// Start the agent if needed and wait until it answers. Pi reads its models
+    /// when it starts, so another remote API restarts it.
+    func connect(endpoint: RemoteEndpoint?) async throws {
+        if agent.isRunning && endpoint != agentEndpoint { await agent.shutdown() }
         if !agent.isRunning {
-            try agent.start()
+            try agent.start(environment: Self.agentEnvironment(endpoint))
+            agentEndpoint = endpoint
             agentConversation = nil; agentModel = nil; agentEffort = nil
         }
         try await agent.call("get_state")
+    }
+
+    /// What `scripts/run_agent.py` needs to add the remote API to Pi's models.
+    static func agentEnvironment(_ endpoint: RemoteEndpoint?) -> [String: String] {
+        guard let endpoint else { return [:] }
+        return ["JAIS_REMOTE_BASE_URL": endpoint.baseURL, "JAIS_REMOTE_MODEL": endpoint.model,
+                "JAIS_REMOTE_API_KEY": endpoint.apiKey, "JAIS_REMOTE_REASONING": endpoint.reasoning ? "1" : "0"]
     }
 
     /// Stop the agent and any turn in progress; the next turn restarts it.
@@ -135,6 +147,8 @@ struct PipelineFailure: Error {
         var conversationID: String
         var modelSize: String
         var reasoningEffort = ReasoningEffort.low.rawValue
+        /// The OpenAI-compatible API used instead of the local model, if any.
+        var endpoint: RemoteEndpoint? = nil
     }
 
     func sendWAV(_ data: Data, turnID: String, language: String?, options: TurnOptions) async throws {
@@ -229,11 +243,17 @@ struct PipelineFailure: Error {
     }
 
     static func cleanBody(_ raw: String, options: TurnOptions) -> [String: Any] {
-        ["text": raw, "model_size": options.modelSize]
+        if let endpoint = options.endpoint { return ["text": raw, "endpoint": endpoint.cleanupBody] }
+        return ["text": raw, "model_size": options.modelSize]
     }
 
     /// The agent's model ID for a size, as listed in agent/models.json.
     static func agentModelID(_ size: String) -> String { "jais-3-" + size.lowercased() }
+
+    /// Pi's provider and model: the remote API's, or the local size's.
+    static func agentModel(_ options: TurnOptions) -> (provider: String, id: String) {
+        options.endpoint.map { ("remote", $0.model) } ?? ("jais", agentModelID(options.modelSize))
+    }
 
     private func transcribe(_ audio: Data, language: String?) async throws -> String {
         let body = Self.asrBody(audio: audio, language: language)
@@ -277,16 +297,17 @@ struct PipelineFailure: Error {
     }
 
     private func act(_ text: String, turnID: String, options: TurnOptions) async throws {
-        do { try await connect() }
+        do { try await connect(endpoint: options.endpoint) }
         catch { throw PipelineFailure(code: "agent_unavailable", message: L("The local agent did not start. Check the service status in the menu.")) }
         if options.conversationID != agentConversation {
             try await agent.call("new_session")
-            agentConversation = options.conversationID
+            // A new session starts on Pi's default model and thinking level: set both again.
+            agentConversation = options.conversationID; agentModel = nil; agentEffort = nil
         }
-        let model = Self.agentModelID(options.modelSize)
-        if model != agentModel {
-            try await agent.call("set_model", ["provider": .string("jais"), "modelId": .string(model)])
-            agentModel = model; agentEffort = nil
+        let (provider, model) = Self.agentModel(options)
+        if provider + "/" + model != agentModel {
+            try await agent.call("set_model", ["provider": .string(provider), "modelId": .string(model)])
+            agentModel = provider + "/" + model; agentEffort = nil
         }
         if options.reasoningEffort != agentEffort {
             try await agent.call("set_thinking_level", ["level": .string(options.reasoningEffort)])
