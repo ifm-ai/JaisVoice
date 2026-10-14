@@ -40,7 +40,8 @@ lines=("${(@f)$(cat)}")
 title=${lines[1]:-}
 content=(); spoken=(); in_notes=0
 for line in "${(@)lines[2,-1]}"; do
-  if (( ! in_notes )) && [[ $line == [[:space:]]#---[[:space:]]# ]]; then in_notes=1
+  # The notes separator, also when the model decorates it (#---#, **---**).
+  if (( ! in_notes )) && [[ $line == [[:space:]#*_]#---##[[:space:]#*_]# ]]; then in_notes=1
   elif (( in_notes )); then spoken+=("$line")
   elif [[ -n ${line//[[:space:]]/} ]]; then content+=("$line")
   fi
@@ -66,8 +67,10 @@ if [[ $action == (chart|table) ]]; then
   (( ${#rows} >= 2 )) || { print -u2 "Give a header row and at least one data row, with | between the cells."; exit 1; }
 fi
 if [[ $action == chart ]]; then
+  header_cells=("${(@ps:\t:)rows[1]}")
   for (( i = 2; i <= ${#rows}; i++ )); do
     values=("${(@ps:\t:)rows[i]}")
+    (( ${#values} == ${#header_cells} )) || { print -u2 "Row ${i} has $(( ${#values} - 1 )) numbers but the header row has $(( ${#header_cells} - 1 )) categories: give one number per category."; exit 1; }
     for value in "${(@)values[2,-1]}"; do
       number=${value//[\$€£%,[:space:]]/}
       [[ $number == (-|)[0-9]#(.[0-9]##|)  && -n $number ]] || { print -u2 "Not a number in row ${i}: $value"; exit 1; }
@@ -130,6 +133,8 @@ on fill(s, mainText, secondText)
             try
               if object text of ti is "" and width of ti > 0 then
                 set object text of ti to secondText
+                -- The theme draws a fact's caption and a quote's source very small.
+                if size of object text of ti < 30 then set size of object text of ti to 30
                 exit repeat
               end if
             end try
@@ -179,6 +184,7 @@ on run {action, kind, slideTitle, body, notes}
       set t to default title item of s
       if title showing of s then set contentTop to (item 2 of (position of t as list)) + (height of t) + 30
     end try
+    try
     if action is in {"chart", "table"} then
       set rowTexts to my split(body, linefeed)
       set headerCells to my split(item 1 of rowTexts, tab)
@@ -260,6 +266,11 @@ on run {action, kind, slideTitle, body, notes}
       set position of tb to {W * 0.06, contentTop}
       set width of tb to W * 0.88
     end if
+    on error message
+      -- Never leave an empty slide behind: remove it and report why.
+      delete s
+      error message
+    end try
     set presenter notes of s to notes
     set current slide of d to s
     set summary to "Slide " & (count of slides of d) & " added (" & action & "): " & slideTitle

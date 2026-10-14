@@ -40,3 +40,8 @@ def test_mistakes_are_explained(tmp_path):
     assert ".pptx" in run(tmp_path, "export", "deck.key").stderr
     assert "Usage" in run(tmp_path, "draw").stderr
     assert run(tmp_path, "export", "Deck.pptx").stdout == "[Deck.pptx]\n"
+
+
+def test_a_chart_row_needs_one_number_per_category_and_notes_may_be_decorated(tmp_path):
+    assert "Row 2 has 2 numbers but the header row has 3 categories" in run(tmp_path, "chart", "bar", text="T\n| | A | B | C |\n| CD | 1 | 2 |\n").stderr
+    assert run(tmp_path, "fact", text="7%\nWhat it means\n#---#\nNotes\n").stdout == "[fact]\n[bar]\n[7%]\n[What it means]\n[Notes]\n"
