@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "Pi agent harness and Playwright browser tools for Jais Voice",
+  "license": "Apache-2.0",
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.99.1",
     "@playwright/mcp": "0.0.81"
