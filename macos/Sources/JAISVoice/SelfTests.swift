@@ -258,6 +258,17 @@ import AVFoundation
             try check(diff.filter { !$0.removed }.map(\.text).joined(separator: " ") == "إلى سارة" && diff.contains(DiffWord(text: "أحمد", removed: true)),
                       "the Arabic diff shows the removed words")
             try check(TranscriptDiff.isRTL("ابحث في باريس") && !TranscriptDiff.isRTL("https://www.louvre.fr"), "reading direction")
+            let reply = Markdown.blocks("## Hours ##\nOpen **daily**.\nClosed Tuesday.\n\n- Paris\n  - Rivoli\n2) Abu Dhabi\n- [x] booked\n\n> note\n\n| City | Hours |\n|---|:-:|\n| Paris | 9–18 |\n---\n```swift\nlet a = 1\n\n")
+            try check(reply == [.heading(level: 2, text: "Hours"), .paragraph("Open **daily**.\nClosed Tuesday."),
+                                .listItem(marker: "•", depth: 0, text: "Paris"), .listItem(marker: "◦", depth: 1, text: "Rivoli"),
+                                .listItem(marker: "2.", depth: 0, text: "Abu Dhabi"), .listItem(marker: "☑", depth: 0, text: "booked"),
+                                .quote([.paragraph("note")]), .table(header: ["City", "Hours"], rows: [["Paris", "9–18"]]),
+                                .rule, .code("let a = 1\n\n")],
+                      "Markdown blocks, with a code fence still streaming")
+            try check(Markdown.blocks("#hashtag and a | pipe\n---") == [.paragraph("#hashtag and a | pipe"), .rule], "plain text stays plain")
+            let styled = Markdown.inline("**bold** and `code`", size: 14)
+            try check(String(styled.characters) == "bold and code" && styled.runs.contains { $0.inlinePresentationIntent == .code },
+                      "inline Markdown keeps its styles")
             var clock = DismissalClock(); let start = Date(timeIntervalSince1970: 0)
             clock.reset(at: start)
             _ = clock.tick(at: start.addingTimeInterval(4), paused: false)
