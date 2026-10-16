@@ -36,7 +36,7 @@ struct AppRelease: Equatable {
     static let feedURL = (Bundle.main.object(forInfoDictionaryKey: "JAISUpdateFeedURL") as? String).flatMap(URL.init(string:))
     static let current = AppRelease(
         version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
-        downloadURL: URL(string: "https://github.com/MBZUAI-IFM/JaisVoice/releases")!)
+        downloadURL: URL(string: "https://github.com/ifm-ai/JaisVoice/releases")!)
     private static let dismissedKey = "dismissedUpdateVersion"
 
     /// A newer release found by the last check.

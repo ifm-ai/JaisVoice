@@ -13,10 +13,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/MBZUAI-IFM/JaisVoice/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/MBZUAI-IFM/JaisVoice?label=release"></a>
+  <a href="https://github.com/ifm-ai/JaisVoice/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/ifm-ai/JaisVoice?label=release"></a>
   <img alt="macOS 26+" src="https://img.shields.io/badge/macOS-26%2B-black?logo=apple">
   <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple%20Silicon-required-black">
-  <a href="https://github.com/MBZUAI-IFM/JaisVoice/actions/workflows/release.yml"><img alt="Build" src="https://github.com/MBZUAI-IFM/JaisVoice/actions/workflows/release.yml/badge.svg"></a>
+  <a href="https://github.com/ifm-ai/JaisVoice/actions/workflows/release.yml"><img alt="Build" src="https://github.com/ifm-ai/JaisVoice/actions/workflows/release.yml/badge.svg"></a>
 </p>
 
 <p align="center">
@@ -24,6 +24,10 @@
   &nbsp;&nbsp;
   <img src="docs/images/approval.png" alt="Jais Voice asking before running a command" width="300">
 </p>
+
+## News
+
+- **2026-10-15**: 🎉 [Jais 3 is out](https://ifm.ai/blog/jais3/), six open Arabic-centric models from 0.9B to 375B parameters. The announcement includes [a demo video of Jais Voice](https://ifm.ai/blog/jais3/#capabilities) too !
 
 ## Features
 
@@ -35,7 +39,7 @@
 
 ## Installation
 
-1. Download Jais Voice from the [latest release](https://github.com/MBZUAI-IFM/JaisVoice/releases/latest) (you only need the `Jais-Voice-<version>.dmg` file).
+1. Download Jais Voice from the [latest release](https://github.com/ifm-ai/JaisVoice/releases/latest) (you only need the `Jais-Voice-<version>.dmg` file).
 2. Double-click the `.dmg` file, then drag **Jais Voice** onto **Applications**.
 3. The app is not notarized by Apple yet, so macOS blocks it on first launch. To open it anyway:
    1. Open **System Settings**.
@@ -69,3 +73,7 @@ python3.12 scripts/setup.py
 ```
 
 The app and the disk image land in `outputs/`. Every push to `main` builds, tests and publishes a release through GitHub Actions. See [docs/development.md](docs/development.md) for the architecture, tests and release process.
+
+## License
+
+Jais Voice is released under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for attribution.
