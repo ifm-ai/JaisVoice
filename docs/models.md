@@ -2,16 +2,16 @@
 
 Jais Voice uses one speech model and one language model. The same language model does both transcript cleanup and the agent's work. `models/catalog.json` lists the models the app knows, with their Hugging Face repository and pinned revision; the **Models** section of the settings downloads, loads, unloads and deletes them. Models live in `~/Library/Application Support/Jais Voice/models/`.
 
-| Role | Repository |
-| --- | --- |
-| Speech recognition | [IFM/Jais-ASR-MLX-8bit](https://huggingface.co/IFM/Jais-ASR-MLX-8bit) |
-| Cleanup and agent (one model for both) | [IFM/Jais-3-3.7B-MLX-8bit](https://huggingface.co/IFM/Jais-3-3.7B-MLX-8bit) (default) · [IFM/Jais-3-0.9B-MLX-bf16](https://huggingface.co/IFM/Jais-3-0.9B-MLX-bf16) · [IFM/Jais-3-7B-MLX-8bit](https://huggingface.co/IFM/Jais-3-7B-MLX-8bit) |
+| Role | MLX build used by the app | Original model |
+| --- | --- | --- |
+| Speech recognition | [IFM/Jais-ASR-MLX-8bit](https://huggingface.co/IFM/Jais-ASR-MLX-8bit) | [IFM/Jais-ASR](https://huggingface.co/IFM/Jais-ASR) |
+| Cleanup and agent (one model for both) | [IFM/Jais-3-3.7B-MLX-8bit](https://huggingface.co/IFM/Jais-3-3.7B-MLX-8bit) (default) · [IFM/Jais-3-0.9B-MLX-bf16](https://huggingface.co/IFM/Jais-3-0.9B-MLX-bf16) · [IFM/Jais-3-7B-MLX-8bit](https://huggingface.co/IFM/Jais-3-7B-MLX-8bit) | [inception42/Jais-3-3.7B](https://huggingface.co/inception42/Jais-3-3.7B) · [inception42/Jais-3-0.9B](https://huggingface.co/inception42/Jais-3-0.9B) · [inception42/Jais-3-7B](https://huggingface.co/inception42/Jais-3-7B) |
 
-These repositories currently require access on Hugging Face. The app uses your Hugging Face login: run `hf auth login` once, or set `HF_TOKEN`.
+All these repositories are public: no Hugging Face account or token is needed. The app downloads the MLX builds; they are converted from the original models published under `inception42` (Jais 3) and `IFM` (Jais-ASR).
 
 ## Speech recognition
 
-On first launch the app offers to download Jais-ASR, the 8-bit MLX build (7.0 GB: 8-bit decoder, BF16 audio encoder). Like a language model, it is pinned to a commit, downloaded resumably, checked file by file against Hugging Face (size, SHA-256 for weights, git hash for the other files), validated against the architecture, then installed; without access to the repository, the files can be downloaded by hand (see below).
+On first launch the app offers to download Jais-ASR, the 8-bit MLX build (7.0 GB: 8-bit decoder, BF16 audio encoder). Like a language model, it is pinned to a commit, downloaded resumably, checked file by file against Hugging Face (size, SHA-256 for weights, git hash for the other files), validated against the architecture, then installed; when Hugging Face cannot be reached from the app, the files can be downloaded by hand (see below).
 
 The ASR service runs it with MLX on the app's own Python, without mlx-vlm: `jais_runtime/asr_model.py` holds the audio encoder (Qwen3-Omni) and the projector, and reuses the Jais 3 decoder of `jais_runtime/model.py`. Decoding follows the model card: greedy, at most 256 tokens, repetition penalty 1.05. The repository's processor (`processing_jais_asr.py`, `language.py`, `postprocess.py`) computes the mel features and the prompt, pins the language when the user chose one (the model can still decline audio without speech) and separates the language tag from the transcript; these are the only Python files the app downloads and runs. For the ASR, the folder of files downloaded by hand also needs these three files, `preprocessor_config.json`, `processor_config.json` and `generation_config.json`.
 
@@ -19,7 +19,7 @@ The ASR service runs it with MLX on the app's own Python, without mlx-vlm: `jais
 
 Clicking **Download** on a Jais 3 model:
 
-1. checks that your account can read the repository;
+1. reads the repository's file list at the pinned revision;
 2. downloads the MLX build at its pinned revision (weights, configuration, tokenizer and chat template; never Python files), resumably;
 3. checks every file's size and SHA-256 against Hugging Face;
 4. validates the tensors against the architecture and installs the model.
@@ -30,11 +30,11 @@ Clicking **Download** on a Jais 3 model:
 | Jais 3 · 3.7B | 8-bit affine (groups of 64) | 5.4 GB |
 | Jais 3 · 7B | 8-bit affine (groups of 64) | 9.6 GB |
 
-The collection [IFM/jais-3-mlx](https://huggingface.co/collections/IFM/jais-3-mlx) also has 4-bit builds and larger models; the runtime loads BF16 and 8-bit only.
+The collection [IFM/Jais 3 MLX](https://huggingface.co/collections/IFM/jais-3-mlx-6abf696214dd63f3f6b80c05) also has 4-bit builds and larger models; the runtime loads BF16 and 8-bit only.
 
-### Without access to the repository
+### Downloading the files yourself
 
-If your account cannot read the repository, the app explains how to get access and where to put the files instead. You can download the repository files yourself (for example from the **Files** tab on Hugging Face, or with `hf download`) into the folder the message gives:
+If the app cannot reach the repository (a proxy, a network that blocks Hugging Face), it says where to put the files instead. You can download the repository files yourself (for example from the **Files** tab on Hugging Face, or with `hf download`) into the folder the message gives:
 
 ```sh
 hf download IFM/Jais-3-3.7B-MLX-8bit --revision b10d70beb6c8259b9af1f6dfcd465f469b8e95e2 --local-dir "$HOME/Library/Application Support/Jais Voice/models/sources/Jais-3-3.7B-MLX-8bit"

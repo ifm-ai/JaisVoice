@@ -1,6 +1,6 @@
 {
   "models": [
-    {"id": "jais-asr", "kind": "asr", "display_name": "Jais-ASR", "directory": "Jais-ASR-MLX-8bit-7b65a421947f", "download": {"repo": "IFM/Jais-ASR-MLX-8bit", "revision": "7b65a421947fb743fd4034101a2c78fcce363c69", "bytes": 7031282740}},
+    {"id": "jais-asr", "kind": "asr", "display_name": "Jais-ASR", "directory": "Jais-ASR-MLX-8bit-7b65a421947f", "download": {"repo": "IFM/Jais-ASR-MLX-8bit", "revision": "47eeea97b34af9fcda9e80268fdd77d65e8e27fb", "bytes": 7031167263}},
     {"id": "jais-3-0.9b", "kind": "llm", "size": "0.9B", "display_name": "Jais 3 · 0.9B", "directory": "Jais-3-0.9B-MLX-bf16-a777f3820160", "download": {"repo": "IFM/Jais-3-0.9B-MLX-bf16", "revision": "a777f382016021046857d1ed208a26faa54f336e", "bytes": 2161620448}},
     {"id": "jais-3-3.7b", "kind": "llm", "size": "3.7B", "display_name": "Jais 3 · 3.7B", "directory": "Jais-3-3.7B-MLX-8bit-b10d70beb6c8", "download": {"repo": "IFM/Jais-3-3.7B-MLX-8bit", "revision": "b10d70beb6c8259b9af1f6dfcd465f469b8e95e2", "bytes": 5395429334}},
     {"id": "jais-3-7b", "kind": "llm", "size": "7B", "display_name": "Jais 3 · 7B", "directory": "Jais-3-7B-MLX-8bit-cb9852e33707", "download": {"repo": "IFM/Jais-3-7B-MLX-8bit", "revision": "cb9852e337078a8aa3a62b7d96217a5760b1af24", "bytes": 9582764791}}
