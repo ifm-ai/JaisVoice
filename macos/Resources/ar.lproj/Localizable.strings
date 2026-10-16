@@ -215,7 +215,7 @@
 "A local transcription is already running" = "هناك نسخ محلي قيد التشغيل بالفعل";
 "Local transcription failed" = "فشل النسخ المحلي";
 "Invalid audio or language" = "الصوت أو اللغة غير صالحة";
-"No access to {0} on Hugging Face. Request access on huggingface.co/{0} and sign in with `hf auth login`, or download the repository files yourself into {1}, then click Download again." = "لا يوجد وصول إلى {0} على Hugging Face. اطلب الوصول على huggingface.co/{0} وسجّل الدخول باستخدام `hf auth login`، أو نزّل ملفات المستودع بنفسك إلى {1}، ثم انقر على «تنزيل» مرة أخرى.";
+"Hugging Face did not provide {0} at the version this app expects. Update Jais Voice, or download the repository files yourself into {1}, then click Download again." = "لم يوفّر Hugging Face المستودع {0} بالإصدار الذي يتوقعه التطبيق. حدّث Jais Voice، أو نزّل ملفات المستودع بنفسك إلى {1}، ثم انقر على «تنزيل» مرة أخرى.";
 "Downloading…" = "جارٍ التنزيل…";
 "No data received for a while" = "لم تصل أي بيانات منذ مدة";
 "General" = "عام";

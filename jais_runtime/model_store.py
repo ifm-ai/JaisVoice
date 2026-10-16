@@ -110,13 +110,12 @@ def patterns(entry: dict) -> list[str]:
 
 
 class NoAccess(RuntimeError):
-    """The repository is private or gated for this user, and no local copy exists."""
+    """Hugging Face refused the repository or its pinned revision, and no local copy exists."""
 
     def __init__(self, repo: str, folder: Path):
         self.repo, self.folder = repo, folder
-        super().__init__(f"No access to {repo} on Hugging Face. Request access on https://huggingface.co/{repo} "
-                         f"and sign in with `hf auth login`, or download the repository files yourself into {folder}, "
-                         "then download the model again.")
+        super().__init__(f"Hugging Face did not provide {repo} at the version this app expects. Update Jais Voice, "
+                         f"or download the repository files yourself into {folder}, then download the model again.")
 
 
 def is_installed(entry: dict, base: Path) -> bool:

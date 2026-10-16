@@ -19,7 +19,7 @@ Native macOS app + Python supervisor (`scripts/run_services.py`) for the local J
 
 ## Models
 - `models/catalog.json`: the ASR and one Jais 3 MLX build per size, each pinned to a Hugging Face commit.
-- The app runs `scripts/models.py` (bundle resource `launch-models`): `list` → `{event: "catalog", models: [{id, kind, size?, display_name, installed, download_bytes?, disk_bytes, partial_bytes}]}`; `download <id>` → `{event: "progress", phase: download|verify|install, bytes?, total?}`… then `{event: "done"}`, `{event: "error", message}` (with `code: "no_access", repo, folder` when the repository is not accessible) or, after SIGTERM, `{event: "cancelled"}` (resumable); `delete <id>` → `{event: "deleted"}`.
+- The app runs `scripts/models.py` (bundle resource `launch-models`): `list` → `{event: "catalog", models: [{id, kind, size?, display_name, installed, download_bytes?, disk_bytes, partial_bytes}]}`; `download <id>` → `{event: "progress", phase: download|verify|install, bytes?, total?}`… then `{event: "done"}`, `{event: "error", message}` (with `code: "no_access", repo, folder` when Hugging Face refuses the repository or its pinned revision) or, after SIGTERM, `{event: "cancelled"}` (resumable); `delete <id>` → `{event: "deleted"}`.
 - At launch the app offers the missing required models (the ASR, and the 3.7B when no language model is installed). Deleting a loaded language model unloads it first.
 
 ## Panel events (in-process `WireEvent`)
