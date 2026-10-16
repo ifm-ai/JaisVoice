@@ -25,6 +25,10 @@
   <img src="docs/images/approval.png" alt="Jais Voice asking before running a command" width="300">
 </p>
 
+## News
+
+- **2026-10-15**: [Jais 3 is out](https://ifm.ai/blog/jais3/), six open Arabic-centric models from 0.9B to 375B parameters. The announcement includes [a demo video of Jais Voice](https://ifm.ai/blog/jais3/#capabilities) turning a spoken instruction into actions.
+
 ## Features
 
 - **Local speech recognition** with Jais-ASR, including Arabic dialects.
