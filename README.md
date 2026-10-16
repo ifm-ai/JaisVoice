@@ -50,12 +50,12 @@ Requires an Apple Silicon Mac with macOS 26 and at least 16 GB of memory. On fir
 
 ## Models
 
-| Role | Model |
-| --- | --- |
-| Speech recognition | [IFM/Jais-ASR-MLX-8bit](https://huggingface.co/IFM/Jais-ASR-MLX-8bit) |
-| Cleanup and agent (one model for both) | [IFM/Jais-3-3.7B-MLX-8bit](https://huggingface.co/IFM/Jais-3-3.7B-MLX-8bit) (default) · [IFM/Jais-3-0.9B-MLX-bf16](https://huggingface.co/IFM/Jais-3-0.9B-MLX-bf16) · [IFM/Jais-3-7B-MLX-8bit](https://huggingface.co/IFM/Jais-3-7B-MLX-8bit) |
+| Role | MLX build used by the app | Original model |
+| --- | --- | --- |
+| Speech recognition | [IFM/Jais-ASR-MLX-8bit](https://huggingface.co/IFM/Jais-ASR-MLX-8bit) | [IFM/Jais-ASR](https://huggingface.co/IFM/Jais-ASR) |
+| Cleanup and agent (one model for both) | [IFM/Jais-3-3.7B-MLX-8bit](https://huggingface.co/IFM/Jais-3-3.7B-MLX-8bit) (default) · [IFM/Jais-3-0.9B-MLX-bf16](https://huggingface.co/IFM/Jais-3-0.9B-MLX-bf16) · [IFM/Jais-3-7B-MLX-8bit](https://huggingface.co/IFM/Jais-3-7B-MLX-8bit) | [inception42/Jais-3-3.7B](https://huggingface.co/inception42/Jais-3-3.7B) · [inception42/Jais-3-0.9B](https://huggingface.co/inception42/Jais-3-0.9B) · [inception42/Jais-3-7B](https://huggingface.co/inception42/Jais-3-7B) |
 
-These repositories currently require access on Hugging Face. The app downloads the speech model and the MLX builds of the language models itself. See [docs/models.md](docs/models.md).
+All these repositories are public on Hugging Face. The app downloads the speech model and the MLX builds of the language models itself, without a Hugging Face account. See [docs/models.md](docs/models.md).
 
 ## Usage
 
