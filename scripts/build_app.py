@@ -28,7 +28,7 @@ APP_SOURCES = ("agent", "jais_runtime", "models", "scripts", "package.json", "pa
 # The latest release of the repository building the app, as published by
 # .github/workflows/release.yml.
 UPDATE_FEED = "https://api.github.com/repos/{}/releases/latest".format(
-    os.environ.get("GITHUB_REPOSITORY", "MBZUAI-IFM/JaisVoice"))
+    os.environ.get("GITHUB_REPOSITORY", "ifm-ai/JaisVoice"))
 LAUNCHERS = (("launch-services", "run_services.py"), ("launch-agent", "run_agent.py"), ("launch-models", "models.py"))
 IGNORED = shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store", "*.test.ts")
 # What nothing in the app runs: Tk and IDLE, the shared library for embedding
