@@ -397,6 +397,17 @@ struct ConfigurationView: View {
                 }.labelsHidden().frame(width: 190).disabled(state.isBusy)
             }
             rowDivider
+            VStack(alignment: .leading, spacing: 0) {
+                settingRow(L("Correct transcripts")) {
+                    Toggle(L("Correct transcripts"), isOn: Binding(get: { preferences.transcriptCleanup }, set: { preferences.setTranscriptCleanup($0) }))
+                        .labelsHidden().toggleStyle(.switch).controlSize(.small).disabled(state.isBusy)
+                }
+                Text(L(preferences.transcriptCleanup ? "The model removes hesitations and self-corrections before the assistant acts."
+                                                     : "The assistant receives the transcript exactly as recognized."))
+                    .font(.system(size: 10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 12).padding(.bottom, 12).padding(.top, -4)
+            }
+            rowDivider
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(L("Reasoning")).font(.system(size: 12))

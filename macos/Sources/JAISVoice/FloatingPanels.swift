@@ -87,7 +87,7 @@ struct ResultBubble: View {
                             naturalText(exchange.prompt, size: 14)
                             if !exchange.response.isEmpty {
                                 sectionLabel("JAIS VOICE", tag: "")
-                                naturalText(exchange.response, size: 14)
+                                MarkdownText(text: exchange.response, size: 14)
                             }
                             if let error = exchange.error {
                                 naturalText(error, size: 12)
@@ -137,7 +137,7 @@ struct ResultBubble: View {
                             sectionLabel(L("ACTIONS"), tag: state.actionsTag)
                             ForEach(Array(state.actions.enumerated()), id: \.element.id) { index, action in
                                 let note = state.interimText(before: index)
-                                if !note.isEmpty { naturalText(note, size: 13).opacity(0.8) }
+                                if !note.isEmpty { MarkdownText(text: note, size: 13).opacity(0.8) }
                                 actionRow(action)
                             }
                         }
@@ -146,7 +146,7 @@ struct ResultBubble: View {
                     if !state.finalResponse.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             sectionLabel(L(state.awaitingClarification ? "CLARIFICATION NEEDED" : "RESPONSE"), tag: state.modelLabel)
-                            naturalText(state.finalResponse, size: 14)
+                            MarkdownText(text: state.finalResponse, size: 14)
                             if state.awaitingClarification {
                                 Label(L("Hold the dictation keys, answer, then release."), systemImage: "mic.fill")
                                     .font(.system(size: 12, weight: .medium)).foregroundStyle(accent)
@@ -242,7 +242,7 @@ struct ResultBubble: View {
     private func approvalCard(_ request: ActionRequest) -> some View {
         VStack(alignment: .leading, spacing: 9) {
             sectionLabel(L("APPROVAL"), tag: L(request.tool))
-            if !request.question.isEmpty { naturalText(request.question, size: 13) }
+            if !request.question.isEmpty { MarkdownText(text: request.question, size: 13) }
             ScrollView {
                 Text(request.details)
                     .font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.75))

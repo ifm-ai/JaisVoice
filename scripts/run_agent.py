@@ -4,6 +4,8 @@
 stdin/stdout carry Pi's JSONL protocol; diagnostics go to stderr. The app
 closes stdin to stop the agent. Configuration and skills come from `agent/`
 and runtime state (credentials store, caches) stays under `.runtime/pi-agent`.
+Skills are read in place: the user's own, in `.runtime/skills`, before the
+app's in `agent/skills`.
 Pi runs from the home folder, so its file tools resolve paths as the user
 says them; the browser and other helpers work in `.runtime/agent-workspace`.
 When the app sets JAIS_REMOTE_BASE_URL and JAIS_REMOTE_MODEL, the agent's
@@ -42,6 +44,9 @@ def models_config(env: dict) -> dict:
             "baseUrl": base_url.rstrip("/"),
             "api": "openai-completions",
             "apiKey": "$JAIS_REMOTE_API_KEY",
+            # Some reasoning APIs refuse a conversation whose assistant turns drop
+            # `reasoning_content`: Pi then replays it, empty when the model did not think.
+            "compat": {"supportsDeveloperRole": False, "requiresReasoningContentOnAssistantMessages": True},
             "models": [{
                 "id": model, "name": f"{model} (API)", "reasoning": reasoning, "input": ["text"],
                 "contextWindow": REMOTE_CONTEXT, "maxTokens": REMOTE_MAX_TOKENS,
@@ -58,9 +63,11 @@ def command(env: dict) -> tuple[list[str], dict, Path]:
     for name in CONFIG_FILES:
         shutil.copyfile(ROOT / "agent" / name, agent_dir / name)
     (agent_dir / "models.json").write_text(json.dumps(models_config(env), indent=2))
-    # The agent's skills are replaced as a whole, like its configuration.
+    # Skills are read where they are, again for each new conversation: the user's own first, so
+    # one named like an app skill replaces it, then the app's. Earlier versions copied them here.
     shutil.rmtree(agent_dir / "skills", ignore_errors=True)
-    shutil.copytree(ROOT / "agent" / "skills", agent_dir / "skills")
+    user_skills, app_skills = RUNTIME / "skills", ROOT / "agent" / "skills"
+    user_skills.mkdir(parents=True, exist_ok=True)
     workspace = RUNTIME / "agent-workspace"
     workspace.mkdir(parents=True, exist_ok=True)
     env = dict(env)
@@ -74,6 +81,8 @@ def command(env: dict) -> tuple[list[str], dict, Path]:
         "JAIS_NODE": node,
         "JAIS_PLAYWRIGHT_CLI": str(ROOT / "node_modules/@playwright/mcp/cli.js"),
         "JAIS_AGENT_WORKSPACE": str(workspace),
+        "JAIS_USER_SKILLS": str(user_skills),
+        "JAIS_APP_SKILLS": str(app_skills),
         # Pi refuses an empty key; servers without authentication ignore this one.
         "JAIS_REMOTE_API_KEY": env.get("JAIS_REMOTE_API_KEY") or "none",
         # Without Google Chrome, the agent downloads Chromium there when it starts.
@@ -86,6 +95,7 @@ def command(env: dict) -> tuple[list[str], dict, Path]:
         "--mode", "rpc", "--no-session",
         "--no-extensions", "-e", "builtin:mcp", "-e", str(ROOT / "agent/extensions/jais"),
         "--no-prompt-templates", "--no-themes", "--no-context-files",
+        "--skill", str(user_skills), "--skill", str(app_skills),
     ]
     return argv, env, Path.home()
 

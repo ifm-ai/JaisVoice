@@ -14,7 +14,10 @@
   "quietStartup": true,
   "cacheWarming": "off",
   "retry": {
-    "enabled": false
+    "enabled": false,
+    "provider": {
+      "maxRetries": 2
+    }
   },
   "compaction": {
     "enabled": false

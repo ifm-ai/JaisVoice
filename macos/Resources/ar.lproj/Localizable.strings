@@ -13,6 +13,9 @@
 "Type a request without a microphone…" = "اكتب طلبًا دون ميكروفون…";
 "Hold to talk" = "اضغط مطولًا للتحدث";
 "Transcription language" = "لغة النسخ";
+"Correct transcripts" = "تصحيح النصوص المنسوخة";
+"The model removes hesitations and self-corrections before the assistant acts." = "يزيل النموذج التردد والتصحيحات الذاتية قبل أن يتصرف المساعد.";
+"The assistant receives the transcript exactly as recognized." = "يتلقى المساعد النص المنسوخ كما تم التعرف عليه تمامًا.";
 "These settings will be available when the request finishes." = "ستتوفر هذه الإعدادات عند انتهاء الطلب.";
 "Requesting access…" = "جارٍ طلب الإذن…";
 "Microphone access allowed" = "الوصول إلى الميكروفون مسموح";

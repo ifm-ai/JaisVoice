@@ -25,6 +25,9 @@ export const CHROME = ["/Applications", join(homedir(), "Applications")]
 /** Where the agent's helpers run; Pi itself runs from the home folder, for the file tools. */
 export const WORKSPACE = process.env.JAIS_AGENT_WORKSPACE || process.cwd();
 export const BROWSER_OUTPUT = join(RUNTIME, "browser-output", String(process.pid));
+/** Skills the user adds or edits without rebuilding the app; one named like an app skill replaces it. */
+export const USER_SKILLS = process.env.JAIS_USER_SKILLS || join(RUNTIME, "skills");
+export const APP_SKILLS = process.env.JAIS_APP_SKILLS || join(ROOT, "agent/skills");
 
 export const MAX_ACTIONS = 50;
 export const SHELL_SECONDS = 30;
@@ -215,10 +218,16 @@ export function compactContext(messages: Message[]): Message[] {
   const users = messages.flatMap((message, index) => message.role === "user" ? [index] : []);
   const start = users.length >= CONTEXT_LIMITS.userTurns ? users[users.length - CONTEXT_LIMITS.userTurns] : 0;
   const kept = messages.slice(start).map((message) => structuredClone(message));
+  // Every result of the latest assistant turn is new to the model, not only the last one:
+  // a model that calls several tools at once must read all their results in full.
+  const lastAssistant = kept.findLastIndex((message) => message.role === "assistant");
+  const latest = new Set(kept.filter((message, index) => message.role === "toolResult" && index > lastAssistant));
   const results = kept.filter((message) => message.role === "toolResult");
-  const priorBudget = Math.min(CONTEXT_LIMITS.earlierResult, Math.floor(CONTEXT_LIMITS.earlierResults / Math.max(1, results.length - 1)));
-  results.forEach((message, index) => {
-    const limit = index === results.length - 1 ? CONTEXT_LIMITS.latestResult : priorBudget;
+  if (latest.size === 0 && results.length > 0) latest.add(results.at(-1)!);
+  const earlier = results.length - latest.size;
+  const priorBudget = Math.min(CONTEXT_LIMITS.earlierResult, Math.floor(CONTEXT_LIMITS.earlierResults / Math.max(1, earlier)));
+  results.forEach((message) => {
+    const limit = latest.has(message) ? CONTEXT_LIMITS.latestResult : priorBudget;
     for (const part of message.content ?? []) {
       if (part.type === "text" && part.text.length > limit) {
         part.text = part.text.slice(0, limit) + "\n[Earlier content abbreviated; call the tool again for the current state.]";

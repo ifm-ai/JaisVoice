@@ -316,8 +316,10 @@ def test_agent_launcher_uses_isolated_configuration(store, monkeypatch):
     assert all((agent_dir / name).read_text() == (run_agent.ROOT / "agent" / name).read_text() for name in run_agent.CONFIG_FILES)
     assert json.loads((agent_dir / "models.json").read_text()) == json.loads((run_agent.ROOT / "agent/models.json").read_text())
     assert env["JAIS_REMOTE_API_KEY"] == "none"
-    skills = sorted(path.relative_to(agent_dir) for path in (agent_dir / "skills").rglob("SKILL.md"))
-    assert skills and skills == sorted(path.relative_to(run_agent.ROOT / "agent") for path in (run_agent.ROOT / "agent/skills").rglob("SKILL.md"))
+    # Skills are read in place, the user's before the app's, so a user skill can replace an app skill.
+    skills = [argv[index + 1] for index, arg in enumerate(argv) if arg == "--skill"]
+    assert skills == [env["JAIS_USER_SKILLS"], env["JAIS_APP_SKILLS"]] == [str(tmp / "runtime/skills"), str(run_agent.ROOT / "agent/skills")]
+    assert (tmp / "runtime/skills").is_dir() and not (agent_dir / "skills").exists()
     assert env["JAIS_AGENT_WORKSPACE"] == str(tmp / "runtime/agent-workspace") and (tmp / "runtime/agent-workspace").is_dir()
     # Pi's file tools resolve paths from the home folder; rg and fd come first on the PATH.
     assert cwd == Path.home() and env["PATH"].split(":")[0] == "/bundle/runtime/bin"
@@ -332,6 +334,7 @@ def test_agent_launcher_adds_the_remote_api(store, monkeypatch):
     providers = json.loads(written)["providers"]
     assert set(providers) == {"jais", "remote"} and providers["remote"]["baseUrl"] == "https://api.example.com/v1"
     assert providers["remote"]["models"][0]["id"] == "big-model" and providers["remote"]["models"][0]["reasoning"] is True
+    assert providers["remote"]["compat"] == {"supportsDeveloperRole": False, "requiresReasoningContentOnAssistantMessages": True}
     # The key reaches Pi through its environment only.
     assert providers["remote"]["apiKey"] == "$JAIS_REMOTE_API_KEY" and "sk-test" not in written and env["JAIS_REMOTE_API_KEY"] == "sk-test"
 

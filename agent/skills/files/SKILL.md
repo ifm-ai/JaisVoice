@@ -11,6 +11,8 @@ description: Find, read, create and edit the user's files with read, ls, find, g
    path), grep looks for words inside files (with a path and `ignoreCase`). Search a specific folder
    rather than the whole home folder.
 3. read shows text files; long files come in parts, continue with `offset` only if needed.
+   read cannot open a PDF: run `zsh "/full/path/to/pdf-text.sh" "/path/file.pdf" 1 2` with
+   shell_execute (pdf-text.sh is next to this file) for the text of pages 1 to 2, then the next pages.
 4. Writing:
    - write creates a file, and any missing folders, or replaces a file entirely: before writing,
      check with ls that you will not replace an existing file the user did not ask to replace.

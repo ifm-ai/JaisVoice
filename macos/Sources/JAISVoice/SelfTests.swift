@@ -19,18 +19,19 @@ import AVFoundation
             let preferences = AppPreferences(defaults: defaults)
             try check(preferences.interfaceLanguage == .english, "interface defaults to English")
             try check(preferences.shortcutChoice == 0 && preferences.asrLanguageCode == nil, "initial settings: ⌥ Space and automatic language")
-            try check(preferences.modelSize == "3.7B" && preferences.actionPermission == .ask && preferences.reasoningEffort == .low,
-                      "defaults: 3.7B, ask before actions, low reasoning")
+            try check(preferences.modelSize == "3.7B" && preferences.actionPermission == .ask && preferences.reasoningEffort == .low
+                      && preferences.transcriptCleanup, "defaults: 3.7B, ask before actions, low reasoning, cleanup on")
             preferences.setInterfaceLanguage(.french)
             preferences.setASRLanguage(" FR ")
             preferences.setShortcutChoice(2)
             preferences.setModelSize("7B")
             preferences.setActionPermission(.always)
             preferences.setReasoningEffort(.high)
+            preferences.setTranscriptCleanup(false)
             let restored = AppPreferences(defaults: defaults)
             try check(restored.interfaceLanguage == .french && restored.asrLanguageCode == "fr" && restored.shortcutChoice == 2
-                      && restored.modelSize == "7B" && restored.actionPermission == .always && restored.reasoningEffort == .high,
-                      "settings persist after reopening")
+                      && restored.modelSize == "7B" && restored.actionPermission == .always && restored.reasoningEffort == .high
+                      && !restored.transcriptCleanup, "settings persist after reopening")
             preferences.setInterfaceLanguage(.english)
             preferences.setModelSize("invalid")
             preferences.setASRLanguage("not-a-language")
@@ -85,6 +86,7 @@ import AVFoundation
             let options = LocalPipeline.TurnOptions(conversationID: "c", modelSize: "0.9B")
             let body = LocalPipeline.cleanBody("t", options: options)
             try check(body["model_size"] as? String == "0.9B", "cleanup gets the model size")
+            try check(options.cleanup, "turns clean up the transcript by default")
             try check(options.reasoningEffort == "low" && ReasoningEffort.allCases.map(\.rawValue) == ["low", "medium", "high"],
                       "the agent's reasoning levels are the chat template's")
             try check(LocalPipeline.agentModelID("3.7B") == "jais-3-3.7b", "the agent model ID matches agent/models.json")
@@ -100,6 +102,8 @@ import AVFoundation
                       "the agent launcher gets the API in its environment")
             try check(LocalPipeline.asrBody(audio: Data(), language: nil)["language"] == nil
                       && LocalPipeline.asrBody(audio: Data(), language: "fr")["language"] as? String == "fr", "automatic mode omits the language")
+            try check(TurnState.withoutToolMarkup("Slide 6.<ifm|tool_calls>\n<ifm|tool_call>shell_execute") == "Slide 6."
+                      && TurnState.withoutToolMarkup(" Done. ") == "Done.", "tool-call markup written as text is never shown")
             let action = ActionRequest(title: "macOS command", message: #"{"reason":"Open Safari","details":"open -a Safari"}"#)
             try check(action == ActionRequest(tool: "macOS command", reason: "Open Safari", details: "open -a Safari"), "action request parsed from the extension")
             try check(ActionRequest(title: "Command", message: "ls").details == "ls", "a non-JSON message is shown as is")
@@ -254,6 +258,17 @@ import AVFoundation
             try check(diff.filter { !$0.removed }.map(\.text).joined(separator: " ") == "إلى سارة" && diff.contains(DiffWord(text: "أحمد", removed: true)),
                       "the Arabic diff shows the removed words")
             try check(TranscriptDiff.isRTL("ابحث في باريس") && !TranscriptDiff.isRTL("https://www.louvre.fr"), "reading direction")
+            let reply = Markdown.blocks("## Hours ##\nOpen **daily**.\nClosed Tuesday.\n\n- Paris\n  - Rivoli\n2) Abu Dhabi\n- [x] booked\n\n> note\n\n| City | Hours |\n|---|:-:|\n| Paris | 9–18 |\n---\n```swift\nlet a = 1\n\n")
+            try check(reply == [.heading(level: 2, text: "Hours"), .paragraph("Open **daily**.\nClosed Tuesday."),
+                                .listItem(marker: "•", depth: 0, text: "Paris"), .listItem(marker: "◦", depth: 1, text: "Rivoli"),
+                                .listItem(marker: "2.", depth: 0, text: "Abu Dhabi"), .listItem(marker: "☑", depth: 0, text: "booked"),
+                                .quote([.paragraph("note")]), .table(header: ["City", "Hours"], rows: [["Paris", "9–18"]]),
+                                .rule, .code("let a = 1\n\n")],
+                      "Markdown blocks, with a code fence still streaming")
+            try check(Markdown.blocks("#hashtag and a | pipe\n---") == [.paragraph("#hashtag and a | pipe"), .rule], "plain text stays plain")
+            let styled = Markdown.inline("**bold** and `code`", size: 14)
+            try check(String(styled.characters) == "bold and code" && styled.runs.contains { $0.inlinePresentationIntent == .code },
+                      "inline Markdown keeps its styles")
             var clock = DismissalClock(); let start = Date(timeIntervalSince1970: 0)
             clock.reset(at: start)
             _ = clock.tick(at: start.addingTimeInterval(4), paused: false)

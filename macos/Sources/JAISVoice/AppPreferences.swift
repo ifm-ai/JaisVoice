@@ -107,7 +107,7 @@ struct RemoteEndpoint: Equatable {
     var cleanupBody: [String: Any] { ["base_url": baseURL, "model": model, "api_key": apiKey] }
 }
 
-/// Persist the shortcut, languages, model size and action permission.
+/// Persist the shortcut, languages, model size, transcript cleanup and action permission.
 /// Permission is a live macOS state, not an application preference.
 @MainActor final class AppPreferences: ObservableObject {
     static let shortcutKey = "shortcutChoice"
@@ -119,6 +119,7 @@ struct RemoteEndpoint: Equatable {
     static let remoteBaseURLKey = "remoteAPIBaseURL"
     static let remoteModelKey = "remoteAPIModel"
     static let remoteReasoningKey = "remoteAPIReasoning"
+    static let transcriptCleanupKey = "transcriptCleanup"
     @Published private(set) var interfaceLanguage: InterfaceLanguage
     private let defaults: UserDefaults
     /// The API key stays out of the preferences, in a file only this user can read.
@@ -133,6 +134,8 @@ struct RemoteEndpoint: Equatable {
     /// Advanced: an OpenAI-compatible API, kept when it is switched off.
     @Published private(set) var remoteEnabled: Bool
     @Published private(set) var remoteDraft: RemoteEndpoint
+    /// Whether the language model corrects the transcript before the agent sees it.
+    @Published private(set) var transcriptCleanup: Bool
     @Published var microphoneStatus: MicrophoneAuthorization = .notDetermined
     /// macOS permissions to read and use other apps, and to read text drawn in their windows.
     @Published var accessibilityTrusted = false
@@ -168,6 +171,7 @@ struct RemoteEndpoint: Equatable {
             model: defaults.string(forKey: Self.remoteModelKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
             apiKey: (try? String(contentsOf: apiKeyURL, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
             reasoning: defaults.bool(forKey: Self.remoteReasoningKey))
+        transcriptCleanup = defaults.object(forKey: Self.transcriptCleanupKey) as? Bool ?? true
         refreshMicrophoneStatus()
         refreshAppControlStatus()
     }
@@ -234,6 +238,11 @@ struct RemoteEndpoint: Equatable {
         }
         // createFile keeps the permissions of a file it replaces.
         try manager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: apiKeyURL.path)
+    }
+
+    func setTranscriptCleanup(_ enabled: Bool) {
+        transcriptCleanup = enabled
+        defaults.set(enabled, forKey: Self.transcriptCleanupKey)
     }
 
     func setModelSize(_ value: String) {

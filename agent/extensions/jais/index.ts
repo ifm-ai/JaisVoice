@@ -6,12 +6,14 @@
  */
 import { StringEnum, Type } from "@earendil-works/pi-ai";
 import { defineTool, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   APPROVAL_SECONDS, approvalMessage, BROWSER_OUTPUT, BROWSER_PREFIX, BROWSER_TOOLS, BROWSERS, browserArgs, CHROME, chromiumDownloader,
   MAC_TOOLS, MAX_ACTIONS, NODE, PLAYWRIGHT_CLI, PLAYWRIGHT_INSTALLER, RUNTIME, SHELL_SECONDS, WORKSPACE, bounded, bytes, commandProblem,
-  compactContext, inlineSnapshots, noteCommand, plainTextPayload, REFUSED, runShell, type Message,
+  compactContext, inlineSnapshots, noteCommand, plainTextPayload, REFUSED, runShell, APP_SKILLS, USER_SKILLS, type Message,
 } from "./runtime.ts";
+import { repairToolCalls, type TextCall } from "./toolcalls.ts";
 import {
   appAccessMessage, appRefused, DESKTOP_HELPER, DESKTOP_TOOLS, DesktopGrants, DesktopHelper, hostsIn, NAVIGATION_REFUSED,
   navigationAllowed, navigationMessage, OVERVIEW_MESSAGE, tierProblem, type Access, type DesktopApp,
@@ -21,9 +23,19 @@ import {
   skillInstructions, toolPath, WRITE_REFUSED, writeProblem,
 } from "./files.ts";
 
-/** The agent's own skills, read without asking; and what the agent may never write. */
+/** The agent's own skills, read without asking (the user's first, then the app's); and what the agent may never write. */
 const AGENT_DIR = process.env.PI_CODING_AGENT_DIR || join(RUNTIME, "pi-agent");
-const SKILLS = resolveToolPath(join(AGENT_DIR, "skills"), "/");
+const SKILL_DIRS = [USER_SKILLS, APP_SKILLS].map((dir) => resolveToolPath(dir, "/"));
+const skillsDirOf = (path: string) => SKILL_DIRS.find((dir) => isInside(path, dir));
+const skillGuide = (name: string) => SKILL_DIRS.map((dir) => skillInstructions(dir, name)).find(Boolean) ?? "";
+
+/** Models trained with a skill tool call it to load a skill: read its file instead. */
+function skillAlias(call: TextCall): TextCall | undefined {
+  const name = call.arguments.name ?? call.arguments.skill;
+  if (!["skill", "load_skill", "use_skill"].includes(call.name.toLowerCase()) || typeof name !== "string") return undefined;
+  const dir = SKILL_DIRS.find((candidate) => existsSync(join(candidate, name, "SKILL.md")));
+  return dir ? { name: "read", arguments: { path: join(dir, name, "SKILL.md") } } : undefined;
+}
 const OWN_PATHS = [RUNTIME, AGENT_DIR, process.env.JAIS_PROJECT_ROOT ?? ""];
 
 const text = (value: string) => ({ content: [{ type: "text" as const, text: value }], details: undefined });
@@ -299,8 +311,9 @@ export default function (pi: ExtensionAPI) {
       if (READ_TOOLS.includes(name)) {
         const problem = readProblem(path);
         if (problem) return { block: true, reason: problem };
-        if (isInside(path, SKILLS)) {
-          skillsShown.add(path.slice(SKILLS.length + 1).split("/")[0]);
+        const skills = skillsDirOf(path);
+        if (skills) {
+          skillsShown.add(path.slice(skills.length + 1).split("/")[0]);
         } else {
           if (!filesAllowed && !await confirm("File access", FILES_READ_MESSAGE)) return { block: true, reason: FILES_REFUSED };
           filesAllowed = true;
@@ -330,21 +343,28 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
+  // A model may write its tool calls as text, which ends the request without acting: recover them.
+  pi.on("message_end", (event) => {
+    const active = new Set(pi.getActiveTools());
+    const repaired = repairToolCalls(event.message as any, pi.getAllTools().filter((tool) => active.has(tool.name)), skillAlias);
+    return repaired ? { message: repaired as any } : undefined;
+  });
+
   pi.on("tool_result", (event) => {
     const browser = event.toolName.startsWith(BROWSER_PREFIX);
     const name = browser ? event.toolName.slice(BROWSER_PREFIX.length) : event.toolName;
     // A small model rarely reads a skill by itself: the first result of an area's tools brings it.
     // Reading a skill file is not file work.
-    const ownSkill = name === "read" && isInside(toolPath(event.input, process.cwd()), SKILLS);
+    const ownSkill = name === "read" && skillsDirOf(toolPath(event.input, process.cwd())) !== undefined;
     const skill = ownSkill ? undefined : skillFor(name);
-    const guide = skill && !skillsShown.has(skill) ? skillInstructions(SKILLS, skill) : "";
+    const guide = skill && !skillsShown.has(skill) ? skillGuide(skill) : "";
     if (skill) skillsShown.add(skill);
     let changed = false;
     let content = event.content.map((part) => {
       if (part.type !== "text" || !browser) return part;
       let value = inlineSnapshots(part.text, BROWSER_OUTPUT, [WORKSPACE, process.cwd()]);
       if (!event.isError && name !== "browser_snapshot" && !value.includes("### Snapshot")) {
-        value += "\n[This action returned no page snapshot. Call browser_snapshot before using element references.]";
+        value += `\n[This action returned no page snapshot. Call ${BROWSER_PREFIX}browser_snapshot before using element references.]`;
       }
       changed ||= value !== part.text;
       return { ...part, text: value };

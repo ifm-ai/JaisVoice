@@ -5,11 +5,11 @@ description: Search the web and read pages with the browser tools (DuckDuckGo, s
 
 # Web research
 
-1. Search: call browser_navigate with `https://duckduckgo.com/?q=` followed by the URL-encoded query.
+1. Search: call mcp__browser__browser_navigate with `https://duckduckgo.com/?q=` followed by the URL-encoded query.
    Never open Google, Bing or another search engine.
-2. Read the results in the snapshot and open the most relevant official source with browser_click
-   or browser_navigate. Use the element refs of the current snapshot only.
-3. If a page needs more time to load, call browser_wait_for; call browser_snapshot again before
+2. Read the results in the snapshot and open the most relevant official source with mcp__browser__browser_click
+   or mcp__browser__browser_navigate. Use the element refs of the current snapshot only.
+3. If a page needs more time to load, call mcp__browser__browser_wait_for; call mcp__browser__browser_snapshot again before
    using refs after any page change.
 4. Answer from what you actually read:
    - Include only facts observed in the sources; do not add details the user did not ask for.
