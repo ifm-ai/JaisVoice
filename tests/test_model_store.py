@@ -334,6 +334,7 @@ def test_agent_launcher_adds_the_remote_api(store, monkeypatch):
     providers = json.loads(written)["providers"]
     assert set(providers) == {"jais", "remote"} and providers["remote"]["baseUrl"] == "https://api.example.com/v1"
     assert providers["remote"]["models"][0]["id"] == "big-model" and providers["remote"]["models"][0]["reasoning"] is True
+    assert providers["remote"]["compat"] == {"supportsDeveloperRole": False, "requiresReasoningContentOnAssistantMessages": True}
     # The key reaches Pi through its environment only.
     assert providers["remote"]["apiKey"] == "$JAIS_REMOTE_API_KEY" and "sk-test" not in written and env["JAIS_REMOTE_API_KEY"] == "sk-test"
 

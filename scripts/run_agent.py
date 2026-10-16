@@ -44,6 +44,9 @@ def models_config(env: dict) -> dict:
             "baseUrl": base_url.rstrip("/"),
             "api": "openai-completions",
             "apiKey": "$JAIS_REMOTE_API_KEY",
+            # Some reasoning APIs refuse a conversation whose assistant turns drop
+            # `reasoning_content`: Pi then replays it, empty when the model did not think.
+            "compat": {"supportsDeveloperRole": False, "requiresReasoningContentOnAssistantMessages": True},
             "models": [{
                 "id": model, "name": f"{model} (API)", "reasoning": reasoning, "input": ["text"],
                 "contextWindow": REMOTE_CONTEXT, "maxTokens": REMOTE_MAX_TOKENS,
