@@ -405,7 +405,7 @@ import UniformTypeIdentifiers
 
     private var turnOptions: LocalPipeline.TurnOptions {
         .init(conversationID: state.conversationID, modelSize: preferences.modelSize, reasoningEffort: preferences.reasoningEffort.rawValue,
-              endpoint: preferences.remoteEndpoint)
+              endpoint: preferences.remoteEndpoint, cleanup: preferences.transcriptCleanup)
     }
 
     private func press() {

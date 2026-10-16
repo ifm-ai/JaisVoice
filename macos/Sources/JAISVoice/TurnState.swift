@@ -157,15 +157,22 @@ struct ConversationExchange: Identifiable {
     var onBegin: (() -> Void)?
 
     var awaitingClarification: Bool { stage == "awaiting_clarification" }
+    /// What the agent received: the corrected transcript, or the raw one when cleanup is off.
+    var prompt: String { cleaned.isEmpty ? raw : cleaned }
     /// The text the model wrote between the previous action and this one.
     func interimText(before index: Int) -> String {
         let end = min(actions[index].textOffset, response.count)
         let start = index == 0 ? 0 : min(actions[index - 1].textOffset, end)
-        return String(response.dropFirst(start).prefix(end - start)).trimmingCharacters(in: .whitespacesAndNewlines)
+        return Self.withoutToolMarkup(String(response.dropFirst(start).prefix(end - start)))
     }
     /// The answer written after the last action; the whole response when no action ran.
     var finalResponse: String {
-        String(response.dropFirst(min(actions.last?.textOffset ?? 0, response.count))).trimmingCharacters(in: .whitespacesAndNewlines)
+        Self.withoutToolMarkup(String(response.dropFirst(min(actions.last?.textOffset ?? 0, response.count))))
+    }
+    /// Tool calls a model wrote as text stream in before the agent recovers and runs them: never show their markup.
+    static func withoutToolMarkup(_ text: String) -> String {
+        let cut = text.range(of: "<ifm|tool_call").map { String(text[..<$0.lowerBound]) } ?? text
+        return cut.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     /// Where the actions of this turn ran: the browser, the Mac, or both.
     var actionsTag: String {
@@ -223,8 +230,8 @@ struct ConversationExchange: Identifiable {
     }
     @discardableResult func begin(recording: Bool = false, continuingConversation: Bool = false) -> String {
         if continuingConversation {
-            if let previous = turnID, !cleaned.isEmpty || !response.isEmpty {
-                history.append(ConversationExchange(id: previous, prompt: cleaned, response: finalResponse, error: error))
+            if let previous = turnID, !prompt.isEmpty || !response.isEmpty {
+                history.append(ConversationExchange(id: previous, prompt: prompt, response: finalResponse, error: error))
             }
         } else {
             conversationID = UUID().uuidString

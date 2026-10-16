@@ -19,18 +19,19 @@ import AVFoundation
             let preferences = AppPreferences(defaults: defaults)
             try check(preferences.interfaceLanguage == .english, "interface defaults to English")
             try check(preferences.shortcutChoice == 0 && preferences.asrLanguageCode == nil, "initial settings: ⌥ Space and automatic language")
-            try check(preferences.modelSize == "3.7B" && preferences.actionPermission == .ask && preferences.reasoningEffort == .low,
-                      "defaults: 3.7B, ask before actions, low reasoning")
+            try check(preferences.modelSize == "3.7B" && preferences.actionPermission == .ask && preferences.reasoningEffort == .low
+                      && preferences.transcriptCleanup, "defaults: 3.7B, ask before actions, low reasoning, cleanup on")
             preferences.setInterfaceLanguage(.french)
             preferences.setASRLanguage(" FR ")
             preferences.setShortcutChoice(2)
             preferences.setModelSize("7B")
             preferences.setActionPermission(.always)
             preferences.setReasoningEffort(.high)
+            preferences.setTranscriptCleanup(false)
             let restored = AppPreferences(defaults: defaults)
             try check(restored.interfaceLanguage == .french && restored.asrLanguageCode == "fr" && restored.shortcutChoice == 2
-                      && restored.modelSize == "7B" && restored.actionPermission == .always && restored.reasoningEffort == .high,
-                      "settings persist after reopening")
+                      && restored.modelSize == "7B" && restored.actionPermission == .always && restored.reasoningEffort == .high
+                      && !restored.transcriptCleanup, "settings persist after reopening")
             preferences.setInterfaceLanguage(.english)
             preferences.setModelSize("invalid")
             preferences.setASRLanguage("not-a-language")
@@ -85,6 +86,7 @@ import AVFoundation
             let options = LocalPipeline.TurnOptions(conversationID: "c", modelSize: "0.9B")
             let body = LocalPipeline.cleanBody("t", options: options)
             try check(body["model_size"] as? String == "0.9B", "cleanup gets the model size")
+            try check(options.cleanup, "turns clean up the transcript by default")
             try check(options.reasoningEffort == "low" && ReasoningEffort.allCases.map(\.rawValue) == ["low", "medium", "high"],
                       "the agent's reasoning levels are the chat template's")
             try check(LocalPipeline.agentModelID("3.7B") == "jais-3-3.7b", "the agent model ID matches agent/models.json")
@@ -100,6 +102,8 @@ import AVFoundation
                       "the agent launcher gets the API in its environment")
             try check(LocalPipeline.asrBody(audio: Data(), language: nil)["language"] == nil
                       && LocalPipeline.asrBody(audio: Data(), language: "fr")["language"] as? String == "fr", "automatic mode omits the language")
+            try check(TurnState.withoutToolMarkup("Slide 6.<ifm|tool_calls>\n<ifm|tool_call>shell_execute") == "Slide 6."
+                      && TurnState.withoutToolMarkup(" Done. ") == "Done.", "tool-call markup written as text is never shown")
             let action = ActionRequest(title: "macOS command", message: #"{"reason":"Open Safari","details":"open -a Safari"}"#)
             try check(action == ActionRequest(tool: "macOS command", reason: "Open Safari", details: "open -a Safari"), "action request parsed from the extension")
             try check(ActionRequest(title: "Command", message: "ls").details == "ls", "a non-JSON message is shown as is")
