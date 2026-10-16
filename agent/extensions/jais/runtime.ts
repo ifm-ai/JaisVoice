@@ -218,10 +218,16 @@ export function compactContext(messages: Message[]): Message[] {
   const users = messages.flatMap((message, index) => message.role === "user" ? [index] : []);
   const start = users.length >= CONTEXT_LIMITS.userTurns ? users[users.length - CONTEXT_LIMITS.userTurns] : 0;
   const kept = messages.slice(start).map((message) => structuredClone(message));
+  // Every result of the latest assistant turn is new to the model, not only the last one:
+  // a model that calls several tools at once must read all their results in full.
+  const lastAssistant = kept.findLastIndex((message) => message.role === "assistant");
+  const latest = new Set(kept.filter((message, index) => message.role === "toolResult" && index > lastAssistant));
   const results = kept.filter((message) => message.role === "toolResult");
-  const priorBudget = Math.min(CONTEXT_LIMITS.earlierResult, Math.floor(CONTEXT_LIMITS.earlierResults / Math.max(1, results.length - 1)));
-  results.forEach((message, index) => {
-    const limit = index === results.length - 1 ? CONTEXT_LIMITS.latestResult : priorBudget;
+  if (latest.size === 0 && results.length > 0) latest.add(results.at(-1)!);
+  const earlier = results.length - latest.size;
+  const priorBudget = Math.min(CONTEXT_LIMITS.earlierResult, Math.floor(CONTEXT_LIMITS.earlierResults / Math.max(1, earlier)));
+  results.forEach((message) => {
+    const limit = latest.has(message) ? CONTEXT_LIMITS.latestResult : priorBudget;
     for (const part of message.content ?? []) {
       if (part.type === "text" && part.text.length > limit) {
         part.text = part.text.slice(0, limit) + "\n[Earlier content abbreviated; call the tool again for the current state.]";

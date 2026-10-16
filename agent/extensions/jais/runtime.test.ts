@@ -100,6 +100,20 @@ test("context keeps recent dialogue and shortens stale tool output in a copy", (
   assert.equal(messages[2].content[0].text.length, 30000);
 });
 
+test("every result of the latest parallel tool calls stays whole", () => {
+  const messages: Message[] = [
+    { role: "user", content: "Make a deck from these two pages" },
+    { role: "assistant", content: [{ type: "text", text: "Loading the skill and the sources." }] },
+    { role: "toolResult", content: [{ type: "text", text: "s".repeat(5000) }] },
+    { role: "toolResult", content: [{ type: "text", text: "p".repeat(8000) }] },
+    { role: "toolResult", content: [{ type: "text", text: "q".repeat(8000) }] },
+  ];
+  assert.deepEqual(compactContext(messages).slice(2).map((message) => message.content[0].text.length), [5000, 8000, 8000]);
+  messages.push({ role: "assistant", content: [{ type: "text", text: "Next page." }] }, { role: "toolResult", content: [{ type: "text", text: "r".repeat(100) }] });
+  const lengths = compactContext(messages).filter((message) => message.role === "toolResult").map((message) => message.content[0].text.length);
+  assert.ok(lengths.slice(0, 3).every((length) => length < 1300) && lengths[3] === 100);
+});
+
 test("Arabic requests and their tool results get a reply-language reminder in the model's context only", () => {
   const messages: Message[] = [
     { role: "user", content: "ابحث عن متحف المستقبل في دبي" },
