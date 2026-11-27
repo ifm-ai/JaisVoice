@@ -14,8 +14,10 @@ import plistlib
 import re
 import subprocess
 import tempfile
+import time
 
 WIDTH, HEIGHT = 640, 400
+DETACH_ATTEMPTS, DETACH_DELAY = 6, 5.0  # seconds between attempts
 APP_POSITION, APPLICATIONS_POSITION = (160, 190), (480, 190)
 TITLE_BAR = 28  # Finder window bounds include the title bar
 
@@ -91,6 +93,24 @@ def disk_usage(path: Path) -> int:
     return int(subprocess.check_output(["/usr/bin/du", "-sk", str(path)], text=True).split()[0]) * 1024
 
 
+def detach(device: str, attempts: int = DETACH_ATTEMPTS, delay: float = DETACH_DELAY) -> None:
+    """Detach a disk image, waiting for whatever still holds its volume.
+
+    Finder may hold the volume for a moment after closing its window, and "hdiutil detach
+    -force" can still answer "Resource busy" then. The first attempt is a plain detach, the
+    next ones force it.
+    """
+    for attempt in range(1, attempts + 1):
+        command = ["/usr/bin/hdiutil", "detach", device, "-quiet" if attempt == 1 else "-force"]
+        print("+", " ".join(command), flush=True)
+        if subprocess.run(command).returncode == 0:
+            return
+        if attempt < attempts:
+            print(f"{device} is still busy; trying again in {delay:g}s ({attempt}/{attempts}).", flush=True)
+            time.sleep(delay)
+    raise RuntimeError(f"could not detach {device} after {attempts} attempts")
+
+
 def make_dmg(app: Path, output: Path, volume: str) -> Path:
     app = app.resolve()
     with tempfile.TemporaryDirectory(prefix="jais-dmg-") as temporary:
@@ -122,9 +142,7 @@ def make_dmg(app: Path, output: Path, volume: str) -> Path:
                 print(f"Finder layout skipped ({error}); the image keeps the default window.", flush=True)
             run("/bin/sync")
         finally:
-            # Finder may still hold the volume for a moment after closing its window.
-            if subprocess.run(["/usr/bin/hdiutil", "detach", device, "-quiet"]).returncode != 0:
-                run("/usr/bin/hdiutil", "detach", device, "-force")
+            detach(device)
         output.parent.mkdir(parents=True, exist_ok=True)
         output.unlink(missing_ok=True)
         run("/usr/bin/hdiutil", "convert", writable, "-format", "ULFO", "-o", output)
